@@ -1,0 +1,31 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: castel-postgres-dev
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: castel_dev
+      POSTGRES_USER: castel
+      POSTGRES_PASSWORD: castel
+    ports:
+      - "5432:5432"
+    volumes:
+      - castel_postgres_dev_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U castel -d castel_dev"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  adminer:
+    image: adminer:latest
+    container_name: castel-adminer-dev
+    restart: unless-stopped
+    ports:
+      - "8081:8080"
+    depends_on:
+      - postgres
+
+volumes:
+  castel_postgres_dev_data:
+    name: castel_postgres_dev_data
