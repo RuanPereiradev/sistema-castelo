@@ -1,0 +1,38 @@
+# Maven
+target/
+*.jar
+*.war
+*.ear
+dependency-reduced-pom.xml
+.classpath
+.project
+.settings/
+*.iml
+
+# Maven Wrapper is versioned intentionally; do not ignore mvnw/mvnw.cmd/.mvn/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Node
+node_modules/
+npm-debug.log
+package-lock.json
+yarn.lock
+
+# Environment
+.env
+.env.local
+.env.*.local
+http-client.private.env.json
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Claude Code
+.claude/agent-memory-local/
