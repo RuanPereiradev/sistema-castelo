@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>br.com.castel</groupId>
+        <artifactId>castel</artifactId>
+        <version>0.1.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>hotel</artifactId>
+    <packaging>jar</packaging>
+
+    <name>hotel</name>
+    <description>RoomType, Room, Reservation, Guest, RatePlan, DailyInventory</description>
+
+    <dependencies>
+        <dependency>
+            <groupId>br.com.castel</groupId>
+            <artifactId>shared-kernel</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>br.com.castel</groupId>
+            <artifactId>billing</artifactId>
+        </dependency>
+    </dependencies>
+</project>
