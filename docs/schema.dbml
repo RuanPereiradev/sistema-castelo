@@ -1,0 +1,525 @@
+// Sistema de Gestao Hoteleira e de Restaurante
+// Cole em https://dbdiagram.io/d
+// Exporta para PostgreSQL, PNG e PDF pelo menu Export
+
+Project hotel_restaurant {
+  database_type: 'PostgreSQL'
+  Note: 'Monolito modular. FKs seguem a direcao da dependencia entre modulos: billing nao conhece hotel nem restaurant.'
+}
+
+// ─────────────────────────────────────────────
+// TRANSVERSAIS
+// ─────────────────────────────────────────────
+
+Table property {
+  id uuid [pk]
+  legal_name varchar(255) [not null]
+  trade_name varchar(255)
+  cnpj varchar(14)
+  street varchar(255)
+  city varchar(120)
+  state varchar(2)
+  postal_code varchar(8)
+  time_zone varchar(50) [not null, default: 'America/Fortaleza']
+  created_at timestamptz [not null]
+  created_by uuid
+  updated_at timestamptz
+  updated_by uuid
+}
+
+Table setting {
+  id uuid [pk]
+  property_id uuid [not null]
+  setting_key varchar(100) [not null]
+  setting_value text [not null]
+  value_type varchar(20) [not null, note: 'STRING INTEGER DECIMAL BOOLEAN TIME']
+  description text
+  created_at timestamptz [not null]
+  created_by uuid
+  updated_at timestamptz
+  updated_by uuid
+
+  Indexes {
+    (property_id, setting_key) [unique]
+  }
+}
+
+// ─────────────────────────────────────────────
+// IDENTITY
+// ─────────────────────────────────────────────
+
+Table app_user {
+  id uuid [pk]
+  property_id uuid [not null]
+  full_name varchar(255) [not null]
+  email varchar(255) [not null, unique]
+  password_hash varchar(255) [not null]
+  is_active boolean [not null, default: true]
+  last_login_at timestamptz
+  created_at timestamptz [not null]
+  created_by uuid
+  updated_at timestamptz
+  updated_by uuid
+}
+
+Table user_role {
+  app_user_id uuid [pk]
+  role varchar(30) [pk, note: 'ADMIN FRONT_DESK WAITER KITCHEN']
+}
+
+// ─────────────────────────────────────────────
+// BILLING  (V3 - nao referencia hotel nem restaurant)
+// ─────────────────────────────────────────────
+
+Table folio {
+  id uuid [pk]
+  property_id uuid [not null]
+  folio_type varchar(10) [not null, note: 'STAY TAB']
+  status varchar(10) [not null, default: 'OPEN', note: 'OPEN CLOSED']
+  reference_code varchar(20) [note: 'numero do quarto, usado pelo restaurant']
+  reference_label varchar(150) [note: 'nome do hospede']
+  opened_at timestamptz [not null]
+  closed_at timestamptz
+  closed_by uuid
+  created_at timestamptz [not null]
+  created_by uuid
+  updated_at timestamptz
+  updated_by uuid
+
+  Indexes {
+    (property_id, reference_code) [note: 'parcial: status=OPEN e folio_type=STAY']
+  }
+}
+
+Table charge {
+  id uuid [pk]
+  folio_id uuid [not null]
+  charge_type varchar(20) [not null, note: 'ROOM_NIGHT TAB ADJUSTMENT']
+  amount numeric(12,2) [not null, note: 'pode ser negativo em ADJUSTMENT']
+  description varchar(255) [not null]
+  source_id uuid [note: 'room_night.id ou tab.id - SEM FK, fronteira de modulo']
+  reference_date date
+  authorized_by uuid
+  reason text
+  posted_at timestamptz [not null]
+  posted_by uuid [not null]
+}
+
+Table payment {
+  id uuid [pk]
+  folio_id uuid [not null]
+  cash_drawer_session_id uuid
+  method varchar(20) [not null, note: 'CASH PIX CREDIT_CARD DEBIT_CARD ROOM_ACCOUNT']
+  amount numeric(12,2) [not null]
+  status varchar(20) [not null, default: 'CONFIRMED', note: 'PENDING CONFIRMED FAILED REFUNDED']
+  idempotency_key varchar(100) [not null, unique]
+  external_reference varchar(255)
+  paid_at timestamptz [not null]
+  received_by uuid [not null]
+}
+
+Table cash_drawer_session {
+  id uuid [pk]
+  property_id uuid [not null]
+  opened_by uuid [not null]
+  opened_at timestamptz [not null]
+  opening_float numeric(12,2) [not null]
+  closed_by uuid
+  closed_at timestamptz
+  expected_amount numeric(12,2)
+  counted_amount numeric(12,2)
+  difference numeric(12,2)
+  status varchar(10) [not null, default: 'OPEN', note: 'OPEN CLOSED']
+
+  Indexes {
+    property_id [unique, note: 'parcial: status=OPEN - um caixa aberto por vez']
+  }
+}
+
+Table cash_movement {
+  id uuid [pk]
+  cash_drawer_session_id uuid [not null]
+  movement_type varchar(20) [not null, note: 'OPENING_FLOAT CASH_DROP CASH_SUPPLY CLOSING_COUNT']
+  amount numeric(12,2) [not null]
+  reason text
+  created_at timestamptz [not null]
+  created_by uuid [not null]
+}
+
+// ─────────────────────────────────────────────
+// HOTEL
+// ─────────────────────────────────────────────
+
+Table room_type {
+  id uuid [pk]
+  property_id uuid [not null]
+  name varchar(100) [not null]
+  description text
+  max_occupancy smallint [not null]
+  standard_occupancy smallint [not null]
+  is_active boolean [not null, default: true]
+  created_at timestamptz [not null]
+  created_by uuid
+  updated_at timestamptz
+  updated_by uuid
+
+  Indexes {
+    (property_id, name) [unique]
+  }
+}
+
+Table room {
+  id uuid [pk]
+  property_id uuid [not null]
+  room_type_id uuid [not null]
+  room_number varchar(20) [not null]
+  floor varchar(20)
+  status varchar(20) [not null, default: 'AVAILABLE', note: 'AVAILABLE OCCUPIED MAINTENANCE']
+  notes text
+  is_active boolean [not null, default: true]
+  created_at timestamptz [not null]
+  created_by uuid
+  updated_at timestamptz
+  updated_by uuid
+
+  Indexes {
+    (property_id, room_number) [unique]
+  }
+}
+
+Table rate_plan {
+  id uuid [pk]
+  property_id uuid [not null]
+  room_type_id uuid [not null]
+  name varchar(100) [not null]
+  valid_from date [not null]
+  valid_to date [not null]
+  single_rate numeric(12,2) [not null]
+  double_rate numeric(12,2) [not null]
+  extra_guest_rate numeric(12,2) [not null, default: 0]
+  is_active boolean [not null, default: true]
+  created_at timestamptz [not null]
+  created_by uuid
+  updated_at timestamptz
+  updated_by uuid
+
+  Note: 'EXCLUDE USING gist impede periodos sobrepostos ativos no mesmo room_type'
+}
+
+Table daily_inventory {
+  id uuid [pk]
+  property_id uuid [not null]
+  room_type_id uuid [not null]
+  stay_date date [not null]
+  total_rooms smallint [not null]
+  booked_rooms smallint [not null, default: 0]
+
+  Indexes {
+    (property_id, room_type_id, stay_date) [unique]
+  }
+
+  Note: 'Tabela materializada de concorrencia. UPDATE condicional atomico.'
+}
+
+Table guest {
+  id uuid [pk]
+  property_id uuid [not null]
+  full_name varchar(255) [not null]
+  document_type varchar(15) [not null, note: 'CPF PASSPORT']
+  document_number varchar(30) [not null]
+  email varchar(255)
+  phone varchar(30)
+  birth_date date
+  nationality varchar(60)
+  street varchar(255)
+  city varchar(120)
+  state varchar(60)
+  country varchar(60)
+  postal_code varchar(20)
+  created_at timestamptz [not null]
+  created_by uuid
+  updated_at timestamptz
+  updated_by uuid
+
+  Indexes {
+    (property_id, document_type, document_number) [unique]
+  }
+}
+
+Table reservation {
+  id uuid [pk]
+  property_id uuid [not null]
+  confirmation_code varchar(10) [not null, unique]
+  room_type_id uuid [not null]
+  primary_guest_id uuid [not null]
+  assigned_room_id uuid [note: 'definido no check-in']
+  folio_id uuid [note: 'aberto no check-in']
+  check_in_date date [not null]
+  check_out_date date [not null]
+  adults smallint [not null]
+  status varchar(20) [not null, default: 'PENDING', note: 'PENDING CONFIRMED CHECKED_IN CHECKED_OUT CANCELLED NO_SHOW']
+  channel varchar(20) [not null, default: 'DIRECT', note: 'DIRECT WEB PHONE OTA']
+  external_reservation_id varchar(100)
+  deposit_amount numeric(12,2) [not null, default: 0]
+  total_amount numeric(12,2) [not null, default: 0]
+  overbooking_authorized_by uuid
+  expires_at timestamptz [note: 'prazo da pre-reserva aguardando sinal']
+  confirmed_at timestamptz
+  checked_in_at timestamptz
+  checked_out_at timestamptz
+  cancelled_at timestamptz
+  cancellation_reason text
+  no_show_at timestamptz
+  notes text
+  created_at timestamptz [not null]
+  created_by uuid
+  updated_at timestamptz
+  updated_by uuid
+}
+
+Table reservation_child {
+  id uuid [pk]
+  reservation_id uuid [not null]
+  age smallint [not null, note: 'idade na data do check-in']
+}
+
+Table room_night {
+  id uuid [pk]
+  reservation_id uuid [not null]
+  rate_plan_id uuid
+  stay_date date [not null]
+  base_amount numeric(12,2) [not null]
+  extra_guest_amount numeric(12,2) [not null, default: 0]
+  children_amount numeric(12,2) [not null, default: 0]
+  total_amount numeric(12,2) [not null]
+
+  Indexes {
+    (reservation_id, stay_date) [unique]
+  }
+}
+
+// ─────────────────────────────────────────────
+// RESTAURANT
+// ─────────────────────────────────────────────
+
+Table menu_category {
+  id uuid [pk]
+  property_id uuid [not null]
+  name varchar(100) [not null]
+  display_order smallint [not null, default: 0]
+  is_active boolean [not null, default: true]
+  created_at timestamptz [not null]
+  created_by uuid
+  updated_at timestamptz
+  updated_by uuid
+
+  Indexes {
+    (property_id, name) [unique]
+  }
+}
+
+Table menu_item {
+  id uuid [pk]
+  property_id uuid [not null]
+  menu_category_id uuid [not null]
+  name varchar(150) [not null]
+  description text
+  sold_by_weight boolean [not null, default: false]
+  unit_price numeric(12,2)
+  price_per_kilo numeric(12,2)
+  prep_station varchar(20) [not null, note: 'KITCHEN PIZZA BAR']
+  service_charge_eligible boolean [not null, default: true]
+  is_available boolean [not null, default: true]
+  is_active boolean [not null, default: true]
+  display_order smallint [not null, default: 0]
+  created_at timestamptz [not null]
+  created_by uuid
+  updated_at timestamptz
+  updated_by uuid
+
+  Indexes {
+    (property_id, name) [unique]
+  }
+
+  Note: 'CHECK: por peso exige price_per_kilo e proibe unit_price'
+}
+
+Table menu_item_variant {
+  id uuid [pk]
+  menu_item_id uuid [not null]
+  name varchar(50) [not null]
+  unit_price numeric(12,2) [not null]
+  display_order smallint [not null, default: 0]
+  is_active boolean [not null, default: true]
+
+  Indexes {
+    (menu_item_id, name) [unique]
+  }
+}
+
+Table modifier {
+  id uuid [pk]
+  property_id uuid [not null]
+  name varchar(100) [not null]
+  price numeric(12,2) [not null, default: 0]
+  is_active boolean [not null, default: true]
+
+  Indexes {
+    (property_id, name) [unique]
+  }
+}
+
+Table menu_item_modifier {
+  menu_item_id uuid [pk]
+  modifier_id uuid [pk]
+  max_quantity smallint [not null, default: 1]
+}
+
+Table availability_window {
+  id uuid [pk]
+  menu_item_id uuid [not null]
+  day_of_week smallint [note: 'ISO 1-7, nulo = todos os dias']
+  start_time time [not null]
+  end_time time [not null, note: 'menor que start_time = cruza a meia-noite']
+}
+
+Table dining_table {
+  id uuid [pk]
+  property_id uuid [not null]
+  label varchar(20) [not null]
+  seats smallint
+  area varchar(50)
+  is_active boolean [not null, default: true]
+  created_at timestamptz [not null]
+  created_by uuid
+  updated_at timestamptz
+  updated_by uuid
+
+  Indexes {
+    (property_id, label) [unique]
+  }
+}
+
+Table tab {
+  id uuid [pk]
+  property_id uuid [not null]
+  origin varchar(20) [not null, note: 'TABLE_SERVICE SELF_SERVICE']
+  dining_table_id uuid
+  card_number integer
+  status varchar(20) [not null, default: 'OPEN', note: 'OPEN CLOSING CLOSED CANCELLED']
+  public_token uuid [not null, unique, note: 'QR code publico']
+  folio_id uuid [note: 'definido no fechamento']
+  destination varchar(20) [note: 'DIRECT_PAYMENT ROOM_ACCOUNT']
+  service_charge_applied boolean [not null, default: true]
+  service_charge_rate numeric(5,4) [not null, default: 0.1000]
+  guest_count smallint
+  opened_by uuid [not null]
+  opened_at timestamptz [not null]
+  closing_started_at timestamptz
+  closed_at timestamptz
+  closed_by uuid
+  created_at timestamptz [not null]
+  created_by uuid
+  updated_at timestamptz
+  updated_by uuid
+
+  Indexes {
+    dining_table_id [unique, note: 'parcial: status IN (OPEN, CLOSING)']
+    (property_id, card_number) [unique, note: 'parcial: status IN (OPEN, CLOSING)']
+  }
+
+  Note: 'CHECK: TABLE_SERVICE exige dining_table_id; SELF_SERVICE exige card_number'
+}
+
+Table tab_item {
+  id uuid [pk]
+  tab_id uuid [not null]
+  menu_item_id uuid [not null]
+  menu_item_variant_id uuid
+  item_name varchar(200) [not null, note: 'snapshot']
+  quantity smallint [not null, default: 1]
+  weight_grams integer
+  unit_price numeric(12,2) [note: 'snapshot']
+  price_per_kilo numeric(12,2) [note: 'snapshot']
+  line_total numeric(12,2) [not null]
+  service_chargeable boolean [not null]
+  special_instructions text
+  prep_station varchar(20) [not null, note: 'snapshot - KITCHEN PIZZA BAR']
+  status varchar(20) [not null, default: 'PENDING', note: 'PENDING IN_PREPARATION READY DELIVERED CANCELLED']
+  ordered_by uuid [not null]
+  ordered_at timestamptz [not null]
+  preparation_started_at timestamptz
+  ready_at timestamptz
+  delivered_at timestamptz
+  cancelled_at timestamptz
+  cancelled_by uuid
+  cancellation_reason text
+
+  Indexes {
+    (prep_station, status, ordered_at) [note: 'fila do KDS, parcial em PENDING e IN_PREPARATION']
+  }
+}
+
+Table tab_item_modifier {
+  id uuid [pk]
+  tab_item_id uuid [not null]
+  modifier_id uuid [not null]
+  modifier_name varchar(100) [not null, note: 'snapshot']
+  price numeric(12,2) [not null, note: 'snapshot']
+  quantity smallint [not null, default: 1]
+}
+
+// ─────────────────────────────────────────────
+// RELACIONAMENTOS
+// ─────────────────────────────────────────────
+
+Ref: setting.property_id > property.id
+Ref: app_user.property_id > property.id
+Ref: user_role.app_user_id > app_user.id
+
+Ref: folio.property_id > property.id
+Ref: charge.folio_id > folio.id
+Ref: payment.folio_id > folio.id
+Ref: payment.cash_drawer_session_id > cash_drawer_session.id
+Ref: cash_drawer_session.property_id > property.id
+Ref: cash_drawer_session.opened_by > app_user.id
+Ref: cash_movement.cash_drawer_session_id > cash_drawer_session.id
+
+Ref: room_type.property_id > property.id
+Ref: room.property_id > property.id
+Ref: room.room_type_id > room_type.id
+Ref: rate_plan.property_id > property.id
+Ref: rate_plan.room_type_id > room_type.id
+Ref: daily_inventory.property_id > property.id
+Ref: daily_inventory.room_type_id > room_type.id
+Ref: guest.property_id > property.id
+Ref: reservation.property_id > property.id
+Ref: reservation.room_type_id > room_type.id
+Ref: reservation.primary_guest_id > guest.id
+Ref: reservation.assigned_room_id > room.id
+Ref: reservation.folio_id > folio.id
+Ref: reservation_child.reservation_id > reservation.id
+Ref: room_night.reservation_id > reservation.id
+Ref: room_night.rate_plan_id > rate_plan.id
+
+Ref: menu_category.property_id > property.id
+Ref: menu_item.property_id > property.id
+Ref: menu_item.menu_category_id > menu_category.id
+Ref: menu_item_variant.menu_item_id > menu_item.id
+Ref: modifier.property_id > property.id
+Ref: menu_item_modifier.menu_item_id > menu_item.id
+Ref: menu_item_modifier.modifier_id > modifier.id
+Ref: availability_window.menu_item_id > menu_item.id
+Ref: dining_table.property_id > property.id
+Ref: tab.property_id > property.id
+Ref: tab.dining_table_id > dining_table.id
+Ref: tab.folio_id > folio.id
+Ref: tab_item.tab_id > tab.id
+Ref: tab_item.menu_item_id > menu_item.id
+Ref: tab_item.menu_item_variant_id > menu_item_variant.id
+Ref: tab_item_modifier.tab_item_id > tab_item.id
+Ref: tab_item_modifier.modifier_id > modifier.id
+
+// NOTA: charge.source_id aponta para room_night.id ou tab.id
+// SEM foreign key, de proposito: uma FK cruzaria a fronteira do modulo
+// billing, que nao pode conhecer hotel nem restaurant.
