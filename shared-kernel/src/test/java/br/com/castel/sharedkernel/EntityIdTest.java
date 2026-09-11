@@ -33,6 +33,15 @@ class EntityIdTest {
                 .isEqualTo("INVALID_ENTITY_ID");
     }
 
+    /** UUID.fromString accepts "1-1-1-1-1"; the rule requires the canonical 8-4-4-4-12 form. */
+    @Test
+    void shouldRejectNonCanonicalUuidTextWithInvalidEntityIdCode() {
+        assertThatThrownBy(() -> EntityId.of("1-1-1-1-1", FooId::new))
+                .asInstanceOf(type(InvalidEntityIdException.class))
+                .extracting(InvalidEntityIdException::code)
+                .isEqualTo("INVALID_ENTITY_ID");
+    }
+
     // ---------------------------------------------------------------------
     // newId(constructor)
     // ---------------------------------------------------------------------

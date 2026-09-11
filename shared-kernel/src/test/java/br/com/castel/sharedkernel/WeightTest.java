@@ -1,11 +1,15 @@
 package br.com.castel.sharedkernel;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.InstanceOfAssertFactories.STRING;
 import static org.assertj.core.api.InstanceOfAssertFactories.type;
 
 import java.math.BigDecimal;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 
 class WeightTest {
 
@@ -103,6 +107,42 @@ class WeightTest {
     void shouldRejectKilosWithFractionOfGram() {
         assertThatThrownBy(() -> Weight.ofKilos(new BigDecimal("0.4375")))
                 .isInstanceOf(InvalidWeightException.class);
+    }
+
+    @Test
+    void shouldAcceptWeightAtExactUpperLimitOf50000Grams() {
+        assertThatCode(() -> Weight.ofGrams(50_000)).doesNotThrowAnyException();
+    }
+
+    @Test
+    void shouldRejectWeightOneGramAboveUpperLimitWithInvalidWeightCode() {
+        assertThatThrownBy(() -> Weight.ofGrams(50_001))
+                .asInstanceOf(type(InvalidWeightException.class))
+                .extracting(InvalidWeightException::code)
+                .isEqualTo("INVALID_WEIGHT");
+    }
+
+    @Test
+    @Timeout(value = 1, unit = TimeUnit.SECONDS, threadMode = Timeout.ThreadMode.SEPARATE_THREAD)
+    void shouldRejectKilosWithAstronomicalExponentWithInvalidWeightCode() {
+        BigDecimal astronomicalKilos = new BigDecimal("1E+10000000");
+
+        assertThatThrownBy(() -> Weight.ofKilos(astronomicalKilos))
+                .asInstanceOf(type(InvalidWeightException.class))
+                .extracting(InvalidWeightException::code)
+                .isEqualTo("INVALID_WEIGHT");
+    }
+
+    @Test
+    @Timeout(value = 1, unit = TimeUnit.SECONDS, threadMode = Timeout.ThreadMode.SEPARATE_THREAD)
+    void shouldNotEchoRejectedAstronomicalKilosInExceptionMessage() {
+        BigDecimal astronomicalKilos = new BigDecimal("1E+10000000");
+
+        assertThatThrownBy(() -> Weight.ofKilos(astronomicalKilos))
+                .isInstanceOf(InvalidWeightException.class)
+                .extracting(Throwable::getMessage, STRING)
+                .doesNotContain("1E+10000000")
+                .hasSizeLessThan(200);
     }
 
     @Test

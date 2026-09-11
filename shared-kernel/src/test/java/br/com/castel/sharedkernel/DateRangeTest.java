@@ -2,9 +2,12 @@ package br.com.castel.sharedkernel;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.InstanceOfAssertFactories.type;
 
 import java.time.LocalDate;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 
 class DateRangeTest {
 
@@ -39,6 +42,39 @@ class DateRangeTest {
     void shouldRejectDateRangeWhenEndIsBeforeStart() {
         assertThatThrownBy(() -> DateRange.of(OCT_04, OCT_01))
                 .isInstanceOf(InvalidDateRangeException.class);
+    }
+
+    // ---------------------------------------------------------------------
+    // Maximum length: 365 nights
+    // ---------------------------------------------------------------------
+
+    /** 2026 is not a leap year: Jan 1 2026 to Jan 1 2027 is exactly 365 nights. */
+    @Test
+    void shouldAcceptDateRangeWithExactly365Nights() {
+        DateRange range = DateRange.of(LocalDate.of(2026, 1, 1), LocalDate.of(2027, 1, 1));
+
+        assertThat(range.nights()).isEqualTo(365);
+    }
+
+    @Test
+    void shouldRejectDateRangeWith366NightsWithInvalidDateRangeCode() {
+        LocalDate start = LocalDate.of(2026, 1, 1);
+        LocalDate endAfter366Nights = LocalDate.of(2027, 1, 2);
+
+        assertThatThrownBy(() -> DateRange.of(start, endAfter366Nights))
+                .asInstanceOf(type(InvalidDateRangeException.class))
+                .extracting(InvalidDateRangeException::code)
+                .isEqualTo("INVALID_DATE_RANGE");
+    }
+
+    /** Whole LocalDate span: must be a domain exception, not ArithmeticException. */
+    @Test
+    @Timeout(value = 1, unit = TimeUnit.SECONDS, threadMode = Timeout.ThreadMode.SEPARATE_THREAD)
+    void shouldRejectDateRangeFromMinToMaxLocalDateWithInvalidDateRangeCode() {
+        assertThatThrownBy(() -> DateRange.of(LocalDate.MIN, LocalDate.MAX))
+                .asInstanceOf(type(InvalidDateRangeException.class))
+                .extracting(InvalidDateRangeException::code)
+                .isEqualTo("INVALID_DATE_RANGE");
     }
 
     // ---------------------------------------------------------------------

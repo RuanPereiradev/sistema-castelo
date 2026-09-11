@@ -3,9 +3,11 @@ package br.com.castel.sharedkernel;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.InstanceOfAssertFactories.STRING;
 import static org.assertj.core.api.InstanceOfAssertFactories.type;
 
 import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
@@ -293,6 +295,196 @@ class MoneyTest {
                 .asInstanceOf(type(InvalidMoneyException.class))
                 .extracting(InvalidMoneyException::code)
                 .isEqualTo("INVALID_MONEY");
+    }
+
+    /**
+     * 1 x 10^2147483648: the product's scale falls outside the int range. Must surface as
+     * the domain exception, not ArithmeticException.
+     */
+    @Test
+    @Timeout(value = 1, unit = TimeUnit.SECONDS, threadMode = Timeout.ThreadMode.SEPARATE_THREAD)
+    void shouldRejectMultiplicationFactorWithScaleAtIntegerMinValueWithInvalidMoneyCode() {
+        Money amount = Money.of("10.00");
+        BigDecimal factorWithMinimumScale = new BigDecimal(BigInteger.ONE, Integer.MIN_VALUE);
+
+        assertThatThrownBy(() -> amount.multiply(factorWithMinimumScale))
+                .asInstanceOf(type(InvalidMoneyException.class))
+                .extracting(InvalidMoneyException::code)
+                .isEqualTo("INVALID_MONEY");
+    }
+
+    // ---------------------------------------------------------------------
+    // Denial of service: absurd inputs rejected before any expensive work
+    // ---------------------------------------------------------------------
+
+    @Test
+    @Timeout(value = 1, unit = TimeUnit.SECONDS, threadMode = Timeout.ThreadMode.SEPARATE_THREAD)
+    void shouldRejectBigDecimalAmountWithAstronomicalExponentWithInvalidMoneyCode() {
+        BigDecimal astronomicalAmount = new BigDecimal("1E+999999999");
+
+        assertThatThrownBy(() -> Money.of(astronomicalAmount))
+                .asInstanceOf(type(InvalidMoneyException.class))
+                .extracting(InvalidMoneyException::code)
+                .isEqualTo("INVALID_MONEY");
+    }
+
+    @Test
+    @Timeout(value = 1, unit = TimeUnit.SECONDS, threadMode = Timeout.ThreadMode.SEPARATE_THREAD)
+    void shouldRejectAmountTextWithTwoHundredThousandTrailingZerosWithInvalidMoneyCode() {
+        String giantAmountText = "1." + "0".repeat(200_000);
+
+        assertThatThrownBy(() -> Money.of(giantAmountText))
+                .asInstanceOf(type(InvalidMoneyException.class))
+                .extracting(InvalidMoneyException::code)
+                .isEqualTo("INVALID_MONEY");
+    }
+
+    @Test
+    @Timeout(value = 1, unit = TimeUnit.SECONDS, threadMode = Timeout.ThreadMode.SEPARATE_THREAD)
+    void shouldNotEchoRejectedAstronomicalAmountInExceptionMessage() {
+        BigDecimal astronomicalAmount = new BigDecimal("1E+999999999");
+
+        assertThatThrownBy(() -> Money.of(astronomicalAmount))
+                .isInstanceOf(InvalidMoneyException.class)
+                .extracting(Throwable::getMessage, STRING)
+                .doesNotContain("1E+999999999")
+                .hasSizeLessThan(200);
+    }
+
+    @Test
+    @Timeout(value = 1, unit = TimeUnit.SECONDS, threadMode = Timeout.ThreadMode.SEPARATE_THREAD)
+    void shouldNotEchoRejectedGiantAmountTextInExceptionMessage() {
+        String giantAmountText = "1." + "0".repeat(200_000);
+
+        assertThatThrownBy(() -> Money.of(giantAmountText))
+                .isInstanceOf(InvalidMoneyException.class)
+                .extracting(Throwable::getMessage, STRING)
+                .doesNotContain(giantAmountText)
+                .hasSizeLessThan(200);
+    }
+
+    // ---------------------------------------------------------------------
+    // Text length limit: 25 characters after stripping surrounding whitespace
+    // ---------------------------------------------------------------------
+
+    /** "10." + 22 zeros = 25 characters; trailing zeros beyond the second decimal are accepted. */
+    @Test
+    void shouldAcceptAmountTextWithExactly25Characters() {
+        String textWith25Characters = "10." + "0".repeat(22);
+
+        Money result = Money.of(textWith25Characters);
+
+        assertThat(result).isEqualTo(Money.of("10.00"));
+    }
+
+    /** "10." + 23 zeros = 26 characters, otherwise valid. */
+    @Test
+    void shouldRejectAmountTextWith26CharactersWithInvalidMoneyCode() {
+        String textWith26Characters = "10." + "0".repeat(23);
+
+        assertThatThrownBy(() -> Money.of(textWith26Characters))
+                .asInstanceOf(type(InvalidMoneyException.class))
+                .extracting(InvalidMoneyException::code)
+                .isEqualTo("INVALID_MONEY");
+    }
+
+    /** 25 significant characters plus surrounding whitespace: length counted after stripping. */
+    @Test
+    void shouldNotCountSurroundingWhitespaceTowardsAmountTextLengthLimit() {
+        String textWith25CharactersAndSurroundingWhitespace = "   10." + "0".repeat(22) + "   ";
+
+        Money result = Money.of(textWith25CharactersAndSurroundingWhitespace);
+
+        assertThat(result).isEqualTo(Money.of("10.00"));
+    }
+
+    // ---------------------------------------------------------------------
+    // Malformed text
+    // ---------------------------------------------------------------------
+
+    @Test
+    void shouldRejectAmountWithCombinedSignsWithInvalidMoneyCode() {
+        assertThatThrownBy(() -> Money.of("+-10"))
+                .asInstanceOf(type(InvalidMoneyException.class))
+                .extracting(InvalidMoneyException::code)
+                .isEqualTo("INVALID_MONEY");
+    }
+
+    @Test
+    void shouldRejectBlankAmountTextWithInvalidMoneyCode() {
+        assertThatThrownBy(() -> Money.of("   "))
+                .asInstanceOf(type(InvalidMoneyException.class))
+                .extracting(InvalidMoneyException::code)
+                .isEqualTo("INVALID_MONEY");
+    }
+
+    // ---------------------------------------------------------------------
+    // Lower limit: NUMERIC(12,2) is symmetric
+    // ---------------------------------------------------------------------
+
+    @Test
+    void shouldAcceptAmountAtExactLowerLimitOfNumeric12Scale2() {
+        assertThatCode(() -> Money.of("-9999999999.99")).doesNotThrowAnyException();
+    }
+
+    @Test
+    void shouldRejectAmountOneCentBelowLowerLimitWithOutOfRangeCode() {
+        assertThatThrownBy(() -> Money.of("-10000000000.00"))
+                .asInstanceOf(type(InvalidMoneyException.class))
+                .extracting(InvalidMoneyException::code)
+                .isEqualTo("MONEY_OUT_OF_RANGE");
+    }
+
+    // ---------------------------------------------------------------------
+    // Overflow produced by operations
+    // ---------------------------------------------------------------------
+
+    @Test
+    void shouldAcceptAdditionReachingExactUpperLimit() {
+        Money result = Money.of("9999999999.98").plus(Money.of("0.01"));
+
+        assertThat(result).isEqualTo(Money.of("9999999999.99"));
+    }
+
+    @Test
+    void shouldRejectAdditionExceedingUpperLimitWithOutOfRangeCode() {
+        Money atUpperLimit = Money.of("9999999999.99");
+
+        assertThatThrownBy(() -> atUpperLimit.plus(Money.of("0.01")))
+                .asInstanceOf(type(InvalidMoneyException.class))
+                .extracting(InvalidMoneyException::code)
+                .isEqualTo("MONEY_OUT_OF_RANGE");
+    }
+
+    @Test
+    void shouldRejectSubtractionExceedingLowerLimitWithOutOfRangeCode() {
+        Money atLowerLimit = Money.of("-9999999999.99");
+
+        assertThatThrownBy(() -> atLowerLimit.minus(Money.of("0.01")))
+                .asInstanceOf(type(InvalidMoneyException.class))
+                .extracting(InvalidMoneyException::code)
+                .isEqualTo("MONEY_OUT_OF_RANGE");
+    }
+
+    @Test
+    void shouldRejectIntegerMultiplicationExceedingUpperLimitWithOutOfRangeCode() {
+        Money atUpperLimit = Money.of("9999999999.99");
+
+        assertThatThrownBy(() -> atUpperLimit.multiply(2))
+                .asInstanceOf(type(InvalidMoneyException.class))
+                .extracting(InvalidMoneyException::code)
+                .isEqualTo("MONEY_OUT_OF_RANGE");
+    }
+
+    @Test
+    void shouldRejectPercentageExceedingUpperLimitWithOutOfRangeCode() {
+        Money atUpperLimit = Money.of("9999999999.99");
+        Percentage twoHundredPercent = Percentage.ofPercent(200);
+
+        assertThatThrownBy(() -> atUpperLimit.percentage(twoHundredPercent))
+                .asInstanceOf(type(InvalidMoneyException.class))
+                .extracting(InvalidMoneyException::code)
+                .isEqualTo("MONEY_OUT_OF_RANGE");
     }
 
     // ---------------------------------------------------------------------

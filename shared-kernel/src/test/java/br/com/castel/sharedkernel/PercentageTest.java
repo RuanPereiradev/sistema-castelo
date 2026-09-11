@@ -6,7 +6,10 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.InstanceOfAssertFactories.type;
 
 import java.math.BigDecimal;
+import java.math.BigInteger;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 
 class PercentageTest {
 
@@ -75,6 +78,96 @@ class PercentageTest {
     @Test
     void shouldRejectPercentAboveUpperLimitWithInvalidPercentageCode() {
         assertThatThrownBy(() -> Percentage.ofPercent("1000"))
+                .asInstanceOf(type(InvalidPercentageException.class))
+                .extracting(InvalidPercentageException::code)
+                .isEqualTo("INVALID_PERCENTAGE");
+    }
+
+    @Test
+    void shouldAcceptFractionAtExactUpperLimitOfNumeric5Scale4() {
+        assertThatCode(() -> Percentage.ofFraction(new BigDecimal("9.9999"))).doesNotThrowAnyException();
+    }
+
+    @Test
+    void shouldRejectFractionOneTenThousandthAboveUpperLimitWithInvalidPercentageCode() {
+        assertThatThrownBy(() -> Percentage.ofFraction(new BigDecimal("10")))
+                .asInstanceOf(type(InvalidPercentageException.class))
+                .extracting(InvalidPercentageException::code)
+                .isEqualTo("INVALID_PERCENTAGE");
+    }
+
+    // ---------------------------------------------------------------------
+    // Absurd scale: domain exception, not ArithmeticException
+    // ---------------------------------------------------------------------
+
+    /** 1 x 10^-2147483647: converting percent to fraction would overflow the int scale. */
+    @Test
+    @Timeout(value = 1, unit = TimeUnit.SECONDS, threadMode = Timeout.ThreadMode.SEPARATE_THREAD)
+    void shouldRejectPercentWithScaleAtIntegerMaxValueWithInvalidPercentageCode() {
+        BigDecimal percentWithMaximumScale = new BigDecimal(BigInteger.ONE, Integer.MAX_VALUE);
+
+        assertThatThrownBy(() -> Percentage.ofPercent(percentWithMaximumScale))
+                .asInstanceOf(type(InvalidPercentageException.class))
+                .extracting(InvalidPercentageException::code)
+                .isEqualTo("INVALID_PERCENTAGE");
+    }
+
+    // ---------------------------------------------------------------------
+    // Malformed text
+    // ---------------------------------------------------------------------
+
+    /**
+     * 26 characters. Whether trailing zeros beyond scale are accepted for Percentage is not
+     * specified, so this text may also be rejected by another rule (see report).
+     */
+    @Test
+    void shouldRejectPercentTextWith26CharactersWithInvalidPercentageCode() {
+        String textWith26Characters = "10." + "0".repeat(23);
+
+        assertThatThrownBy(() -> Percentage.ofPercent(textWith26Characters))
+                .asInstanceOf(type(InvalidPercentageException.class))
+                .extracting(InvalidPercentageException::code)
+                .isEqualTo("INVALID_PERCENTAGE");
+    }
+
+    /** Arabic-Indic digits ONE and TWO ("12"), accepted by Character.isDigit but not ASCII. */
+    @Test
+    void shouldRejectPercentWrittenWithArabicIndicDigitsWithInvalidPercentageCode() {
+        String arabicIndicTwelve = "١٢";
+
+        assertThatThrownBy(() -> Percentage.ofPercent(arabicIndicTwelve))
+                .asInstanceOf(type(InvalidPercentageException.class))
+                .extracting(InvalidPercentageException::code)
+                .isEqualTo("INVALID_PERCENTAGE");
+    }
+
+    @Test
+    void shouldRejectPercentWithoutIntegerPartWithInvalidPercentageCode() {
+        assertThatThrownBy(() -> Percentage.ofPercent(".5"))
+                .asInstanceOf(type(InvalidPercentageException.class))
+                .extracting(InvalidPercentageException::code)
+                .isEqualTo("INVALID_PERCENTAGE");
+    }
+
+    @Test
+    void shouldRejectPercentWithDecimalPointButNoFractionDigitsWithInvalidPercentageCode() {
+        assertThatThrownBy(() -> Percentage.ofPercent("5."))
+                .asInstanceOf(type(InvalidPercentageException.class))
+                .extracting(InvalidPercentageException::code)
+                .isEqualTo("INVALID_PERCENTAGE");
+    }
+
+    @Test
+    void shouldRejectPercentWithCombinedSignsWithInvalidPercentageCode() {
+        assertThatThrownBy(() -> Percentage.ofPercent("+-10"))
+                .asInstanceOf(type(InvalidPercentageException.class))
+                .extracting(InvalidPercentageException::code)
+                .isEqualTo("INVALID_PERCENTAGE");
+    }
+
+    @Test
+    void shouldRejectBlankPercentTextWithInvalidPercentageCode() {
+        assertThatThrownBy(() -> Percentage.ofPercent("   "))
                 .asInstanceOf(type(InvalidPercentageException.class))
                 .extracting(InvalidPercentageException::code)
                 .isEqualTo("INVALID_PERCENTAGE");
