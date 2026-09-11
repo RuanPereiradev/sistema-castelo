@@ -2,6 +2,7 @@ package br.com.castel.sharedkernel;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.util.regex.Pattern;
 
 /**
  * Monetary amount in the property's single currency, always with two decimal places.
@@ -10,6 +11,15 @@ import java.math.RoundingMode;
  * rejected with {@link InvalidMoneyException#MONEY_SCALE_EXCEEDED}. Operations round
  * {@link RoundingMode#HALF_UP}, which moves ties away from zero for negative amounts too.
  *
+ * <p>Every instance, including the result of any operation, fits a {@code NUMERIC(12,2)} column:
+ * from {@code -9999999999.99} to {@code 9999999999.99}. Anything outside is rejected with
+ * {@link InvalidMoneyException#MONEY_OUT_OF_RANGE}.
+ *
+ * <p>Text input must be a plain decimal: an optional leading minus sign, digits and an optional
+ * fraction. Scientific notation, a plus sign and surrounding whitespace are rejected with
+ * {@link InvalidMoneyException#INVALID_MONEY}. When text breaks more than one rule, the code follows
+ * the order format, then scale, then range.
+ *
  * <p>A null argument, wherever a {@code Money} or a multiplication factor is expected, is rejected
  * with {@link InvalidMoneyException#INVALID_MONEY}.
  */
@@ -17,37 +27,36 @@ public final class Money {
 
     private static final int SCALE = 2;
     private static final RoundingMode ROUNDING = RoundingMode.HALF_UP;
+    private static final BigDecimal MAXIMUM_MAGNITUDE = new BigDecimal("9999999999.99");
+    private static final Pattern PLAIN_DECIMAL = Pattern.compile("-?[0-9]+(\\.[0-9]+)?");
 
     public static final Money ZERO = new Money(BigDecimal.ZERO.setScale(SCALE));
 
     private final BigDecimal amount;
 
+    /** Receives an amount already at scale 2. */
     private Money(BigDecimal amount) {
-        this.amount = amount;
+        this.amount = requireWithinRange(amount);
     }
 
     public static Money of(BigDecimal amount) {
         if (amount == null) {
             throw InvalidMoneyException.invalid("Amount must not be null");
         }
-        try {
-            return new Money(amount.setScale(SCALE, RoundingMode.UNNECESSARY));
-        } catch (ArithmeticException exception) {
+        if (amount.stripTrailingZeros().scale() > SCALE) {
             throw InvalidMoneyException.scaleExceeded(amount);
         }
+        return new Money(requireWithinRange(amount).setScale(SCALE, RoundingMode.UNNECESSARY));
     }
 
     public static Money of(String amount) {
         if (amount == null) {
             throw InvalidMoneyException.invalid("Amount must not be null");
         }
-        BigDecimal parsed;
-        try {
-            parsed = new BigDecimal(amount);
-        } catch (NumberFormatException exception) {
-            throw InvalidMoneyException.invalid("Amount is not a decimal number: " + amount);
+        if (!PLAIN_DECIMAL.matcher(amount).matches()) {
+            throw InvalidMoneyException.invalid("Amount is not a plain decimal number: " + amount);
         }
-        return of(parsed);
+        return of(new BigDecimal(amount));
     }
 
     public static Money ofCents(long cents) {
@@ -116,6 +125,14 @@ public final class Money {
     /** Plain decimal with two places, as it travels in the API: {@code "180.00"}. */
     public String asString() {
         return amount.toPlainString();
+    }
+
+    /** Exact for amounts with at most two decimal places, which is all this class ever checks. */
+    private static BigDecimal requireWithinRange(BigDecimal amount) {
+        if (amount.abs().compareTo(MAXIMUM_MAGNITUDE) > 0) {
+            throw InvalidMoneyException.outOfRange(amount.toPlainString(), MAXIMUM_MAGNITUDE);
+        }
+        return amount;
     }
 
     private static Money requireMoney(Money money) {

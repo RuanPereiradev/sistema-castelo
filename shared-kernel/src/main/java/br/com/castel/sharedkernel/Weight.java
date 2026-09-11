@@ -50,10 +50,18 @@ public final class Weight {
         return BigDecimal.valueOf(grams, GRAMS_PER_KILO_EXPONENT);
     }
 
-    /** Price of this weight at the given price per kilo, rounded HALF_UP to two decimal places. */
+    /**
+     * Price of this weight at the given price per kilo, rounded HALF_UP to two decimal places.
+     *
+     * @throws InvalidMoneyException with code {@code INVALID_MONEY} if the price per kilo is null,
+     *     zero or negative
+     */
     public Money priceAt(Money pricePerKilo) {
         if (pricePerKilo == null) {
             throw InvalidMoneyException.invalid("Price per kilo must not be null");
+        }
+        if (!pricePerKilo.isPositive()) {
+            throw InvalidMoneyException.invalid("Price per kilo must be positive: " + pricePerKilo);
         }
         return pricePerKilo.multiply(kilos());
     }

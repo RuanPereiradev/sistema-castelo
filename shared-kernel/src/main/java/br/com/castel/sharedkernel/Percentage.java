@@ -7,13 +7,15 @@ import java.math.RoundingMode;
  * Non-negative rate, such as the service charge, stored as a fraction with four decimal places
  * ({@code 0.1000} is 10%), matching a {@code NUMERIC(5,4)} column.
  *
- * <p>Values above 100% are accepted. Construction is exact: a rate finer than four fraction
- * places (e.g. 12.345%) is rejected instead of silently rounded.
+ * <p>Values from 0% to 999.99% (fraction {@code 9.9999}) are accepted, so rates above 100% are valid.
+ * Construction is exact: a rate finer than four fraction places (e.g. 12.345%) is rejected instead
+ * of silently rounded.
  */
 public final class Percentage {
 
     private static final int FRACTION_SCALE = 4;
     private static final int PERCENT_TO_FRACTION_SHIFT = 2;
+    private static final BigDecimal MAXIMUM_FRACTION = new BigDecimal("9.9999");
 
     private final BigDecimal fraction;
 
@@ -27,6 +29,10 @@ public final class Percentage {
         }
         if (fraction.signum() < 0) {
             throw new InvalidPercentageException("Percentage must not be negative: " + fraction);
+        }
+        if (fraction.compareTo(MAXIMUM_FRACTION) > 0) {
+            throw new InvalidPercentageException(
+                    "Fraction must not exceed " + MAXIMUM_FRACTION + ": " + fraction);
         }
         try {
             return new Percentage(fraction.setScale(FRACTION_SCALE, RoundingMode.UNNECESSARY));

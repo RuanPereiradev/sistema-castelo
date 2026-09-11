@@ -2,7 +2,10 @@ package br.com.castel.sharedkernel;
 
 import java.io.Serial;
 
-/** Thrown when a {@link Percentage} is null, unparseable, negative or finer than the stored precision. */
+/**
+ * Thrown when a {@link Percentage} is null, unparseable, negative, above 999.99% or finer than the
+ * stored precision.
+ */
 public final class InvalidPercentageException extends DomainException {
 
     @Serial
