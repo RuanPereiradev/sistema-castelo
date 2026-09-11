@@ -2,6 +2,7 @@ package br.com.castel.sharedkernel;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.InstanceOfAssertFactories.type;
 
 import java.math.BigDecimal;
 import org.junit.jupiter.api.Test;
@@ -47,6 +48,27 @@ class WeightTest {
         Money price = weight.priceAt(Money.of("50.02"));
 
         assertThat(price).isEqualTo(Money.of("12.51"));
+    }
+
+    @Test
+    void shouldRejectNegativePricePerKiloWithInvalidMoneyCode() {
+        Weight weight = Weight.ofGrams(437);
+        Money negativePricePerKilo = Money.of("89.90").negate();
+
+        assertThatThrownBy(() -> weight.priceAt(negativePricePerKilo))
+                .asInstanceOf(type(InvalidMoneyException.class))
+                .extracting(InvalidMoneyException::code)
+                .isEqualTo("INVALID_MONEY");
+    }
+
+    @Test
+    void shouldRejectZeroPricePerKiloWithInvalidMoneyCode() {
+        Weight weight = Weight.ofGrams(437);
+
+        assertThatThrownBy(() -> weight.priceAt(Money.ZERO))
+                .asInstanceOf(type(InvalidMoneyException.class))
+                .extracting(InvalidMoneyException::code)
+                .isEqualTo("INVALID_MONEY");
     }
 
     // ---------------------------------------------------------------------

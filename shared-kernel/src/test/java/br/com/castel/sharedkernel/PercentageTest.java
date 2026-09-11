@@ -3,6 +3,7 @@ package br.com.castel.sharedkernel;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.InstanceOfAssertFactories.type;
 
 import java.math.BigDecimal;
 import org.junit.jupiter.api.Test;
@@ -45,6 +46,23 @@ class PercentageTest {
     @Test
     void shouldAcceptPercentAboveOneHundred() {
         assertThatCode(() -> Percentage.ofPercent(150)).doesNotThrowAnyException();
+    }
+
+    // ---------------------------------------------------------------------
+    // Upper limit: NUMERIC(5,4), largest fraction 9.9999 (999.99%)
+    // ---------------------------------------------------------------------
+
+    @Test
+    void shouldAcceptPercentAtExactUpperLimitOfNumeric5Scale4() {
+        assertThatCode(() -> Percentage.ofPercent("999.99")).doesNotThrowAnyException();
+    }
+
+    @Test
+    void shouldRejectPercentAboveUpperLimitWithInvalidPercentageCode() {
+        assertThatThrownBy(() -> Percentage.ofPercent("1000"))
+                .asInstanceOf(type(InvalidPercentageException.class))
+                .extracting(InvalidPercentageException::code)
+                .isEqualTo("INVALID_PERCENTAGE");
     }
 
     // ---------------------------------------------------------------------

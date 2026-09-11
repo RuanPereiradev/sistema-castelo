@@ -9,6 +9,7 @@ import static org.junit.jupiter.params.provider.Arguments.arguments;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.UUID;
 import java.util.stream.Stream;
 import org.assertj.core.api.ThrowableAssert.ThrowingCallable;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -19,14 +20,21 @@ import org.junit.jupiter.params.provider.MethodSource;
  * Each subclass is obtained by triggering the real domain rule that throws it,
  * so the test does not depend on exception constructors.
  *
- * <p>The {@code MONEY_SCALE_EXCEEDED} code of {@link InvalidMoneyException} is covered
- * in {@code MoneyTest}; here Money uses its canonical trigger ({@code of("abc")}).
+ * <p>The {@code MONEY_SCALE_EXCEEDED} and {@code MONEY_OUT_OF_RANGE} codes of
+ * {@link InvalidMoneyException} are covered in {@code MoneyTest}; here Money uses its
+ * canonical trigger ({@code of("abc")}).
  */
 class DomainExceptionTest {
 
     private static final String UPPER_SNAKE_CASE = "^[A-Z][A-Z0-9]*(_[A-Z0-9]+)*$";
     private static final LocalDate OCT_01 = LocalDate.of(2026, 10, 1);
     private static final LocalDate OCT_04 = LocalDate.of(2026, 10, 4);
+
+    record SampleId(UUID value) implements EntityId {
+        SampleId {
+            EntityId.requireValid(value);
+        }
+    }
 
     /** exception name, canonical trigger, expected code. */
     static Stream<Arguments> domainExceptions() {
@@ -54,12 +62,16 @@ class DomainExceptionTest {
                 arguments(
                         "InvalidCpfException",
                         (ThrowingCallable) () -> Cpf.of("11111111111"),
-                        "INVALID_CPF"));
+                        "INVALID_CPF"),
+                arguments(
+                        "InvalidEntityIdException",
+                        (ThrowingCallable) () -> EntityId.requireValid(null),
+                        "INVALID_ENTITY_ID"));
     }
 
     /**
      * Two different violations of the same rule, for subclasses that have a single code.
-     * InvalidMoneyException is excluded: by spec it has two codes.
+     * InvalidMoneyException is excluded: by spec it has more than one code.
      */
     static Stream<Arguments> singleCodeExceptionsWithTwoViolations() {
         return Stream.of(
@@ -82,7 +94,11 @@ class DomainExceptionTest {
                 arguments(
                         "InvalidCpfException",
                         (ThrowingCallable) () -> Cpf.of("11111111111"),
-                        (ThrowingCallable) () -> Cpf.of("123")));
+                        (ThrowingCallable) () -> Cpf.of("123")),
+                arguments(
+                        "InvalidEntityIdException",
+                        (ThrowingCallable) () -> EntityId.requireValid(null),
+                        (ThrowingCallable) () -> EntityId.of("not-a-uuid", SampleId::new)));
     }
 
     @ParameterizedTest(name = "{0}")

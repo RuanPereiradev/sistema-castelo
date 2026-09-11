@@ -1,23 +1,62 @@
 package br.com.castel.sharedkernel;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.InstanceOfAssertFactories.type;
 
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 
 class EntityIdTest {
 
-    private static final UUID SAME_UUID = UUID.fromString("3f2b8c1e-7a4d-4e1b-9c6f-2d8a5b7e1c90");
+    /** Same shape the concrete IDs of each module follow: validation in the compact constructor. */
+    record FooId(UUID value) implements EntityId {
+        FooId {
+            EntityId.requireValid(value);
+        }
+    }
 
-    record FooId(UUID value) implements EntityId {}
-
-    record BarId(UUID value) implements EntityId {}
+    // ---------------------------------------------------------------------
+    // of(String, constructor)
+    // ---------------------------------------------------------------------
 
     @Test
-    void shouldNotConsiderIdsOfDifferentTypesWithSameUuidEqual() {
-        FooId fooId = new FooId(SAME_UUID);
-        BarId barId = new BarId(SAME_UUID);
+    void shouldRejectMalformedUuidTextWithInvalidEntityIdCode() {
+        assertThatThrownBy(() -> EntityId.of("not-a-uuid", FooId::new))
+                .asInstanceOf(type(InvalidEntityIdException.class))
+                .extracting(InvalidEntityIdException::code)
+                .isEqualTo("INVALID_ENTITY_ID");
+    }
 
-        assertThat(fooId).isNotEqualTo(barId);
+    // ---------------------------------------------------------------------
+    // newId(constructor)
+    // ---------------------------------------------------------------------
+
+    @Test
+    void shouldGenerateDistinctValuesOnSuccessiveCalls() {
+        FooId first = EntityId.newId(FooId::new);
+        FooId second = EntityId.newId(FooId::new);
+
+        assertThat(first.value()).isNotEqualTo(second.value());
+    }
+
+    // ---------------------------------------------------------------------
+    // requireValid(UUID)
+    // ---------------------------------------------------------------------
+
+    @Test
+    void shouldRejectNullValueInRequireValidWithInvalidEntityIdCode() {
+        assertThatThrownBy(() -> EntityId.requireValid(null))
+                .asInstanceOf(type(InvalidEntityIdException.class))
+                .extracting(InvalidEntityIdException::code)
+                .isEqualTo("INVALID_ENTITY_ID");
+    }
+
+    @Test
+    void shouldRejectNullValueInConcreteIdCompactConstructorWithInvalidEntityIdCode() {
+        assertThatThrownBy(() -> new FooId(null))
+                .asInstanceOf(type(InvalidEntityIdException.class))
+                .extracting(InvalidEntityIdException::code)
+                .isEqualTo("INVALID_ENTITY_ID");
     }
 }

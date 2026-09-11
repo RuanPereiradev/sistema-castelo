@@ -195,6 +195,42 @@ class MoneyTest {
     }
 
     @Test
+    void shouldAcceptTrailingZeroBeyondSecondDecimalPlace() {
+        assertThatCode(() -> Money.of("0.010")).doesNotThrowAnyException();
+    }
+
+    @Test
+    void shouldConsiderAmountWithTrailingZeroBeyondSecondDecimalEqualToTwoDecimalAmount() {
+        Money withTrailingZero = Money.of("0.010");
+        Money withTwoDecimals = Money.of("0.01");
+
+        assertThat(withTrailingZero).isEqualTo(withTwoDecimals);
+    }
+
+    @Test
+    void shouldRejectScientificNotationWithInvalidMoneyCode() {
+        assertThatThrownBy(() -> Money.of("1E+3"))
+                .asInstanceOf(type(InvalidMoneyException.class))
+                .extracting(InvalidMoneyException::code)
+                .isEqualTo("INVALID_MONEY");
+    }
+
+    /** NUMERIC(12,2): largest representable amount. */
+    @Test
+    void shouldAcceptAmountAtExactUpperLimitOfNumeric12Scale2() {
+        assertThatCode(() -> Money.of("9999999999.99")).doesNotThrowAnyException();
+    }
+
+    /** One cent above the NUMERIC(12,2) limit. */
+    @Test
+    void shouldRejectAmountOneCentAboveUpperLimitWithOutOfRangeCode() {
+        assertThatThrownBy(() -> Money.of("10000000000.00"))
+                .asInstanceOf(type(InvalidMoneyException.class))
+                .extracting(InvalidMoneyException::code)
+                .isEqualTo("MONEY_OUT_OF_RANGE");
+    }
+
+    @Test
     void shouldRejectNullAmountWithInvalidMoneyException() {
         assertThatThrownBy(() -> Money.of((String) null))
                 .isInstanceOf(InvalidMoneyException.class);
