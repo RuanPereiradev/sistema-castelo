@@ -15,4 +15,17 @@
 
     <name>shared-kernel</name>
     <description>Money, Cpf, DateRange, DomainEvent, IDs tipados e demais tipos compartilhados</description>
+
+    <dependencies>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.assertj</groupId>
+            <artifactId>assertj-core</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
 </project>
