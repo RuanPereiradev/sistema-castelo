@@ -44,6 +44,21 @@ class PercentageTest {
     }
 
     @Test
+    void shouldRejectScientificNotationPercentWithInvalidPercentageCode() {
+        assertThatThrownBy(() -> Percentage.ofPercent("1E+2"))
+                .asInstanceOf(type(InvalidPercentageException.class))
+                .extracting(InvalidPercentageException::code)
+                .isEqualTo("INVALID_PERCENTAGE");
+    }
+
+    @Test
+    void shouldStripSurroundingWhitespaceBeforeValidatingPercent() {
+        Percentage withSurroundingWhitespace = Percentage.ofPercent(" 12.5 ");
+
+        assertThat(withSurroundingWhitespace).isEqualTo(Percentage.ofPercent("12.5"));
+    }
+
+    @Test
     void shouldAcceptPercentAboveOneHundred() {
         assertThatCode(() -> Percentage.ofPercent(150)).doesNotThrowAnyException();
     }

@@ -6,8 +6,10 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.InstanceOfAssertFactories.type;
 
 import java.math.BigDecimal;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 
 class MoneyTest {
 
@@ -240,6 +242,57 @@ class MoneyTest {
     void shouldRejectNonNumericAmountWithInvalidMoneyException() {
         assertThatThrownBy(() -> Money.of("abc"))
                 .isInstanceOf(InvalidMoneyException.class);
+    }
+
+    @Test
+    void shouldStripSurroundingWhitespaceBeforeValidatingAmount() {
+        Money withSurroundingWhitespace = Money.of(" 10.00 ");
+
+        assertThat(withSurroundingWhitespace).isEqualTo(Money.of("10.00"));
+    }
+
+    @Test
+    void shouldAcceptExplicitPositiveSignAsSameAmountWithoutSign() {
+        Money withPositiveSign = Money.of("+10.00");
+
+        assertThat(withPositiveSign).isEqualTo(Money.of("10.00"));
+    }
+
+    @Test
+    void shouldRejectAmountWithoutIntegerPartWithInvalidMoneyCode() {
+        assertThatThrownBy(() -> Money.of(".5"))
+                .asInstanceOf(type(InvalidMoneyException.class))
+                .extracting(InvalidMoneyException::code)
+                .isEqualTo("INVALID_MONEY");
+    }
+
+    @Test
+    void shouldRejectAmountWithDecimalPointButNoFractionDigitsWithInvalidMoneyCode() {
+        assertThatThrownBy(() -> Money.of("5."))
+                .asInstanceOf(type(InvalidMoneyException.class))
+                .extracting(InvalidMoneyException::code)
+                .isEqualTo("INVALID_MONEY");
+    }
+
+    // ---------------------------------------------------------------------
+    // Multiplication factor guard
+    // ---------------------------------------------------------------------
+
+    /**
+     * A factor with absurd precision must be rejected up front. Without the guard,
+     * rescaling the product can hang the CPU; the timeout runs in a separate thread
+     * so a missing guard fails the test instead of freezing the build.
+     */
+    @Test
+    @Timeout(value = 2, unit = TimeUnit.SECONDS, threadMode = Timeout.ThreadMode.SEPARATE_THREAD)
+    void shouldRejectMultiplicationFactorWithAbsurdPrecisionWithInvalidMoneyCode() {
+        Money amount = Money.of("10.00");
+        BigDecimal absurdPrecisionFactor = new BigDecimal("1E-999999999");
+
+        assertThatThrownBy(() -> amount.multiply(absurdPrecisionFactor))
+                .asInstanceOf(type(InvalidMoneyException.class))
+                .extracting(InvalidMoneyException::code)
+                .isEqualTo("INVALID_MONEY");
     }
 
     // ---------------------------------------------------------------------
