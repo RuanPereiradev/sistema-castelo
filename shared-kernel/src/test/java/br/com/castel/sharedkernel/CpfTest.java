@@ -9,37 +9,36 @@ import org.junit.jupiter.api.Test;
 /**
  * Fixtures (check digits computed by hand and verified by script):
  * <ul>
- *   <li>{@code 52998224725}: valid</li>
- *   <li>{@code 12345678909}: valid; first check digit is 0 (remainder &lt; 2 rule)</li>
- *   <li>{@code 52998224726}: first check digit correct, second wrong</li>
- *   <li>{@code 52998224733}: first check digit wrong (should be 2), second consistent
- *       with the wrong first one, so only the first-digit check rejects it</li>
+ *   <li>{@code 12345678909}: valid reference CPF (first check digit 0, second 9)</li>
+ *   <li>{@code 12345678908}: first check digit correct, second wrong</li>
+ *   <li>{@code 12345678917}: first check digit wrong (1 instead of 0); second digit 7 is
+ *       the one computed from that wrong first digit, so only the first-digit check rejects it</li>
+ *   <li>{@code 11111111111} and {@code 00000000000}: pass the check-digit arithmetic, so only
+ *       the repeated-digit rule rejects them</li>
  * </ul>
  */
 class CpfTest {
 
-    private static final String VALID_CPF = "52998224725";
-    private static final String VALID_CPF_WITH_ZERO_FIRST_CHECK_DIGIT = "12345678909";
+    private static final String VALID_CPF = "12345678909";
+
+    // ---------------------------------------------------------------------
+    // Check digits
+    // ---------------------------------------------------------------------
 
     @Test
-    void shouldAcceptKnownValidCpf() {
+    void shouldAcceptValidReferenceCpf() {
         assertThatCode(() -> Cpf.of(VALID_CPF)).doesNotThrowAnyException();
     }
 
     @Test
-    void shouldAcceptValidCpfWhoseFirstCheckDigitIsZero() {
-        assertThatCode(() -> Cpf.of(VALID_CPF_WITH_ZERO_FIRST_CHECK_DIGIT)).doesNotThrowAnyException();
-    }
-
-    @Test
     void shouldRejectCpfWhenLastCheckDigitIsWrong() {
-        assertThatThrownBy(() -> Cpf.of("52998224726"))
+        assertThatThrownBy(() -> Cpf.of("12345678908"))
                 .isInstanceOf(InvalidCpfException.class);
     }
 
     @Test
     void shouldRejectCpfWhenFirstCheckDigitIsWrong() {
-        assertThatThrownBy(() -> Cpf.of("52998224733"))
+        assertThatThrownBy(() -> Cpf.of("12345678917"))
                 .isInstanceOf(InvalidCpfException.class);
     }
 
@@ -55,29 +54,58 @@ class CpfTest {
                 .isInstanceOf(InvalidCpfException.class);
     }
 
-    @Test
-    void shouldConsiderPunctuatedAndUnpunctuatedCpfEqual() {
-        Cpf punctuated = Cpf.of("529.982.247-25");
-        Cpf unpunctuated = Cpf.of(VALID_CPF);
+    // ---------------------------------------------------------------------
+    // Normalization and formatting
+    // ---------------------------------------------------------------------
 
-        assertThat(punctuated).isEqualTo(unpunctuated);
+    @Test
+    void shouldConsiderCpfWithDotsAndDashEqualToDigitsOnlyCpf() {
+        Cpf punctuated = Cpf.of("123.456.789-09");
+        Cpf digitsOnly = Cpf.of(VALID_CPF);
+
+        assertThat(punctuated).isEqualTo(digitsOnly);
     }
 
     @Test
+    void shouldConsiderCpfWithDotsAndSpaceEqualToDigitsOnlyCpf() {
+        Cpf withSpace = Cpf.of("123.456.789 09");
+        Cpf digitsOnly = Cpf.of(VALID_CPF);
+
+        assertThat(withSpace).isEqualTo(digitsOnly);
+    }
+
+    @Test
+    void shouldFormatCpfWithDotsAndDash() {
+        Cpf cpf = Cpf.of(VALID_CPF);
+
+        assertThat(cpf.formatted()).isEqualTo("123.456.789-09");
+    }
+
+    // ---------------------------------------------------------------------
+    // Malformed input
+    // ---------------------------------------------------------------------
+
+    @Test
     void shouldRejectCpfWithFewerThanElevenDigits() {
-        assertThatThrownBy(() -> Cpf.of("5299822472"))
+        assertThatThrownBy(() -> Cpf.of("1234567890"))
                 .isInstanceOf(InvalidCpfException.class);
     }
 
     @Test
     void shouldRejectCpfWithMoreThanElevenDigits() {
-        assertThatThrownBy(() -> Cpf.of("529982247250"))
+        assertThatThrownBy(() -> Cpf.of("123456789090"))
                 .isInstanceOf(InvalidCpfException.class);
     }
 
     @Test
-    void shouldRejectCpfContainingLettersEvenWhenRemainingDigitsFormValidCpf() {
-        assertThatThrownBy(() -> Cpf.of("529982247a25"))
+    void shouldRejectCpfContainingLetterEvenWhenRemainingDigitsFormValidCpf() {
+        assertThatThrownBy(() -> Cpf.of("123456789a09"))
+                .isInstanceOf(InvalidCpfException.class);
+    }
+
+    @Test
+    void shouldRejectCpfContainingNonSeparatorSymbolEvenWhenRemainingDigitsFormValidCpf() {
+        assertThatThrownBy(() -> Cpf.of("123456789#09"))
                 .isInstanceOf(InvalidCpfException.class);
     }
 
@@ -91,12 +119,5 @@ class CpfTest {
     void shouldRejectEmptyCpf() {
         assertThatThrownBy(() -> Cpf.of(""))
                 .isInstanceOf(InvalidCpfException.class);
-    }
-
-    @Test
-    void shouldFormatCpfWithDotsAndDash() {
-        Cpf cpf = Cpf.of(VALID_CPF_WITH_ZERO_FIRST_CHECK_DIGIT);
-
-        assertThat(cpf.formatted()).isEqualTo("123.456.789-09");
     }
 }

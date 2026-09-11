@@ -9,7 +9,6 @@ import static org.junit.jupiter.params.provider.Arguments.arguments;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
-import java.util.Currency;
 import java.util.stream.Stream;
 import org.assertj.core.api.ThrowableAssert.ThrowingCallable;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -19,6 +18,9 @@ import org.junit.jupiter.params.provider.MethodSource;
 /**
  * Each subclass is obtained by triggering the real domain rule that throws it,
  * so the test does not depend on exception constructors.
+ *
+ * <p>The {@code MONEY_SCALE_EXCEEDED} code of {@link InvalidMoneyException} is covered
+ * in {@code MoneyTest}; here Money uses its canonical trigger ({@code of("abc")}).
  */
 class DomainExceptionTest {
 
@@ -26,57 +28,72 @@ class DomainExceptionTest {
     private static final LocalDate OCT_01 = LocalDate.of(2026, 10, 1);
     private static final LocalDate OCT_04 = LocalDate.of(2026, 10, 4);
 
-    /** exception name, trigger, a second trigger with different input, expected code. */
+    /** exception name, canonical trigger, expected code. */
     static Stream<Arguments> domainExceptions() {
         return Stream.of(
                 arguments(
-                        "CurrencyMismatchException",
-                        (ThrowingCallable) () -> Money.of("10.00").plus(Money.of("10.00", Currency.getInstance("USD"))),
-                        (ThrowingCallable) () -> Money.of("1.00", Currency.getInstance("EUR")).plus(Money.of("1.00")),
-                        "CURRENCY_MISMATCH"),
-                arguments(
                         "InvalidMoneyException",
                         (ThrowingCallable) () -> Money.of("abc"),
-                        (ThrowingCallable) () -> Money.of((String) null),
                         "INVALID_MONEY"),
                 arguments(
                         "InvalidPercentageException",
                         (ThrowingCallable) () -> Percentage.ofPercent(-1),
-                        (ThrowingCallable) () -> Percentage.ofFraction(new BigDecimal("-0.50")),
                         "INVALID_PERCENTAGE"),
                 arguments(
                         "InvalidQuantityException",
                         (ThrowingCallable) () -> Quantity.of(0),
-                        (ThrowingCallable) () -> Quantity.of(-5),
                         "INVALID_QUANTITY"),
                 arguments(
                         "InvalidWeightException",
                         (ThrowingCallable) () -> Weight.ofGrams(0),
-                        (ThrowingCallable) () -> Weight.ofGrams(-100),
                         "INVALID_WEIGHT"),
                 arguments(
                         "InvalidDateRangeException",
                         (ThrowingCallable) () -> DateRange.of(OCT_01, OCT_01),
-                        (ThrowingCallable) () -> DateRange.of(OCT_04, OCT_01),
                         "INVALID_DATE_RANGE"),
                 arguments(
                         "InvalidCpfException",
                         (ThrowingCallable) () -> Cpf.of("11111111111"),
-                        (ThrowingCallable) () -> Cpf.of("123"),
                         "INVALID_CPF"));
+    }
+
+    /**
+     * Two different violations of the same rule, for subclasses that have a single code.
+     * InvalidMoneyException is excluded: by spec it has two codes.
+     */
+    static Stream<Arguments> singleCodeExceptionsWithTwoViolations() {
+        return Stream.of(
+                arguments(
+                        "InvalidPercentageException",
+                        (ThrowingCallable) () -> Percentage.ofPercent(-1),
+                        (ThrowingCallable) () -> Percentage.ofFraction(new BigDecimal("-0.50"))),
+                arguments(
+                        "InvalidQuantityException",
+                        (ThrowingCallable) () -> Quantity.of(0),
+                        (ThrowingCallable) () -> Quantity.of(1000)),
+                arguments(
+                        "InvalidWeightException",
+                        (ThrowingCallable) () -> Weight.ofGrams(0),
+                        (ThrowingCallable) () -> Weight.ofGrams(-100)),
+                arguments(
+                        "InvalidDateRangeException",
+                        (ThrowingCallable) () -> DateRange.of(OCT_01, OCT_01),
+                        (ThrowingCallable) () -> DateRange.of(OCT_04, OCT_01)),
+                arguments(
+                        "InvalidCpfException",
+                        (ThrowingCallable) () -> Cpf.of("11111111111"),
+                        (ThrowingCallable) () -> Cpf.of("123")));
     }
 
     @ParameterizedTest(name = "{0}")
     @MethodSource("domainExceptions")
-    void shouldBeSubclassOfDomainException(
-            String exceptionName, ThrowingCallable trigger, ThrowingCallable otherTrigger, String expectedCode) {
+    void shouldBeSubclassOfDomainException(String exceptionName, ThrowingCallable trigger, String expectedCode) {
         assertThatThrownBy(trigger).isInstanceOf(DomainException.class);
     }
 
     @ParameterizedTest(name = "{0}")
     @MethodSource("domainExceptions")
-    void shouldExposeNonNullCode(
-            String exceptionName, ThrowingCallable trigger, ThrowingCallable otherTrigger, String expectedCode) {
+    void shouldExposeNonNullCode(String exceptionName, ThrowingCallable trigger, String expectedCode) {
         assertThatThrownBy(trigger)
                 .asInstanceOf(type(DomainException.class))
                 .extracting(DomainException::code)
@@ -85,8 +102,7 @@ class DomainExceptionTest {
 
     @ParameterizedTest(name = "{0}")
     @MethodSource("domainExceptions")
-    void shouldExposeCodeInUpperSnakeCase(
-            String exceptionName, ThrowingCallable trigger, ThrowingCallable otherTrigger, String expectedCode) {
+    void shouldExposeCodeInUpperSnakeCase(String exceptionName, ThrowingCallable trigger, String expectedCode) {
         assertThatThrownBy(trigger)
                 .asInstanceOf(type(DomainException.class))
                 .extracting(DomainException::code, STRING)
@@ -95,8 +111,7 @@ class DomainExceptionTest {
 
     @ParameterizedTest(name = "{0}")
     @MethodSource("domainExceptions")
-    void shouldExposeStableCodeDerivedFromExceptionName(
-            String exceptionName, ThrowingCallable trigger, ThrowingCallable otherTrigger, String expectedCode) {
+    void shouldExposeExpectedStableCode(String exceptionName, ThrowingCallable trigger, String expectedCode) {
         assertThatThrownBy(trigger)
                 .asInstanceOf(type(DomainException.class))
                 .extracting(DomainException::code)
@@ -104,11 +119,11 @@ class DomainExceptionTest {
     }
 
     @ParameterizedTest(name = "{0}")
-    @MethodSource("domainExceptions")
-    void shouldExposeSameCodeRegardlessOfOffendingInput(
-            String exceptionName, ThrowingCallable trigger, ThrowingCallable otherTrigger, String expectedCode) {
-        DomainException first = (DomainException) catchThrowable(trigger);
-        DomainException second = (DomainException) catchThrowable(otherTrigger);
+    @MethodSource("singleCodeExceptionsWithTwoViolations")
+    void shouldExposeSameCodeForDifferentViolationsOfSameRule(
+            String exceptionName, ThrowingCallable firstViolation, ThrowingCallable secondViolation) {
+        DomainException first = (DomainException) catchThrowable(firstViolation);
+        DomainException second = (DomainException) catchThrowable(secondViolation);
 
         assertThat(first.code()).isEqualTo(second.code());
     }

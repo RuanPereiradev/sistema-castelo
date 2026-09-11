@@ -23,4 +23,15 @@ class QuantityTest {
     void shouldAcceptQuantityOfOne() {
         assertThatCode(() -> Quantity.of(1)).doesNotThrowAnyException();
     }
+
+    @Test
+    void shouldAcceptQuantityOf999() {
+        assertThatCode(() -> Quantity.of(999)).doesNotThrowAnyException();
+    }
+
+    @Test
+    void shouldRejectQuantityOf1000() {
+        assertThatThrownBy(() -> Quantity.of(1000))
+                .isInstanceOf(InvalidQuantityException.class);
+    }
 }

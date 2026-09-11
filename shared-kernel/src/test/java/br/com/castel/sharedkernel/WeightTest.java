@@ -8,6 +8,10 @@ import org.junit.jupiter.api.Test;
 
 class WeightTest {
 
+    // ---------------------------------------------------------------------
+    // priceAt(pricePerKilo)
+    // ---------------------------------------------------------------------
+
     @Test
     void shouldPrice437GramsAt8990PerKiloAs3929() {
         Weight weight = Weight.ofGrams(437);
@@ -27,7 +31,7 @@ class WeightTest {
     }
 
     @Test
-    void shouldRoundPriceOfOneGramToNearestCent() {
+    void shouldRoundPriceOfOneGramAt8990PerKiloToNineCents() {
         Weight weight = Weight.ofGrams(1);
 
         Money price = weight.priceAt(Money.of("89.90"));
@@ -35,6 +39,7 @@ class WeightTest {
         assertThat(price).isEqualTo(Money.of("0.09"));
     }
 
+    /** 250g x 50.02/kg = 12.505: HALF_UP gives 12.51, HALF_EVEN would give 12.50. */
     @Test
     void shouldRoundPriceHalfUpWhenResultIsExactlyHalfCent() {
         Weight weight = Weight.ofGrams(250);
@@ -43,6 +48,10 @@ class WeightTest {
 
         assertThat(price).isEqualTo(Money.of("12.51"));
     }
+
+    // ---------------------------------------------------------------------
+    // Construction
+    // ---------------------------------------------------------------------
 
     @Test
     void shouldRejectZeroGrams() {
@@ -65,6 +74,12 @@ class WeightTest {
     @Test
     void shouldRejectNegativeKilos() {
         assertThatThrownBy(() -> Weight.ofKilos(new BigDecimal("-0.437")))
+                .isInstanceOf(InvalidWeightException.class);
+    }
+
+    @Test
+    void shouldRejectKilosWithFractionOfGram() {
+        assertThatThrownBy(() -> Weight.ofKilos(new BigDecimal("0.4375")))
                 .isInstanceOf(InvalidWeightException.class);
     }
 
