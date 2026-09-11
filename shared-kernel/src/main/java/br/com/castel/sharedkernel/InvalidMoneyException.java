@@ -6,7 +6,8 @@ import java.io.Serial;
  * Thrown when a {@link Money} cannot be built or operated on.
  *
  * <p>Carries one of three codes: {@link #INVALID_MONEY} for null, unparseable or scientific-notation
- * input (and for a non-positive price per kilo), {@link #MONEY_SCALE_EXCEEDED} when the amount would
+ * input (and for a non-positive price per kilo or a multiplication factor beyond the accepted scale or
+ * precision), {@link #MONEY_SCALE_EXCEEDED} when the amount would
  * need rounding to fit two decimal places, and {@link #MONEY_OUT_OF_RANGE} when the amount does not
  * fit a {@code NUMERIC(12,2)} column.
  */

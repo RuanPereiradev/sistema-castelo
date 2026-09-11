@@ -47,9 +47,23 @@ public interface EntityId {
         return value;
     }
 
-    /** Creates an id of the given type backed by a random (version 4) UUID. */
+    /**
+     * Creates an id of the given type backed by a time-ordered (version 7, RFC 9562) UUID.
+     *
+     * <p>Ordering is guaranteed only between ids generated in distinct milliseconds.
+     */
     static <T extends EntityId> T newId(Function<UUID, T> constructor) {
-        return of(UUID.randomUUID(), constructor);
+        return of(UuidVersion7.next(), constructor);
+    }
+
+    /**
+     * Creates a random (version 4) UUID for a token exposed outside the system, such as in a QR code.
+     *
+     * <p>Deliberately not version 7: a time-ordered value reveals when it was created and makes
+     * neighbouring tokens easier to guess.
+     */
+    static UUID newPublicToken() {
+        return UUID.randomUUID();
     }
 
     /**

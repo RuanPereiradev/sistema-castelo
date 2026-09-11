@@ -15,10 +15,17 @@ import java.util.regex.Pattern;
  * from {@code -9999999999.99} to {@code 9999999999.99}. Anything outside is rejected with
  * {@link InvalidMoneyException#MONEY_OUT_OF_RANGE}.
  *
- * <p>Text input must be a plain decimal: an optional leading minus sign, digits and an optional
- * fraction. Scientific notation, a plus sign and surrounding whitespace are rejected with
+ * <p>Text input is stripped of surrounding whitespace ({@link String#strip()}) and must then be a
+ * plain decimal: an optional leading sign ({@code +} or {@code -}), ASCII digits and an optional
+ * fraction with at least one digit. Scientific notation, a missing integer part ({@code ".5"}), a
+ * dangling point ({@code "5."}) and blank text are rejected with
  * {@link InvalidMoneyException#INVALID_MONEY}. When text breaks more than one rule, the code follows
  * the order format, then scale, then range.
+ *
+ * <p>A decimal multiplication factor must have a scale between {@code -16} and {@code 16} and at most
+ * 32 significant digits; anything beyond that is rejected with
+ * {@link InvalidMoneyException#INVALID_MONEY} before any arithmetic, so a pathological factor cannot
+ * stall the rescaling of the product.
  *
  * <p>A null argument, wherever a {@code Money} or a multiplication factor is expected, is rejected
  * with {@link InvalidMoneyException#INVALID_MONEY}.
@@ -28,7 +35,9 @@ public final class Money {
     private static final int SCALE = 2;
     private static final RoundingMode ROUNDING = RoundingMode.HALF_UP;
     private static final BigDecimal MAXIMUM_MAGNITUDE = new BigDecimal("9999999999.99");
-    private static final Pattern PLAIN_DECIMAL = Pattern.compile("-?[0-9]+(\\.[0-9]+)?");
+    private static final Pattern PLAIN_DECIMAL = Pattern.compile("[+-]?[0-9]+(\\.[0-9]+)?");
+    private static final int MAXIMUM_FACTOR_SCALE = 16;
+    private static final int MAXIMUM_FACTOR_PRECISION = 32;
 
     public static final Money ZERO = new Money(BigDecimal.ZERO.setScale(SCALE));
 
@@ -53,10 +62,11 @@ public final class Money {
         if (amount == null) {
             throw InvalidMoneyException.invalid("Amount must not be null");
         }
-        if (!PLAIN_DECIMAL.matcher(amount).matches()) {
+        String stripped = amount.strip();
+        if (!PLAIN_DECIMAL.matcher(stripped).matches()) {
             throw InvalidMoneyException.invalid("Amount is not a plain decimal number: " + amount);
         }
-        return of(new BigDecimal(amount));
+        return of(new BigDecimal(stripped));
     }
 
     public static Money ofCents(long cents) {
@@ -78,6 +88,10 @@ public final class Money {
     public Money multiply(BigDecimal factor) {
         if (factor == null) {
             throw InvalidMoneyException.invalid("Multiplication factor must not be null");
+        }
+        if (Math.abs(factor.scale()) > MAXIMUM_FACTOR_SCALE || factor.precision() > MAXIMUM_FACTOR_PRECISION) {
+            throw InvalidMoneyException.invalid("Multiplication factor exceeds scale "
+                    + MAXIMUM_FACTOR_SCALE + " or precision " + MAXIMUM_FACTOR_PRECISION);
         }
         return new Money(amount.multiply(factor).setScale(SCALE, ROUNDING));
     }

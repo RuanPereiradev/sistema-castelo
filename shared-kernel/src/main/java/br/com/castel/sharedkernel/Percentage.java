@@ -10,6 +10,10 @@ import java.math.RoundingMode;
  * <p>Values from 0% to 999.99% (fraction {@code 9.9999}) are accepted, so rates above 100% are valid.
  * Construction is exact: a rate finer than four fraction places (e.g. 12.345%) is rejected instead
  * of silently rounded.
+ *
+ * <p>Text input is stripped of surrounding whitespace ({@link String#strip()}) before parsing. An
+ * optional leading sign is accepted ({@code "+12.5"}); scientific notation, blank text and anything
+ * {@link BigDecimal#BigDecimal(String)} cannot parse are rejected.
  */
 public final class Percentage {
 
@@ -57,9 +61,13 @@ public final class Percentage {
         if (percent == null) {
             throw new InvalidPercentageException("Percent must not be null");
         }
+        String stripped = percent.strip();
+        if (stripped.indexOf('e') >= 0 || stripped.indexOf('E') >= 0) {
+            throw new InvalidPercentageException("Percent must not use scientific notation: " + percent);
+        }
         BigDecimal parsed;
         try {
-            parsed = new BigDecimal(percent);
+            parsed = new BigDecimal(stripped);
         } catch (NumberFormatException exception) {
             throw new InvalidPercentageException("Percent is not a decimal number: " + percent);
         }
