@@ -10,8 +10,13 @@ import java.util.stream.Stream;
  *
  * <p>The end date is the check-out day and is not a night: 01/10 to 04/10 is three nights
  * (01, 02 and 03).
+ *
+ * <p>A range has from 1 to 365 nights. Every rejection is an {@link InvalidDateRangeException}; its
+ * message never includes the rejected dates.
  */
 public final class DateRange {
+
+    private static final long MAXIMUM_NIGHTS = 365;
 
     private final LocalDate start;
     private final LocalDate end;
@@ -26,7 +31,10 @@ public final class DateRange {
             throw new InvalidDateRangeException("Start and end must not be null");
         }
         if (!end.isAfter(start)) {
-            throw new InvalidDateRangeException("End must be after start: " + start + " to " + end);
+            throw new InvalidDateRangeException("End must be after start");
+        }
+        if (ChronoUnit.DAYS.between(start, end) > MAXIMUM_NIGHTS) {
+            throw new InvalidDateRangeException("Date range must not exceed " + MAXIMUM_NIGHTS + " nights");
         }
         return new DateRange(start, end);
     }

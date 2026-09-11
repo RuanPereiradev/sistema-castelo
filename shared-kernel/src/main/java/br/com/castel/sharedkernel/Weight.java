@@ -4,13 +4,19 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 
 /**
- * Positive weight in whole grams, matching a {@code weight_grams INTEGER} column.
+ * Positive weight in whole grams, from 1 to 50000, matching a {@code weight_grams INTEGER} column.
  *
- * <p>Construction is exact: a value in kilos that is not a whole number of grams is rejected.
+ * <p>Construction is exact: a value in kilos that is not a whole number of grams is rejected. The
+ * upper bound applies to both factories. A value in kilos whose scale lies outside {@code -100..100}
+ * or whose precision exceeds 100 digits is rejected before any conversion.
+ *
+ * <p>Every rejection is an {@link InvalidWeightException}; its message never includes the rejected value.
  */
 public final class Weight {
 
     private static final int GRAMS_PER_KILO_EXPONENT = 3;
+    private static final int MAXIMUM_GRAMS = 50_000;
+    private static final BigDecimal MAXIMUM_KILOS = BigDecimal.valueOf(MAXIMUM_GRAMS, GRAMS_PER_KILO_EXPONENT);
 
     private final int grams;
 
@@ -20,7 +26,10 @@ public final class Weight {
 
     public static Weight ofGrams(int grams) {
         if (grams <= 0) {
-            throw new InvalidWeightException("Weight must be positive: " + grams + "g");
+            throw new InvalidWeightException("Weight must be positive");
+        }
+        if (grams > MAXIMUM_GRAMS) {
+            throw new InvalidWeightException("Weight must not exceed " + MAXIMUM_GRAMS + " grams");
         }
         return new Weight(grams);
     }
@@ -29,15 +38,19 @@ public final class Weight {
         if (kilos == null) {
             throw new InvalidWeightException("Kilos must not be null");
         }
+        DecimalInput.requireBounded(kilos, InvalidWeightException::new);
         if (kilos.signum() <= 0) {
-            throw new InvalidWeightException("Weight must be positive: " + kilos + "kg");
+            throw new InvalidWeightException("Weight must be positive");
+        }
+        if (kilos.compareTo(MAXIMUM_KILOS) > 0) {
+            throw new InvalidWeightException("Weight must not exceed " + MAXIMUM_GRAMS + " grams");
         }
         try {
             return ofGrams(kilos.movePointRight(GRAMS_PER_KILO_EXPONENT)
                     .setScale(0, RoundingMode.UNNECESSARY)
                     .intValueExact());
         } catch (ArithmeticException exception) {
-            throw new InvalidWeightException("Weight is not a whole number of grams: " + kilos + "kg");
+            throw new InvalidWeightException("Weight is not a whole number of grams");
         }
     }
 
@@ -61,7 +74,7 @@ public final class Weight {
             throw InvalidMoneyException.invalid("Price per kilo must not be null");
         }
         if (!pricePerKilo.isPositive()) {
-            throw InvalidMoneyException.invalid("Price per kilo must be positive: " + pricePerKilo);
+            throw InvalidMoneyException.invalid("Price per kilo must be positive");
         }
         return pricePerKilo.multiply(kilos());
     }

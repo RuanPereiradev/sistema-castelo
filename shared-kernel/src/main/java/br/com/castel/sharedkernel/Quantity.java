@@ -19,7 +19,7 @@ public final class Quantity {
     public static Quantity of(int value) {
         if (value < MINIMUM || value > MAXIMUM) {
             throw new InvalidQuantityException(
-                    "Quantity must be between " + MINIMUM + " and " + MAXIMUM + ": " + value);
+                    "Quantity must be between " + MINIMUM + " and " + MAXIMUM);
         }
         return new Quantity(value);
     }

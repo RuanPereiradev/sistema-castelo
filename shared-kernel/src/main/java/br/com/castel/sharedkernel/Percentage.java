@@ -9,11 +9,19 @@ import java.math.RoundingMode;
  *
  * <p>Values from 0% to 999.99% (fraction {@code 9.9999}) are accepted, so rates above 100% are valid.
  * Construction is exact: a rate finer than four fraction places (e.g. 12.345%) is rejected instead
- * of silently rounded.
+ * of silently rounded. Trailing zeros beyond the fourth fraction place are not rounding and are
+ * accepted ({@code "10.000000"} is 10%), as in {@link Money}.
  *
- * <p>Text input is stripped of surrounding whitespace ({@link String#strip()}) before parsing. An
- * optional leading sign is accepted ({@code "+12.5"}); scientific notation, blank text and anything
- * {@link BigDecimal#BigDecimal(String)} cannot parse are rejected.
+ * <p>A decimal whose scale lies outside {@code -100..100} or whose precision exceeds 100 digits is
+ * rejected before any conversion.
+ *
+ * <p>Text input follows the same rules as {@link Money}: stripped of surrounding whitespace
+ * ({@link String#strip()}), at most 25 characters, then an optional leading sign ({@code +} or
+ * {@code -}), ASCII digits and an optional fraction with at least one digit. Longer text, scientific
+ * notation, {@code ".5"}, {@code "5."} and blank text are rejected.
+ *
+ * <p>Every rejection is an {@link InvalidPercentageException}; its message never includes the
+ * rejected value.
  */
 public final class Percentage {
 
@@ -31,19 +39,8 @@ public final class Percentage {
         if (fraction == null) {
             throw new InvalidPercentageException("Fraction must not be null");
         }
-        if (fraction.signum() < 0) {
-            throw new InvalidPercentageException("Percentage must not be negative: " + fraction);
-        }
-        if (fraction.compareTo(MAXIMUM_FRACTION) > 0) {
-            throw new InvalidPercentageException(
-                    "Fraction must not exceed " + MAXIMUM_FRACTION + ": " + fraction);
-        }
-        try {
-            return new Percentage(fraction.setScale(FRACTION_SCALE, RoundingMode.UNNECESSARY));
-        } catch (ArithmeticException exception) {
-            throw new InvalidPercentageException(
-                    "Fraction has more than " + FRACTION_SCALE + " decimal places: " + fraction);
-        }
+        DecimalInput.requireBounded(fraction, InvalidPercentageException::new);
+        return fromBoundedFraction(fraction);
     }
 
     public static Percentage ofPercent(int percent) {
@@ -54,24 +51,37 @@ public final class Percentage {
         if (percent == null) {
             throw new InvalidPercentageException("Percent must not be null");
         }
-        return ofFraction(percent.movePointLeft(PERCENT_TO_FRACTION_SHIFT));
+        DecimalInput.requireBounded(percent, InvalidPercentageException::new);
+        try {
+            return fromBoundedFraction(percent.movePointLeft(PERCENT_TO_FRACTION_SHIFT));
+        } catch (ArithmeticException exception) {
+            throw new InvalidPercentageException("Percent cannot be converted to a fraction");
+        }
     }
 
     public static Percentage ofPercent(String percent) {
         if (percent == null) {
             throw new InvalidPercentageException("Percent must not be null");
         }
-        String stripped = percent.strip();
-        if (stripped.indexOf('e') >= 0 || stripped.indexOf('E') >= 0) {
-            throw new InvalidPercentageException("Percent must not use scientific notation: " + percent);
+        return ofPercent(DecimalInput.parsePlainDecimal(percent, InvalidPercentageException::new));
+    }
+
+    /**
+     * Receives a fraction derived from a bounded decimal. Not guarded again, so that shifting a percent
+     * with scale near the bound does not reject a value such as zero with many trailing zeros.
+     */
+    private static Percentage fromBoundedFraction(BigDecimal fraction) {
+        if (fraction.signum() < 0) {
+            throw new InvalidPercentageException("Percentage must not be negative");
         }
-        BigDecimal parsed;
+        if (fraction.compareTo(MAXIMUM_FRACTION) > 0) {
+            throw new InvalidPercentageException("Fraction must not exceed 9.9999 (999.99%)");
+        }
         try {
-            parsed = new BigDecimal(stripped);
-        } catch (NumberFormatException exception) {
-            throw new InvalidPercentageException("Percent is not a decimal number: " + percent);
+            return new Percentage(fraction.setScale(FRACTION_SCALE, RoundingMode.UNNECESSARY));
+        } catch (ArithmeticException exception) {
+            throw new InvalidPercentageException("Fraction has more than four decimal places");
         }
-        return ofPercent(parsed);
     }
 
     /** The share of {@code money} this percentage represents, rounded HALF_UP to two decimal places. */

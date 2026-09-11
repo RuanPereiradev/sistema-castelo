@@ -2,25 +2,30 @@ package br.com.castel.sharedkernel;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.util.regex.Pattern;
 
 /**
  * Monetary amount in the property's single currency, always with two decimal places.
  *
  * <p>Construction is exact: an amount that would need rounding to fit two decimal places is
- * rejected with {@link InvalidMoneyException#MONEY_SCALE_EXCEEDED}. Operations round
+ * rejected with {@link InvalidMoneyException#MONEY_SCALE_EXCEEDED}; trailing zeros beyond the second
+ * place are not rounding and are accepted ({@code "0.010"} is {@code 0.01}). Operations round
  * {@link RoundingMode#HALF_UP}, which moves ties away from zero for negative amounts too.
  *
  * <p>Every instance, including the result of any operation, fits a {@code NUMERIC(12,2)} column:
  * from {@code -9999999999.99} to {@code 9999999999.99}. Anything outside is rejected with
  * {@link InvalidMoneyException#MONEY_OUT_OF_RANGE}.
  *
- * <p>Text input is stripped of surrounding whitespace ({@link String#strip()}) and must then be a
- * plain decimal: an optional leading sign ({@code +} or {@code -}), ASCII digits and an optional
- * fraction with at least one digit. Scientific notation, a missing integer part ({@code ".5"}), a
- * dangling point ({@code "5."}) and blank text are rejected with
- * {@link InvalidMoneyException#INVALID_MONEY}. When text breaks more than one rule, the code follows
- * the order format, then scale, then range.
+ * <p>A decimal amount whose scale lies outside {@code -100..100} or whose precision exceeds 100 digits
+ * is rejected with {@link InvalidMoneyException#INVALID_MONEY} before any other check, so a
+ * pathological value cannot stall the scale and range checks. This takes precedence over
+ * {@code MONEY_OUT_OF_RANGE}, even when such a value is also out of range.
+ *
+ * <p>Text input is stripped of surrounding whitespace ({@link String#strip()}), must then have at most
+ * 25 characters and be a plain decimal: an optional leading sign ({@code +} or {@code -}), ASCII
+ * digits and an optional fraction with at least one digit. Longer text, scientific notation, a
+ * missing integer part ({@code ".5"}), a dangling point ({@code "5."}) and blank text are rejected
+ * with {@link InvalidMoneyException#INVALID_MONEY}. When text breaks more than one rule, the code
+ * follows the order length, format, scale, range.
  *
  * <p>A decimal multiplication factor must have a scale between {@code -16} and {@code 16} and at most
  * 32 significant digits; anything beyond that is rejected with
@@ -28,14 +33,13 @@ import java.util.regex.Pattern;
  * stall the rescaling of the product.
  *
  * <p>A null argument, wherever a {@code Money} or a multiplication factor is expected, is rejected
- * with {@link InvalidMoneyException#INVALID_MONEY}.
+ * with {@link InvalidMoneyException#INVALID_MONEY}. Exception messages never include the rejected value.
  */
 public final class Money {
 
     private static final int SCALE = 2;
     private static final RoundingMode ROUNDING = RoundingMode.HALF_UP;
     private static final BigDecimal MAXIMUM_MAGNITUDE = new BigDecimal("9999999999.99");
-    private static final Pattern PLAIN_DECIMAL = Pattern.compile("[+-]?[0-9]+(\\.[0-9]+)?");
     private static final int MAXIMUM_FACTOR_SCALE = 16;
     private static final int MAXIMUM_FACTOR_PRECISION = 32;
 
@@ -52,8 +56,9 @@ public final class Money {
         if (amount == null) {
             throw InvalidMoneyException.invalid("Amount must not be null");
         }
+        DecimalInput.requireBounded(amount, InvalidMoneyException::invalid);
         if (amount.stripTrailingZeros().scale() > SCALE) {
-            throw InvalidMoneyException.scaleExceeded(amount);
+            throw InvalidMoneyException.scaleExceeded();
         }
         return new Money(requireWithinRange(amount).setScale(SCALE, RoundingMode.UNNECESSARY));
     }
@@ -62,11 +67,7 @@ public final class Money {
         if (amount == null) {
             throw InvalidMoneyException.invalid("Amount must not be null");
         }
-        String stripped = amount.strip();
-        if (!PLAIN_DECIMAL.matcher(stripped).matches()) {
-            throw InvalidMoneyException.invalid("Amount is not a plain decimal number: " + amount);
-        }
-        return of(new BigDecimal(stripped));
+        return of(DecimalInput.parsePlainDecimal(amount, InvalidMoneyException::invalid));
     }
 
     public static Money ofCents(long cents) {
@@ -89,8 +90,9 @@ public final class Money {
         if (factor == null) {
             throw InvalidMoneyException.invalid("Multiplication factor must not be null");
         }
-        if (Math.abs(factor.scale()) > MAXIMUM_FACTOR_SCALE || factor.precision() > MAXIMUM_FACTOR_PRECISION) {
-            throw InvalidMoneyException.invalid("Multiplication factor exceeds scale "
+        if (Math.abs((long) factor.scale()) > MAXIMUM_FACTOR_SCALE
+                || factor.precision() > MAXIMUM_FACTOR_PRECISION) {
+            throw InvalidMoneyException.invalid("Multiplication factor exceeds scale magnitude "
                     + MAXIMUM_FACTOR_SCALE + " or precision " + MAXIMUM_FACTOR_PRECISION);
         }
         return new Money(amount.multiply(factor).setScale(SCALE, ROUNDING));
@@ -141,10 +143,10 @@ public final class Money {
         return amount.toPlainString();
     }
 
-    /** Exact for amounts with at most two decimal places, which is all this class ever checks. */
+    /** Only ever called with a bounded amount: the result of a guarded factory or of an operation. */
     private static BigDecimal requireWithinRange(BigDecimal amount) {
         if (amount.abs().compareTo(MAXIMUM_MAGNITUDE) > 0) {
-            throw InvalidMoneyException.outOfRange(amount.toPlainString(), MAXIMUM_MAGNITUDE);
+            throw InvalidMoneyException.outOfRange();
         }
         return amount;
     }

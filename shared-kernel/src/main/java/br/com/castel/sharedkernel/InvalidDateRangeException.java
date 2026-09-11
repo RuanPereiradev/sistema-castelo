@@ -2,7 +2,10 @@ package br.com.castel.sharedkernel;
 
 import java.io.Serial;
 
-/** Thrown when a {@link DateRange} has a missing bound or its end is not after its start. */
+/**
+ * Thrown when a {@link DateRange} has a missing bound, its end is not after its start or it spans more
+ * than 365 nights. The message never includes the rejected dates.
+ */
 public final class InvalidDateRangeException extends DomainException {
 
     @Serial

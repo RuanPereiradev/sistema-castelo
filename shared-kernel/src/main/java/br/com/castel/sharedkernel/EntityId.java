@@ -86,7 +86,7 @@ public interface EntityId {
             throw new InvalidEntityIdException("Entity id value must not be null");
         }
         if (!isCanonicalUuid(value)) {
-            throw new InvalidEntityIdException("Entity id is not a canonical UUID: " + value);
+            throw new InvalidEntityIdException("Entity id is not a canonical UUID");
         }
         return of(UUID.fromString(value), constructor);
     }

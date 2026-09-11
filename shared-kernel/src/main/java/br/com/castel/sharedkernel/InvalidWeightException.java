@@ -2,7 +2,10 @@ package br.com.castel.sharedkernel;
 
 import java.io.Serial;
 
-/** Thrown when a {@link Weight} is null, not positive or not a whole number of grams. */
+/**
+ * Thrown when a {@link Weight} is null, not positive, above 50000 grams, not a whole number of grams or
+ * given in kilos with extreme scale or precision. The message never includes the rejected value.
+ */
 public final class InvalidWeightException extends DomainException {
 
     @Serial
