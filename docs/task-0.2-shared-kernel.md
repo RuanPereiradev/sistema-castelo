@@ -353,6 +353,10 @@ Mais:
   `MONEY_OUT_OF_RANGE`
 - Estouro via `plus`, `multiply` e `percentage` lança `MONEY_OUT_OF_RANGE`
 - `"+-10"` e texto em branco lançam `INVALID_MONEY`
+- Guarda inclusiva: `of(new BigDecimal("0E-100"))` é aceito; `0E-101` lança
+  `INVALID_MONEY`
+- Precedência: `of(new BigDecimal("1E+100"))` lança `MONEY_OUT_OF_RANGE`;
+  `1E+101` lança `INVALID_MONEY`
 
 **Borda**
 - `Money.ZERO.isZero()` é verdadeiro
@@ -375,6 +379,13 @@ Mais:
 - `ofPercent(BigDecimal)` com valor extremo lança `INVALID_PERCENTAGE`, não
   `ArithmeticException`
 - `ofFraction(9.9999)` é aceito; `ofFraction(10)` lança `INVALID_PERCENTAGE`
+- `ofFraction` e `ofPercent(BigDecimal)` com `1E-10000000` lançam
+  `INVALID_PERCENTAGE` em menos de 1 s. Este é o valor que **só a guarda**
+  barra a tempo; valores com expoente positivo ou escala extrema também caem
+  em outras verificações e não provam a guarda
+- `ofPercent("12.345")` lança `INVALID_PERCENTAGE`; `ofPercent("10.0000000")`
+  é igual a `ofPercent(10)`
+- Texto de 25 caracteres é aceito
 
 ### `Quantity`
 - Zero é rejeitado
@@ -394,6 +405,10 @@ Mais:
 - `ofGrams(50_000)` é aceito; `ofGrams(50_001)` lança `INVALID_WEIGHT`
 - `ofKilos(new BigDecimal("1E+10000000"))` lança `INVALID_WEIGHT` em menos de
   1 s, sem o valor rejeitado na mensagem
+- `ofKilos(new BigDecimal("1E-10000000"))` lança `INVALID_WEIGHT` em menos de
+  1 s (o valor que só a guarda barra a tempo)
+- `ofKilos(new BigDecimal("50"))` é igual a `ofGrams(50_000)`;
+  `ofKilos(new BigDecimal("50.001"))` lança `INVALID_WEIGHT`
 
 ### `DateRange`
 - **01/10 a 04/10 tem exatamente 3 noites**
