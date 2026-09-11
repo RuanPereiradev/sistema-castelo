@@ -113,13 +113,68 @@ class PercentageTest {
     }
 
     // ---------------------------------------------------------------------
+    // Size guard: |scale| > 100 or precision > 100 rejected before rounding.
+    // 1E-10000000 is positive and small, so only the size guard stops it in time;
+    // without it, rounding takes seconds and the timeout fails the test.
+    // ---------------------------------------------------------------------
+
+    @Test
+    @Timeout(value = 1, unit = TimeUnit.SECONDS, threadMode = Timeout.ThreadMode.SEPARATE_THREAD)
+    void shouldRejectTinyPositiveFractionWithScaleBeyondSizeGuardWithInvalidPercentageCode() {
+        BigDecimal tinyPositiveFraction = new BigDecimal("1E-10000000");
+
+        assertThatThrownBy(() -> Percentage.ofFraction(tinyPositiveFraction))
+                .asInstanceOf(type(InvalidPercentageException.class))
+                .extracting(InvalidPercentageException::code)
+                .isEqualTo("INVALID_PERCENTAGE");
+    }
+
+    @Test
+    @Timeout(value = 1, unit = TimeUnit.SECONDS, threadMode = Timeout.ThreadMode.SEPARATE_THREAD)
+    void shouldRejectTinyPositivePercentWithScaleBeyondSizeGuardWithInvalidPercentageCode() {
+        BigDecimal tinyPositivePercent = new BigDecimal("1E-10000000");
+
+        assertThatThrownBy(() -> Percentage.ofPercent(tinyPositivePercent))
+                .asInstanceOf(type(InvalidPercentageException.class))
+                .extracting(InvalidPercentageException::code)
+                .isEqualTo("INVALID_PERCENTAGE");
+    }
+
+    // ---------------------------------------------------------------------
+    // Fraction scale: 4 decimal places (NUMERIC(5,4))
+    // ---------------------------------------------------------------------
+
+    /** 12.345% = 0.12345: the fifth decimal digit of the fraction is significant. */
+    @Test
+    void shouldRejectPercentWithSignificantDigitBeyondFractionScaleWithInvalidPercentageCode() {
+        assertThatThrownBy(() -> Percentage.ofPercent("12.345"))
+                .asInstanceOf(type(InvalidPercentageException.class))
+                .extracting(InvalidPercentageException::code)
+                .isEqualTo("INVALID_PERCENTAGE");
+    }
+
+    @Test
+    void shouldAcceptPercentWithTrailingZerosBeyondFractionScaleAsSamePercent() {
+        Percentage withTrailingZeros = Percentage.ofPercent("10.0000000");
+
+        assertThat(withTrailingZeros).isEqualTo(Percentage.ofPercent(10));
+    }
+
+    // ---------------------------------------------------------------------
     // Malformed text
     // ---------------------------------------------------------------------
 
-    /**
-     * 26 characters. Whether trailing zeros beyond scale are accepted for Percentage is not
-     * specified, so this text may also be rejected by another rule (see report).
-     */
+    /** "10." + 22 zeros = 25 characters; trailing zeros beyond the fraction scale are accepted. */
+    @Test
+    void shouldAcceptPercentTextWithExactly25Characters() {
+        String textWith25Characters = "10." + "0".repeat(22);
+
+        Percentage result = Percentage.ofPercent(textWith25Characters);
+
+        assertThat(result).isEqualTo(Percentage.ofPercent(10));
+    }
+
+    /** "10." + 23 zeros = 26 characters, otherwise valid. */
     @Test
     void shouldRejectPercentTextWith26CharactersWithInvalidPercentageCode() {
         String textWith26Characters = "10." + "0".repeat(23);

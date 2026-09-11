@@ -364,6 +364,51 @@ class MoneyTest {
     }
 
     // ---------------------------------------------------------------------
+    // Size guard: |scale| > 100 or precision > 100 rejected, inclusive at 100
+    // ---------------------------------------------------------------------
+
+    /** 0E-100: value zero, scale exactly 100. */
+    @Test
+    void shouldAcceptZeroAmountWithScaleAtExactSizeGuardLimitAsZero() {
+        Money result = Money.of(new BigDecimal("0E-100"));
+
+        assertThat(result).isEqualTo(Money.ZERO);
+    }
+
+    /** 0E-101: value zero, scale 101. */
+    @Test
+    void shouldRejectZeroAmountWithScaleOneAboveSizeGuardLimitWithInvalidMoneyCode() {
+        BigDecimal zeroWithScale101 = new BigDecimal("0E-101");
+
+        assertThatThrownBy(() -> Money.of(zeroWithScale101))
+                .asInstanceOf(type(InvalidMoneyException.class))
+                .extracting(InvalidMoneyException::code)
+                .isEqualTo("INVALID_MONEY");
+    }
+
+    /** 1E+100: scale -100 passes the size guard, then fails the NUMERIC(12,2) range check. */
+    @Test
+    void shouldRejectAmountWithNegativeScaleAtSizeGuardLimitWithOutOfRangeCode() {
+        BigDecimal amountWithScaleMinus100 = new BigDecimal("1E+100");
+
+        assertThatThrownBy(() -> Money.of(amountWithScaleMinus100))
+                .asInstanceOf(type(InvalidMoneyException.class))
+                .extracting(InvalidMoneyException::code)
+                .isEqualTo("MONEY_OUT_OF_RANGE");
+    }
+
+    /** 1E+101: scale -101 is stopped by the size guard before the range check. */
+    @Test
+    void shouldRejectAmountWithNegativeScaleOneBeyondSizeGuardLimitWithInvalidMoneyCode() {
+        BigDecimal amountWithScaleMinus101 = new BigDecimal("1E+101");
+
+        assertThatThrownBy(() -> Money.of(amountWithScaleMinus101))
+                .asInstanceOf(type(InvalidMoneyException.class))
+                .extracting(InvalidMoneyException::code)
+                .isEqualTo("INVALID_MONEY");
+    }
+
+    // ---------------------------------------------------------------------
     // Text length limit: 25 characters after stripping surrounding whitespace
     // ---------------------------------------------------------------------
 

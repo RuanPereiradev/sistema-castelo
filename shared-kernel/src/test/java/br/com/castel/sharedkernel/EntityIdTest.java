@@ -127,7 +127,7 @@ class EntityIdTest {
 
     private static List<String> generateIdTextsInDistinctMilliseconds(int count) throws InterruptedException {
         List<String> texts = new ArrayList<>();
-        for (int i = 0; i < count; i++) {
+        for (int generatedCount = 0; generatedCount < count; generatedCount++) {
             texts.add(EntityId.newId(FooId::new).value().toString());
             Thread.sleep(2);
         }

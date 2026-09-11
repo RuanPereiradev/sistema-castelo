@@ -145,6 +145,36 @@ class WeightTest {
                 .hasSizeLessThan(200);
     }
 
+    /**
+     * 1E-10000000 is positive and small, so only the size guard (|scale| > 100 or
+     * precision > 100, before rounding) stops it in time; without it, rounding takes seconds.
+     */
+    @Test
+    @Timeout(value = 1, unit = TimeUnit.SECONDS, threadMode = Timeout.ThreadMode.SEPARATE_THREAD)
+    void shouldRejectTinyPositiveKilosWithScaleBeyondSizeGuardWithInvalidWeightCode() {
+        BigDecimal tinyPositiveKilos = new BigDecimal("1E-10000000");
+
+        assertThatThrownBy(() -> Weight.ofKilos(tinyPositiveKilos))
+                .asInstanceOf(type(InvalidWeightException.class))
+                .extracting(InvalidWeightException::code)
+                .isEqualTo("INVALID_WEIGHT");
+    }
+
+    @Test
+    void shouldAcceptKilosAtExactUpperLimitAsEquivalentGrams() {
+        Weight fromKilos = Weight.ofKilos(new BigDecimal("50"));
+
+        assertThat(fromKilos).isEqualTo(Weight.ofGrams(50_000));
+    }
+
+    @Test
+    void shouldRejectKilosOneGramAboveUpperLimitWithInvalidWeightCode() {
+        assertThatThrownBy(() -> Weight.ofKilos(new BigDecimal("50.001")))
+                .asInstanceOf(type(InvalidWeightException.class))
+                .extracting(InvalidWeightException::code)
+                .isEqualTo("INVALID_WEIGHT");
+    }
+
     @Test
     void shouldConsiderKilosAndEquivalentGramsEqual() {
         Weight fromKilos = Weight.ofKilos(new BigDecimal("0.437"));
