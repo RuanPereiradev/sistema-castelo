@@ -257,6 +257,10 @@ CREATE TABLE menu_item_variant (
     unit_price      NUMERIC(12,2) NOT NULL CHECK (unit_price > 0),
     display_order   SMALLINT     NOT NULL DEFAULT 0,
     is_active       BOOLEAN      NOT NULL DEFAULT TRUE,
+    created_at      TIMESTAMPTZ  NOT NULL DEFAULT now(),
+    created_by      UUID,
+    updated_at      TIMESTAMPTZ,
+    updated_by      UUID,
     CONSTRAINT uk_variant_name UNIQUE (menu_item_id, name)
 );
 
@@ -266,6 +270,10 @@ CREATE TABLE modifier (
     name            VARCHAR(100) NOT NULL,
     price           NUMERIC(12,2) NOT NULL DEFAULT 0 CHECK (price >= 0),
     is_active       BOOLEAN      NOT NULL DEFAULT TRUE,
+    created_at      TIMESTAMPTZ  NOT NULL DEFAULT now(),
+    created_by      UUID,
+    updated_at      TIMESTAMPTZ,
+    updated_by      UUID,
     CONSTRAINT uk_modifier_name UNIQUE (property_id, name)
 );
 
@@ -281,7 +289,11 @@ CREATE TABLE availability_window (
     menu_item_id    UUID     NOT NULL REFERENCES menu_item(id) ON DELETE CASCADE,
     day_of_week     SMALLINT CHECK (day_of_week BETWEEN 1 AND 7),
     start_time      TIME     NOT NULL,
-    end_time        TIME     NOT NULL
+    end_time        TIME     NOT NULL,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+    created_by      UUID,
+    updated_at      TIMESTAMPTZ,
+    updated_by      UUID
 );
 
 CREATE INDEX idx_menu_item_category ON menu_item (property_id, menu_category_id)
@@ -585,7 +597,6 @@ CREATE TABLE reservation (
     external_reservation_id   VARCHAR(100),
     required_deposit_amount   NUMERIC(12,2) NOT NULL DEFAULT 0
                               CHECK (required_deposit_amount >= 0),
-    total_amount              NUMERIC(12,2) NOT NULL DEFAULT 0 CHECK (total_amount   >= 0),
     overbooking_authorized_by UUID,
     expires_at                TIMESTAMPTZ,
     confirmed_at              TIMESTAMPTZ,
@@ -654,6 +665,10 @@ CREATE INDEX idx_reservation_expiring
 - `required_deposit_amount` é o valor **exigido**, não o pago. O valor pago é a
   soma dos `payment` do folio. Guardar o pago aqui criaria um número que pode
   divergir da verdade.
+- `reservation` **não** guarda valor total. O total é derivado — soma de
+  `room_night.total_amount` — e calculado por `Reservation.totalAmount()`.
+- `room_night.total_amount` **é** guardado: é o snapshot do valor cobrado
+  naquela noite (seção 1.4), não um valor derivado.
 
 ---
 

@@ -27,12 +27,48 @@ migration.
 > (`InvalidEntityIdException`), limites de `NUMERIC(12,2)` e `NUMERIC(5,4)`,
 > formato de texto aceito em `Money` e `Percentage`, UUID v7 para id e v4 para
 > token público, e `priceAt` rejeitando preço por quilo zero ou negativo.
+>
+> **Terceira revisão**, após o code review: guarda de tamanho antes de
+> materializar decimais, limite de 25 caracteres, validador de texto comum a
+> `Money` e `Percentage`, peso máximo de 50 kg e estadia máxima de 365 noites.
 
 **Restrição de arquitetura:** `shared-kernel` **não depende de Spring**. Nenhum
 `import org.springframework`, nenhuma anotação de framework, nenhum JPA. Java
 puro. Se algo parecer exigir Spring aqui, é sinal de que pertence a outro módulo.
 
 Dependências permitidas: apenas JUnit e AssertJ, ambas em escopo `test`.
+
+## Entrada não confiável
+
+Toda factory que recebe `BigDecimal` ou `String` valida o tamanho **antes** de
+qualquer aritmética, `setScale`, `stripTrailingZeros` ou `toPlainString`.
+`scale()` e `precision()` são O(1); materializar o número não é. Validar
+primeiro fecha três caminhos de negação de serviço.
+
+- **Guarda única para `BigDecimal`**, no topo de toda factory:
+  `|scale| > 100` ou `precision > 100` é rejeitado com a exceção do tipo
+  (`INVALID_MONEY`, `INVALID_PERCENTAGE`, `INVALID_WEIGHT`). O `abs` é feito em
+  `long`, porque `Math.abs(Integer.MIN_VALUE)` continua negativo
+- **Texto** em `Money.of(String)` e `Percentage.ofPercent(String)`: primeiro
+  `strip()`, depois limite de **25 caracteres**, depois o formato. As duas
+  classes usam **o mesmo validador**: sinal opcional (`+` ou `-`), dígitos
+  ASCII, parte decimal opcional com pelo menos um dígito. `".5"`, `"5."`,
+  `"+-10"`, texto em branco, notação científica e dígitos não ASCII (`"١٢"`)
+  são rejeitados
+- A guarda é inclusiva: `|scale|` e `precision` iguais a 100 passam. Em
+  `Money.of(BigDecimal)` a precedência é guarda (`INVALID_MONEY`), escala
+  (`MONEY_SCALE_EXCEEDED`), faixa (`MONEY_OUT_OF_RANGE`): `1E+100` é
+  `MONEY_OUT_OF_RANGE`, `1E+101` é `INVALID_MONEY`
+- Zeros à direita além da escala são aceitos em `Money` e em `Percentage`
+  (`"0.010"` vira `0.01`; `"10.0000000"` vira 10%). Só dígito significativo
+  além da escala é rejeitado (`"12.345"` em `Percentage`)
+- **Mensagem de exceção nunca inclui o valor rejeitado.** Evita montar strings
+  gigantes e vazar dado em log
+- `multiply(BigDecimal)` mantém a guarda própria (`|scale| > 16` ou
+  `precision > 32`), também com `abs` em `long`
+- `Percentage.ofPercent(BigDecimal)` faz a conversão para fração dentro do
+  tratamento de erro: valor extremo vira `INVALID_PERCENTAGE`, nunca
+  `ArithmeticException`
 
 ## Classes a implementar
 
@@ -134,6 +170,7 @@ Inteiro positivo. `of(int)`, `value()`, `plus(Quantity)`.
 - Rejeita zero e negativo
 - **Limite superior de 999.** Quantidade 10000 num item de comanda é digitação
   errada, não pedido. Barrar no value object é mais barato que barrar na tela
+- `plus` cujo resultado passa de 999 também é rejeitado
 
 ### `Weight`
 
@@ -147,6 +184,7 @@ Weight.ofGrams(int)                 Weight.ofKilos(BigDecimal)
 - `priceAt` rejeita `pricePerKilo` zero ou negativo com `InvalidMoneyException`
   (`INVALID_MONEY`)
 - Rejeita zero e negativo
+- **Máximo de 50.000 g** (50 kg). Acima disso lança `InvalidWeightException`
 - **Fração de grama é rejeitada.** `ofKilos("0.4375")` = 437,5g lança
   `InvalidWeightException`. A coluna é `weight_grams INTEGER`; aceitar meio
   grama criaria um valor que não volta do banco igual ao que entrou
@@ -158,6 +196,10 @@ Período de hospedagem.
 
 - `LocalDate start` e `LocalDate end`
 - `of(LocalDate, LocalDate)` rejeita `end` menor ou igual a `start`
+- **Máximo de 365 noites.** Período maior lança `InvalidDateRangeException`,
+  inclusive `of(LocalDate.MIN, LocalDate.MAX)`, que nunca pode escapar como
+  `ArithmeticException`. `DateRange` é período de **hospedagem**; períodos de
+  vigência mais longos (como os de `RatePlan`) não devem reutilizá-lo
 - `nights()` devolve o número de noites
 - `contains(LocalDate)`
 - `overlaps(DateRange)`
@@ -302,6 +344,15 @@ Mais:
 - `of(".5")`, `of("5.")` e `of("1E+3")` lançam `INVALID_MONEY`
 - `of("9999999999.99")` é aceito; `of("10000000000.00")` lança `MONEY_OUT_OF_RANGE`
 - `multiply` com fator de precisão absurda (`1E-999999999`) lança `INVALID_MONEY`
+- `multiply` com fator de escala `Integer.MIN_VALUE` lança `INVALID_MONEY`, não
+  `ArithmeticException`
+- `of(new BigDecimal("1E+999999999"))` e `of("1." + "0".repeat(200000))` lançam
+  `INVALID_MONEY` em menos de 1 s, sem o valor rejeitado na mensagem
+- Texto de 25 caracteres é aceito; de 26 lança `INVALID_MONEY`
+- Limite negativo: `-9999999999.99` aceito, `-10000000000.00` lança
+  `MONEY_OUT_OF_RANGE`
+- Estouro via `plus`, `multiply` e `percentage` lança `MONEY_OUT_OF_RANGE`
+- `"+-10"` e texto em branco lançam `INVALID_MONEY`
 
 **Borda**
 - `Money.ZERO.isZero()` é verdadeiro
@@ -317,12 +368,20 @@ Mais:
 - `ofPercent("999.99")` é aceito; `ofPercent("1000")` lança `INVALID_PERCENTAGE`
 - `ofPercent("1E+2")` lança `INVALID_PERCENTAGE`
 - `ofPercent(" 12.5 ")` é igual a `ofPercent("12.5")`
+- `ofPercent(".5")`, `ofPercent("5.")` e `ofPercent("١٢")` lançam
+  `INVALID_PERCENTAGE`
+- Texto acima de 25 caracteres, `"+-10"` e texto em branco lançam
+  `INVALID_PERCENTAGE`
+- `ofPercent(BigDecimal)` com valor extremo lança `INVALID_PERCENTAGE`, não
+  `ArithmeticException`
+- `ofFraction(9.9999)` é aceito; `ofFraction(10)` lança `INVALID_PERCENTAGE`
 
 ### `Quantity`
 - Zero é rejeitado
 - Negativo é rejeitado
 - `of(1)` e `of(999)` são válidos
 - `of(1000)` é rejeitado
+- `of(500).plus(of(500))` é rejeitado
 
 ### `Weight`
 - `437g` a `R$ 89,90/kg` resulta em `R$ 39,29`
@@ -332,6 +391,9 @@ Mais:
 - `ofKilos("0.437")` e `ofGrams(437)` são iguais
 - `ofKilos("0.4375")` lança `InvalidWeightException` (meio grama)
 - `priceAt` com preço por quilo zero ou negativo lança `INVALID_MONEY`
+- `ofGrams(50_000)` é aceito; `ofGrams(50_001)` lança `INVALID_WEIGHT`
+- `ofKilos(new BigDecimal("1E+10000000"))` lança `INVALID_WEIGHT` em menos de
+  1 s, sem o valor rejeitado na mensagem
 
 ### `DateRange`
 - **01/10 a 04/10 tem exatamente 3 noites**
@@ -344,6 +406,9 @@ Mais:
 - `overlaps` verdadeiro quando um contém o outro inteiro
 - Período de uma única noite funciona
 - Período cruzando virada de ano funciona
+- 365 noites é aceito; 366 lança `INVALID_DATE_RANGE`
+- `of(LocalDate.MIN, LocalDate.MAX)` lança `INVALID_DATE_RANGE`, não
+  `ArithmeticException`
 
 ### `Cpf`
 - `12345678909` é aceito (CPF válido de referência)
@@ -361,7 +426,8 @@ Mais:
 ### IDs tipados
 - Use um record descartável declarado no próprio arquivo de teste, com
   construtor compacto chamando `EntityId.requireValid`
-- `of(String)` rejeita UUID malformado com `INVALID_ENTITY_ID`
+- `of(String)` rejeita UUID malformado com `INVALID_ENTITY_ID`, inclusive a
+  forma não canônica `"1-1-1-1-1"` que `UUID.fromString` aceitaria
 - `requireValid(null)` e `new FooId(null)` lançam `INVALID_ENTITY_ID`
 - `newId()` gera valores distintos, com versão 7 e variante RFC 9562
 - `newId()` gera valores crescentes entre milissegundos distintos (comparação

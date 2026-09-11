@@ -1,6 +1,12 @@
 # Sistema de Gestão Hoteleira e de Restaurante
 
-Monolito modular. Java 21 · Spring Boot 3.3 · PostgreSQL 16 · React 18 · Docker.
+Monolito modular. Java 21 · **Spring Boot 4.1.1** · PostgreSQL 16 · React 18 · Docker.
+
+Boot 4 roda sobre Spring Framework 7, Spring Security 7 e Hibernate 7. Boa parte
+do material sobre Spring descreve a linha 6, cuja API de configuração difere.
+Na dúvida sobre configuração de Security, contexto ou JPA, **consulte a
+documentação da versão 4.1 antes de escrever**, em vez de seguir o padrão
+conhecido.
 
 Este arquivo carrega automaticamente em toda sessão e em todo subagente. É a
 fonte da verdade de convenções. Não duplique estas regras nos arquivos de agente.
@@ -89,6 +95,9 @@ aqui, **pergunte antes de nomear**.
 | Perfil | `Role` |
 | Propriedade | `Property` |
 | Configuração | `Setting` |
+| Criança da reserva | `ReservationChild` |
+| Intenção de pagamento | `PaymentIntent` |
+| Referência do folio | `FolioReference` (`code` + `label`) |
 | Emissor fiscal | `TaxInvoiceIssuer` (porta) |
 | Processador de pagamento | `PaymentProcessor` (porta) |
 
@@ -99,7 +108,7 @@ Sempre `UPPER_SNAKE_CASE`, persistidos como **string**, nunca ordinal.
 ```
 ReservationStatus  PENDING · CONFIRMED · CHECKED_IN · CHECKED_OUT · CANCELLED · NO_SHOW
 RoomStatus         AVAILABLE · OCCUPIED · MAINTENANCE
-TabStatus          OPEN · CLOSING · CLOSED · CANCELLED
+TabStatus          OPEN · CLOSING · CLOSED · CANCELLED · MERGED
 TabOrigin          TABLE_SERVICE · SELF_SERVICE
 TabItemStatus      PENDING · IN_PREPARATION · READY · DELIVERED · CANCELLED
 PrepStation        KITCHEN · PIZZA · BAR
