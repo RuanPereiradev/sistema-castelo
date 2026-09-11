@@ -7,7 +7,8 @@ metadata:
 
 - Task specs live in `docs/task-<n>-<slug>.md`: Part A for production, Part B for tests (written without reading the code). Specs are synced after each review, so review against them. Part A rules that Part B does not list tend to stay untested; check them.
 - Decisions approved in task 0.2 (do not flag as problems): `Money` has no `Currency` field; `InvalidMoneyException` has 3 codes (INVALID_MONEY, MONEY_SCALE_EXCEEDED, MONEY_OUT_OF_RANGE); `Percentage` stored as a fraction with scale 4 (NUMERIC(5,4)), allows >100% up to 999.99%; `Quantity` 1..999; ids use UUID v7, `public_token` v4; `Cpf` does not override `toString` (PII); inclusive decimal guard 100/100 in `DecimalInput`, 25-char text cap after `strip()`; trailing zeros beyond scale accepted; `Weight` max 50,000 g; `DateRange` max 365 nights (stay only; RatePlan validity must not reuse it); exception messages never carry the rejected value.
-- Known and accepted, not to reclassify (2026-09-11): `docs/schema.dbml` not synced with `schema-banco-de-dados.md` (user asked only for the `.md`); `Cpf.of` has no length cap (linear); `EntityId.of(String)` compiles the regex per call.
+- Closed in the final 0.2 round (2026-09-11): `Money.percentage(null)` throws `INVALID_PERCENTAGE` (the invalid argument is the `Percentage`), javadoc aligned; `EntityId.of(..., null constructor)` throwing `NullPointerException` is intentional and documented (programming error, never user input, never reaches the front); `Cpf.of` rejects text longer than 20 characters before normalizing (`INVALID_CPF`); `docs/schema.dbml` was deleted — `docs/schema-banco-de-dados.md` is the only schema source (dbdiagram.io imports SQL via Import). Do not ask for a `.dbml` again.
+- Known and accepted, not to reclassify: `EntityId.of(String)` compiles the regex per call.
 - Spring Boot version mismatch fixed on 2026-09-11: CLAUDE.md and root pom both say 4.1.1.
 
 **Why:** avoids re-litigating approved design across reviews.

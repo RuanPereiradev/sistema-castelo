@@ -219,6 +219,8 @@ uma diária. Errar isso significa cobrar uma noite a mais de todo hóspede.
 - Rejeita sequências de dígito repetido (`11111111111`, `00000000000`)
 - `value()` devolve normalizado, `formatted()` devolve `123.456.789-09`
 - `null` e string vazia lançam `InvalidCpfException`
+- Texto com mais de 20 caracteres é rejeitado com `InvalidCpfException`
+  **antes** de normalizar
 - Imutável, `equals` por valor
 
 ### `EntityId`
@@ -357,6 +359,11 @@ Mais:
   `INVALID_MONEY`
 - Precedência: `of(new BigDecimal("1E+100"))` lança `MONEY_OUT_OF_RANGE`;
   `1E+101` lança `INVALID_MONEY`
+- Metade de precisão da guarda: `of(new BigDecimal("1" + "0".repeat(100)))`
+  (precisão 101, escala 0) lança `INVALID_MONEY`, não `MONEY_OUT_OF_RANGE`
+- Não teste qual verificação interna rejeitou o valor, nem a ordem das
+  verificações quando o código é o mesmo: isso é implementação, não
+  comportamento
 
 **Borda**
 - `Money.ZERO.isZero()` é verdadeiro

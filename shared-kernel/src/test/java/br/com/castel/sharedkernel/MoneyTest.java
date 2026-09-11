@@ -408,6 +408,21 @@ class MoneyTest {
                 .isEqualTo("INVALID_MONEY");
     }
 
+    /**
+     * "1" followed by 100 zeros: precision 101, scale 0. Isolates the precision half of the
+     * size guard. Without it, the value would reach the range check and fail with
+     * MONEY_OUT_OF_RANGE instead of INVALID_MONEY.
+     */
+    @Test
+    void shouldRejectAmountWithPrecisionOneAboveSizeGuardLimitWithInvalidMoneyCodeInsteadOfOutOfRangeCode() {
+        BigDecimal amountWithPrecision101 = new BigDecimal("1" + "0".repeat(100));
+
+        assertThatThrownBy(() -> Money.of(amountWithPrecision101))
+                .asInstanceOf(type(InvalidMoneyException.class))
+                .extracting(InvalidMoneyException::code)
+                .isEqualTo("INVALID_MONEY");
+    }
+
     // ---------------------------------------------------------------------
     // Text length limit: 25 characters after stripping surrounding whitespace
     // ---------------------------------------------------------------------

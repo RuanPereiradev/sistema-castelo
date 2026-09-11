@@ -70,6 +70,8 @@ public interface EntityId {
      * Wraps an existing UUID in an id of the given type.
      *
      * @throws InvalidEntityIdException if {@code value} is null
+     * @throws NullPointerException if {@code constructor} is null; intentional, because a missing
+     *         constructor reference is a programming error, not user input, and never reaches the front
      */
     static <T extends EntityId> T of(UUID value, Function<UUID, T> constructor) {
         Objects.requireNonNull(constructor, "constructor");
@@ -80,6 +82,9 @@ public interface EntityId {
      * Parses a UUID in canonical form (8-4-4-4-12 hex digits, either case) into an id of the given type.
      *
      * @throws InvalidEntityIdException if {@code value} is null or not a canonical UUID
+     * @throws NullPointerException if {@code constructor} is null and {@code value} is a canonical UUID;
+     *         intentional, because a missing constructor reference is a programming error, not user
+     *         input, and never reaches the front
      */
     static <T extends EntityId> T of(String value, Function<UUID, T> constructor) {
         if (value == null) {

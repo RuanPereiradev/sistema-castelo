@@ -15,5 +15,9 @@ Found in task 0.2 (shared-kernel, 2026-09-11), JDK 21.0.7:
 - `new BigDecimal(String)` accepts Unicode digits (e.g. Arabic-Indic); a `[0-9]` regex does not.
 - Second review: fixed via guard `|scale|>100 || precision>100` + 25-char text cap. But the tests only used values that a later cheap check also rejects (`1E+10000000` hits the `> max` compare; scale MAX_VALUE throws in `movePointLeft` and is caught). Removing the guard kept the suite green. Only a tiny positive value (`1E-10000000`) passes sign/range checks and reaches `setScale`.
 
+- Final round: both halves of the guard now have a behavioural test (`1E-10000000` with timeout for scale; `"1" + "0".repeat(100)` → `INVALID_MONEY` instead of `MONEY_OUT_OF_RANGE` for precision).
+
+**Accepted by the user, not deferred — do not raise again (2026-09-11):** tests must not try to prove *which* internal check rejected a value, and tests of the *order* of checks are not required where the codes are identical (`Weight`, `Percentage` use one code for guard and range). Proving the internal path is testing implementation, not behaviour. The behavioural contract is: rejected, with the right code, within the time limit, without echoing the value.
+
 **Why:** the spec required guards "instead of stalling", and tests picked exponents that fail fast for unrelated reasons.
-**How to apply:** for each guard, ask "which input reaches the expensive call if the guard is deleted?" and check a test uses that input. Verify by timing the unguarded expression in a separate jshell run. Time probes sequentially (parallel runs distort timings).
+**How to apply:** for each guard, ask "which input reaches the expensive call if the guard is deleted?" and check a test uses that input *with a timeout* — that is behaviour. Verify by timing the unguarded expression in a separate jshell run. Time probes sequentially (parallel runs distort timings). Do not flag a missing test for check identity or check order when the observable code is the same.

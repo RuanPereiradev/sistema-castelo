@@ -33,7 +33,10 @@ import java.math.RoundingMode;
  * stall the rescaling of the product.
  *
  * <p>A null argument, wherever a {@code Money} or a multiplication factor is expected, is rejected
- * with {@link InvalidMoneyException#INVALID_MONEY}. Exception messages never include the rejected value.
+ * with {@link InvalidMoneyException#INVALID_MONEY}. The one exception is {@link #percentage(Percentage)}:
+ * there the invalid argument is the {@code Percentage}, so a null is rejected with
+ * {@link InvalidPercentageException} ({@code INVALID_PERCENTAGE}). Exception messages never include
+ * the rejected value.
  */
 public final class Money {
 
@@ -98,6 +101,12 @@ public final class Money {
         return new Money(amount.multiply(factor).setScale(SCALE, ROUNDING));
     }
 
+    /**
+     * The share of this amount that {@code percentage} represents, rounded HALF_UP to two decimal places.
+     *
+     * @throws InvalidPercentageException with code {@code INVALID_PERCENTAGE} if {@code percentage} is
+     *         null, because the invalid argument is the {@code Percentage}, not the {@code Money}
+     */
     public Money percentage(Percentage percentage) {
         if (percentage == null) {
             throw new InvalidPercentageException("Percentage must not be null");

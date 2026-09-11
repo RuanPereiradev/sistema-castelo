@@ -1,2 +1,2 @@
-- [BigDecimal untrusted input probes](review_bigdecimal_untrusted_input.md) — jshell probes for exponent DoS, scale MIN_VALUE bypass, tests that don't prove the guard
-- [Spec location, approved decisions, stack state](project_spec_and_stack_state.md) — docs/task-*.md specs, shared-kernel approved limits, accepted known deviations
+- [BigDecimal untrusted input probes](review_bigdecimal_untrusted_input.md) — jshell probes for exponent DoS, guard-proving inputs; testing check identity/order is accepted as out of scope
+- [Spec location, approved decisions, stack state](project_spec_and_stack_state.md) — docs/task-*.md specs, shared-kernel approved limits, closed 0.2 items, no schema.dbml

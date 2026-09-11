@@ -6,11 +6,15 @@ import java.util.regex.Pattern;
  * Brazilian individual taxpayer number, stored as its eleven digits.
  *
  * <p>Input may contain dots, dashes and whitespace anywhere; any other non-digit character is
- * rejected. {@link #toString()} is not overridden, so the number does not leak into logs by accident.
+ * rejected. Text longer than 20 characters, counted as received and
+ * before separators are removed, is rejected before any normalization. Every rejection is an
+ * {@link InvalidCpfException}, whose message never includes the rejected value.
+ * {@link #toString()} is not overridden, so the number does not leak into logs by accident.
  */
 public final class Cpf {
 
     private static final int LENGTH = 11;
+    private static final int MAXIMUM_INPUT_LENGTH = 20;
     private static final Pattern SEPARATORS = Pattern.compile("[.\\-\\s]");
     private static final Pattern ELEVEN_DIGITS = Pattern.compile("[0-9]{" + LENGTH + "}");
 
@@ -23,6 +27,9 @@ public final class Cpf {
     public static Cpf of(String cpf) {
         if (cpf == null) {
             throw new InvalidCpfException("CPF must not be null");
+        }
+        if (cpf.length() > MAXIMUM_INPUT_LENGTH) {
+            throw new InvalidCpfException("CPF text must have at most " + MAXIMUM_INPUT_LENGTH + " characters");
         }
         String digits = SEPARATORS.matcher(cpf).replaceAll("");
         if (!ELEVEN_DIGITS.matcher(digits).matches()) {
