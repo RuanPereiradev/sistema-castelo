@@ -214,6 +214,8 @@ class BaselineMigrationTest extends AbstractIntegrationTest {
 
     @Test
     void shouldNotApplyAnyMigrationWhenMigratingASecondTime() {
+        // Flyway already ran V1 during the Spring context startup for this test class,
+        // so this second call is expected to find nothing pending to apply.
         MigrateResult result = flyway.migrate();
 
         assertThat(result.migrationsExecuted).isZero();
