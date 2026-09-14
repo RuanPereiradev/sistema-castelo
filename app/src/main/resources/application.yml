@@ -28,3 +28,25 @@ management:
 
 server:
   port: 8080
+
+castel:
+  auth:
+    login-rate-limit:
+      # Camada 1: falhas por par (IP, username). Camada 2: falhas por IP, somando os usernames.
+      max-failures-per-username: 10
+      max-failures-per-ip: 100
+      window: 1m
+      max-tracked-pairs: 10000
+      max-tracked-ips: 10000
+      # Protecao de CPU: BCrypts simultaneos por IP; a tentativa excedente espera a vaga ate o timeout.
+      max-concurrent-password-checks-per-ip: 3
+      # Teto de tentativas esperando vaga por IP; acima dele, 429 imediato, sem esperar.
+      max-waiting-password-checks-per-ip: 30
+      password-check-slot-timeout: 2s
+
+app:
+  security:
+    jwt:
+      secret: ${JWT_SECRET}
+  cors:
+    allowed-origins: []

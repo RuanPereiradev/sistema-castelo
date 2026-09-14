@@ -1,0 +1,180 @@
+### Task 0.4 - limite de login, camada 1: par (IP, username)
+###
+### ATENCAO: este arquivo BLOQUEIA o login do usuario "admin" a partir do seu IP por 1 minuto.
+### Os outros usernames do mesmo IP continuam logando. Rode-o ISOLADO, sozinho, e so depois de
+### 1 minuto sem falhas de login do admin (00-auth.http gera 1 falha do admin por execucao).
+###
+### Ambiente e pre-requisitos: os mesmos do 00-auth.http (perfil "dev" com seed).
+###
+### Regra: 10 falhas por minuto (janela deslizante) por par (IP, username). O limite e conferido
+### antes da senha, e a falha e contada depois. Com 10 falhas do par na janela, a 11a tentativa
+### do mesmo par recebe 429 mesmo com a senha CORRETA; outro username do mesmo IP recebe 200.
+###
+### A camada 2 (100 falhas por IP, qualquer username) esta em 02-auth-rate-limit-ip.http.
+### Ela fica em arquivo separado porque bloqueia o IP inteiro, e porque o IntelliJ HTTP Client
+### nao repete requisicoes: as 100 falhas sao 100 blocos.
+
+
+### Cenario A - camada 1: 10 falhas do admin, 11a tentativa do admin com senha correta -> 429,
+### e recepcao, do mesmo IP, continua logando.
+
+### Falha 1 de 10
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{ "username": "{{adminUsername}}", "password": "senha-errada-rate-limit" }
+
+> {%
+    client.test("falha 1 retorna 401 INVALID_CREDENTIALS", function() {
+        client.assert(response.status === 401, "esperado 401, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_CREDENTIALS", "code deveria ser INVALID_CREDENTIALS");
+    });
+%}
+
+### Falha 2 de 10
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{ "username": "{{adminUsername}}", "password": "senha-errada-rate-limit" }
+
+> {%
+    client.test("falha 2 retorna 401 INVALID_CREDENTIALS", function() {
+        client.assert(response.status === 401, "esperado 401, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_CREDENTIALS", "code deveria ser INVALID_CREDENTIALS");
+    });
+%}
+
+### Falha 3 de 10
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{ "username": "{{adminUsername}}", "password": "senha-errada-rate-limit" }
+
+> {%
+    client.test("falha 3 retorna 401 INVALID_CREDENTIALS", function() {
+        client.assert(response.status === 401, "esperado 401, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_CREDENTIALS", "code deveria ser INVALID_CREDENTIALS");
+    });
+%}
+
+### Falha 4 de 10
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{ "username": "{{adminUsername}}", "password": "senha-errada-rate-limit" }
+
+> {%
+    client.test("falha 4 retorna 401 INVALID_CREDENTIALS", function() {
+        client.assert(response.status === 401, "esperado 401, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_CREDENTIALS", "code deveria ser INVALID_CREDENTIALS");
+    });
+%}
+
+### Falha 5 de 10
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{ "username": "{{adminUsername}}", "password": "senha-errada-rate-limit" }
+
+> {%
+    client.test("falha 5 retorna 401 INVALID_CREDENTIALS", function() {
+        client.assert(response.status === 401, "esperado 401, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_CREDENTIALS", "code deveria ser INVALID_CREDENTIALS");
+    });
+%}
+
+### Falha 6 de 10
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{ "username": "{{adminUsername}}", "password": "senha-errada-rate-limit" }
+
+> {%
+    client.test("falha 6 retorna 401 INVALID_CREDENTIALS", function() {
+        client.assert(response.status === 401, "esperado 401, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_CREDENTIALS", "code deveria ser INVALID_CREDENTIALS");
+    });
+%}
+
+### Falha 7 de 10
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{ "username": "{{adminUsername}}", "password": "senha-errada-rate-limit" }
+
+> {%
+    client.test("falha 7 retorna 401 INVALID_CREDENTIALS", function() {
+        client.assert(response.status === 401, "esperado 401, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_CREDENTIALS", "code deveria ser INVALID_CREDENTIALS");
+    });
+%}
+
+### Falha 8 de 10
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{ "username": "{{adminUsername}}", "password": "senha-errada-rate-limit" }
+
+> {%
+    client.test("falha 8 retorna 401 INVALID_CREDENTIALS", function() {
+        client.assert(response.status === 401, "esperado 401, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_CREDENTIALS", "code deveria ser INVALID_CREDENTIALS");
+    });
+%}
+
+### Falha 9 de 10
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{ "username": "{{adminUsername}}", "password": "senha-errada-rate-limit" }
+
+> {%
+    client.test("falha 9 retorna 401 INVALID_CREDENTIALS", function() {
+        client.assert(response.status === 401, "esperado 401, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_CREDENTIALS", "code deveria ser INVALID_CREDENTIALS");
+    });
+%}
+
+### Falha 10 de 10
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{ "username": "{{adminUsername}}", "password": "senha-errada-rate-limit" }
+
+> {%
+    client.test("falha 10 retorna 401 INVALID_CREDENTIALS", function() {
+        client.assert(response.status === 401, "esperado 401, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_CREDENTIALS", "code deveria ser INVALID_CREDENTIALS");
+    });
+%}
+
+
+### A11. 11a tentativa do admin, com a senha CORRETA -> 429 TOO_MANY_LOGIN_ATTEMPTS
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{ "username": "{{adminUsername}}", "password": "{{password}}" }
+
+> {%
+    client.test("11a tentativa do par com senha correta retorna 429 TOO_MANY_LOGIN_ATTEMPTS", function() {
+        client.assert(response.status === 429, "esperado 429, recebido " + response.status);
+        client.assert(response.body.code === "TOO_MANY_LOGIN_ATTEMPTS", "code deveria ser TOO_MANY_LOGIN_ATTEMPTS");
+        client.assert(response.contentType.mimeType === "application/problem+json", "content-type deveria ser application/problem+json");
+        client.assert(response.body.accessToken === undefined, "nenhum token pode ser emitido com o par bloqueado");
+    });
+%}
+
+
+### A12. Outro username do mesmo IP (recepcao), senha correta -> 200: so o par do admin esta bloqueado
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{ "username": "{{frontDeskUsername}}", "password": "{{password}}" }
+
+> {%
+    client.test("outro username do mesmo IP continua logando", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        client.assert(response.body.accessToken !== undefined, "accessToken ausente");
+        client.assert(response.body.user.username === "recepcao", "username deveria ser recepcao");
+    });
+%}
