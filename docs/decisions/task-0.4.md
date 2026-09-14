@@ -83,7 +83,7 @@ revisão 4 e instalação deste registro · **5** respostas à revisão final
 | 50 | 4 | Limite atômico de BCrypts simultâneos por IP (máximo 3) com contador de falhas por IP incrementado depois do BCrypt, para login correto nunca receber 429 por ataque do mesmo IP | **revertida pela #56 e #57** (incoerente: proteger e não bloquear o mesmo IP não cabem juntos) |
 | 51 | 4 | Na matriz da spec, os dois cenários de usuário desativado ficam só no teste de integração (nenhum endpoint desativa usuário nesta task) | implementado |
 | 52 | 4 | Sugestões pequenas: `@Qualifier` no cache do limiter; relógio lido dentro do `compute`; teste de concorrência no nível do serviço; test-jar do shared-kernel limitado a `support/` | implementado |
-| 53 | 4 | Commits: três (registro de decisões · implementação · testes), não os quatro da spec, porque separar as rodadas entrelaçadas gera commits que não compilam. Trailers `Task:` e `Agent:` em linhas separadas; `.claude/agent-memory/**` fora dos commits | pendente |
+| 53 | 4 | Commits: três (registro de decisões · implementação · testes), não os quatro da spec, porque separar as rodadas entrelaçadas gera commits que não compilam. Trailers `Task:` e `Agent:` em linhas separadas; `.claude/agent-memory/**` fora dos commits | implementado |
 | 54 | 4 | Logout devolve **204**, sem corpo | implementado |
 | 55 | 4 | Campos atuais de `/api/admin/users` aprovados: `id, username, fullName, email, isActive, roles, lastLoginAt` | implementado |
 | 56 | 4 | Limite de falhas por **par (IP, username)**: 10 falhas em 1 minuto para o par → 429 para aquele par; o mesmo IP com outro username continua livre. Username normalizado como no login; username inexistente conta igual (resposta idêntica) | implementado |
@@ -145,7 +145,7 @@ explícita dele.
 - [x] #68 teto de 30 esperando por IP
 - [x] #69 log com username tentado e 429 por vaga
 - [x] #72 sugestões pequenas
-- [ ] Commits conforme #53
+- [x] Commits conforme #53
 
 ### Movido para outra task
 
