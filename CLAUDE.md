@@ -268,3 +268,25 @@ Task sem `.http` executável está incompleta.
 Se a especificação estiver ambígua ou faltar uma regra de negócio, **pare e
 pergunte**. Não invente comportamento de negócio. Não altere arquivo fora do
 escopo da task.
+
+## Registro de decisões
+
+Toda task mantém `docs/decisions/task-<código>.md` na sua branch, criado a
+partir de `docs/TEMPLATE-decisoes.md` **antes da primeira linha de código**.
+
+Ele é atualizado **na mesma resposta** em que uma decisão é confirmada, nunca
+reconstruído de memória no fim. Task longa passa por várias rodadas de review, e
+o que foi decidido na rodada 1 vira névoa na rodada 4 — é assim que escopo
+aprovado reaparece como "pendência futura".
+
+Regras:
+
+- Decisão confirmada pelo Breno entra na tabela **imediatamente**
+- Item aprovado como escopo **não sai** da lista sem aprovação explícita dele,
+  registrando para qual task vai e por quê
+- Decisão revertida não é apagada: marque como revertida e adicione a nova
+- Antes de reportar o fim de uma rodada, **releia o arquivo** e confirme que
+  nada da lista de escopo ficou de fora
+
+O arquivo vai junto no PR e permanece em `docs/decisions/` depois do merge. Ele
+é a resposta para "por que isso foi feito assim" daqui a seis meses.

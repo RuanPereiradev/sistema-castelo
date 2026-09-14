@@ -73,6 +73,14 @@ código sugerido dentro do relatório.
 - Controller não depende de repositório diretamente
 - Dependências respeitam o grafo do `CLAUDE.md`
 
+### Registro de decisões
+- `docs/decisions/task-<código>.md` existe e está atualizado
+- Toda decisão confirmada nas rodadas anteriores aparece na tabela
+- **Nenhum item de escopo aprovado foi movido para "outra task" sem aprovação
+  registrada.** Este é o achado mais importante em task longa: escopo aprovado
+  na rodada 1 reaparecendo como pendência futura na rodada 4
+- Limitações aceitas estão registradas, para não voltarem como achado novo
+
 ### Entregáveis
 - Arquivo `.http` presente, com caminho feliz **e cenários negativos**
 - Migration Flyway no padrão `V{n}__{descricao}.sql`
