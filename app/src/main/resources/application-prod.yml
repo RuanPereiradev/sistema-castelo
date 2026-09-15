@@ -13,10 +13,20 @@ spring:
   flyway:
     clean-disabled: true
 
-  web:
-    cors:
-      allowed-origins: ${CORS_ALLOWED_ORIGINS}
-
 logging:
   level:
     org.hibernate.SQL: WARN
+
+server:
+  # native: o Tomcat (RemoteIpValve) so aceita X-Forwarded-For vindo de um proxy listado em
+  # internal-proxies. Nunca "framework", que aceita o cabecalho de qualquer cliente.
+  # Sem valor padrao de proposito: o default do Tomcat confia em toda rede privada, e os
+  # aparelhos do hotel estao numa rede privada. Informe o IP do proxy reverso (CIDR ou regex).
+  forward-headers-strategy: native
+  tomcat:
+    remoteip:
+      internal-proxies: ${TRUSTED_PROXIES}
+
+app:
+  cors:
+    allowed-origins: ${CORS_ALLOWED_ORIGINS}

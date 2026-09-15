@@ -45,6 +45,14 @@ class ArchitectureRulesTest {
     }
 
     @Test
+    @DisplayName("A5: a module's application layer does not depend on its own infra layer")
+    void applicationDoesNotDependOnInfraOfSameModule() {
+        assertThatCode(() -> ArchitectureRules.checkApplicationDoesNotDependOnInfraOfSameModule(
+                        productionClasses, ArchitectureRules.BASE_PACKAGE, ArchitectureRules.DOMAIN_MODULES))
+                .doesNotThrowAnyException();
+    }
+
+    @Test
     @DisplayName("A3: shared-kernel does not depend on any other module of the project")
     void sharedKernelDoesNotDependOnProjectModules() {
         ArchitectureRules.sharedKernelMustNotDependOnProjectModules(

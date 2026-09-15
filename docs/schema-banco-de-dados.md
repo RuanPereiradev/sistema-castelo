@@ -129,13 +129,14 @@ cash_drawer_session 1──N payment
 | Versão | Arquivo | Task | Tabelas |
 |---|---|---|---|
 | V1 | `V1__baseline.sql` | 0.3 | `property`, `setting`, `app_user`, `user_role` |
-| V2 | `V2__menu.sql` | 0.8 | `menu_category`, `menu_item`, `menu_item_variant`, `modifier`, `menu_item_modifier`, `availability_window` |
-| V3 | `V3__billing.sql` | 1.3 | `folio`, `charge`, `payment`, `payment_intent` |
-| V4 | `V4__hotel_inventory.sql` | 1.1 | `room_type`, `room`, `rate_plan` |
-| V5 | `V5__dining_table.sql` | 1.5 | `dining_table` |
-| V6 | `V6__reservation.sql` | 2.1 | `guest`, `daily_inventory`, `reservation`, `reservation_child`, `room_night` |
-| V7 | `V7__tab.sql` | 2.2 | `tab`, `tab_item`, `tab_item_modifier` |
-| V8 | `V8__cash.sql` | 2.4 | `cash_drawer_session`, `cash_movement` + FK em `payment` |
+| V2 | `V2__auth.sql` | 0.4 | altera `app_user` (`username`, `token_version`) |
+| V3 | `V3__menu.sql` | 0.8 | `menu_category`, `menu_item`, `menu_item_variant`, `modifier`, `menu_item_modifier`, `availability_window` |
+| V4 | `V4__billing.sql` | 1.3 | `folio`, `charge`, `payment`, `payment_intent` |
+| V5 | `V5__hotel_inventory.sql` | 1.1 | `room_type`, `room`, `rate_plan` |
+| V6 | `V6__dining_table.sql` | 1.5 | `dining_table` |
+| V7 | `V7__reservation.sql` | 2.1 | `guest`, `daily_inventory`, `reservation`, `reservation_child`, `room_night` |
+| V8 | `V8__tab.sql` | 2.2 | `tab`, `tab_item`, `tab_item_modifier` |
+| V9 | `V9__cash.sql` | 2.4 | `cash_drawer_session`, `cash_movement` + FK em `payment` |
 
 ---
 
@@ -205,7 +206,43 @@ granular configurável, aí entra a tabela.
 
 ---
 
-## 5. V2 — cardápio
+## 5. V2 — autenticação
+
+```sql
+ALTER TABLE app_user
+    ADD COLUMN username      VARCHAR(30),
+    ADD COLUMN token_version INTEGER NOT NULL DEFAULT 0;
+
+-- email deixa de ser obrigatório: cozinheiro pode não ter
+ALTER TABLE app_user ALTER COLUMN email DROP NOT NULL;
+
+-- unicidade do email só quando presente
+ALTER TABLE app_user DROP CONSTRAINT uk_app_user_email;
+CREATE UNIQUE INDEX uk_app_user_email ON app_user (email) WHERE email IS NOT NULL;
+
+-- username é o novo campo de login
+UPDATE app_user SET username = split_part(email, '@', 1) WHERE username IS NULL;
+ALTER TABLE app_user ALTER COLUMN username SET NOT NULL;
+CREATE UNIQUE INDEX uk_app_user_username ON app_user (lower(username));
+```
+
+**Notas**
+
+- `username` é o novo campo de login (3 a 30 caracteres, letras minúsculas,
+  dígitos, ponto e sublinhado). `email` deixa de ser obrigatório: o cozinheiro
+  pode não ter um.
+- O índice sobre `lower(username)` torna o login **insensível a maiúsculas**
+  sem guardar o valor normalizado — `Joao` e `joao` são o mesmo usuário.
+- `token_version` sustenta a sessão única: todo token emitido carrega a versão
+  vigente no momento da emissão, e login novo ou logout incrementam a coluna,
+  invalidando imediatamente qualquer token emitido antes.
+- Usuários existentes recebem `username` derivado do prefixo do e-mail
+  (`split_part(email, '@', 1)`) para a migration não quebrar sobre dado já
+  existente.
+
+---
+
+## 6. V3 — cardápio
 
 ```sql
 CREATE TABLE menu_category (
@@ -313,7 +350,7 @@ CREATE INDEX idx_availability_window_item ON availability_window (menu_item_id);
 
 ---
 
-## 6. V3 — billing
+## 7. V4 — billing
 
 ```sql
 CREATE TABLE folio (
@@ -452,7 +489,7 @@ nulável: pagamento por QR code não tem operador, e a constraint
 
 ---
 
-## 7. V4 — inventário do hotel
+## 8. V5 — inventário do hotel
 
 ```sql
 CREATE TABLE room_type (
@@ -522,7 +559,7 @@ temporada.
 
 ---
 
-## 8. V5 — mesas
+## 9. V6 — mesas
 
 ```sql
 CREATE TABLE dining_table (
@@ -542,7 +579,7 @@ CREATE TABLE dining_table (
 
 ---
 
-## 9. V6 — reservas
+## 10. V7 — reservas
 
 ```sql
 CREATE TABLE guest (
@@ -672,7 +709,7 @@ CREATE INDEX idx_reservation_expiring
 
 ---
 
-## 10. V7 — comandas
+## 11. V8 — comandas
 
 ```sql
 CREATE TABLE tab (
@@ -821,7 +858,7 @@ folio, sem tocar em `split_group`.
 
 ---
 
-## 11. V8 — caixa
+## 12. V9 — caixa
 
 ```sql
 CREATE TABLE cash_drawer_session (
@@ -875,7 +912,7 @@ mais de um caixa operando ao mesmo tempo.
 
 ---
 
-## 12. O que o banco não garante
+## 13. O que o banco não garante
 
 A integridade abaixo é responsabilidade exclusiva da aplicação:
 
@@ -897,7 +934,7 @@ justamente os pontos onde um bug não é barrado pelo banco.
 
 ---
 
-## 13. Pendências
+## 14. Pendências
 
 | Pendência | Efeito |
 |---|---|

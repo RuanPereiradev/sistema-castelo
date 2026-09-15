@@ -62,6 +62,15 @@ class ArchitectureViolationProofsTest {
     }
 
     @Test
+    @DisplayName("A5 fails when a module's application layer depends on its own infra layer")
+    void applicationDoesNotDependOnInfraOfSameModuleFailsOnViolation() {
+        assertThatThrownBy(() -> ArchitectureRules.checkApplicationDoesNotDependOnInfraOfSameModule(
+                        violationClasses, FAKE_BASE_PACKAGE, FAKE_DOMAIN_MODULES))
+                .isInstanceOf(AssertionError.class)
+                .hasMessageContaining("fakeidentity.application.FakeIdentityApplicationClass");
+    }
+
+    @Test
     @DisplayName("A3 fails when shared-kernel depends on another module of the project")
     void sharedKernelDoesNotDependOnProjectModulesFailsOnViolation() {
         assertThatThrownBy(() -> ArchitectureRules

@@ -1,0 +1,459 @@
+### Task 0.4 - identity e autenticacao
+### Ambiente: selecione "dev" (ou "local") no IntelliJ HTTP Client, com
+### http-client.env.json + http-client.private.env.json (copie o .example e
+### use a mesma senha de DEV_SEED_PASSWORD, ou o default "admin123" do perfil dev).
+###
+### Pre-requisito: aplicacao rodando com o perfil "dev" e castel.dev.seed-enabled=true,
+### que cria admin (ADMIN), recepcao (FRONT_DESK), garcom (WAITER), cozinha (KITCHEN)
+### e inativo (WAITER, desativado), todos com a mesma senha.
+###
+### Rode o arquivo inteiro, em ordem: varios cenarios usam tokens salvos pelos anteriores.
+### O arquivo gera 6 falhas de login por execucao, cada uma num par (IP, username) diferente
+### (admin, garcom, recepcao, usuario.que.nao.existe, inativo, e o par unico que agrupa todo
+### username em formato invalido do IP). Limites: 10 falhas por minuto por par e 100 por IP.
+### Rodar mais de 9 vezes seguidas dentro de 1 minuto faz o login desses pares responder 429.
+### Os 429 estao em 01-auth-rate-limit.http e 02-auth-rate-limit-ip.http, que rodam isolados.
+###
+### Sem cenario aqui, cobertos so no teste de integracao AuthenticationHttpIntegrationTest:
+### - token e refresh de usuario desativado (401 USER_INACTIVE): nenhum endpoint desativa
+###   usuario nesta task, e o seed "inativo" ja nasce desativado e nao consegue obter token;
+### - token no segundo exato do exp (aceito): depende de relogio controlavel.
+### INVALID_USERNAME, WEAK_PASSWORD, PASSWORD_TOO_LONG e USER_WITHOUT_ROLES (422) tambem nao tem
+### cenario: nenhum endpoint cria ou altera usuario nesta task.
+
+
+### 1. Login valido -> 200 + accessToken + refreshToken + dados do usuario
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{
+  "username": "{{adminUsername}}",
+  "password": "{{password}}"
+}
+
+> {%
+    client.test("login valido retorna 200 com tokens", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        client.assert(response.body.accessToken !== undefined, "accessToken ausente");
+        client.assert(response.body.refreshToken !== undefined, "refreshToken ausente");
+        client.assert(response.body.expiresIn === 900, "expiresIn deveria ser 900 (15 min)");
+        client.assert(response.body.user.username === "admin", "username deveria ser admin");
+    });
+    client.global.set("accessToken", response.body.accessToken);
+    client.global.set("refreshToken", response.body.refreshToken);
+%}
+
+
+### 2. Senha errada -> 401 INVALID_CREDENTIALS
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{
+  "username": "{{adminUsername}}",
+  "password": "senha-errada-de-proposito"
+}
+
+> {%
+    client.test("senha errada retorna 401 INVALID_CREDENTIALS", function() {
+        client.assert(response.status === 401, "esperado 401, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_CREDENTIALS", "code deveria ser INVALID_CREDENTIALS");
+        client.assert(response.contentType.mimeType === "application/problem+json", "content-type deveria ser application/problem+json");
+    });
+    client.global.set("wrongPasswordDetail", response.body.detail);
+%}
+
+
+### 2b. Senha vazia -> 401 INVALID_CREDENTIALS, resposta identica ao cenario 2
+# Senha vazia ainda calcula um BCrypt completo (comparada com um valor aleatorio), para o tempo
+# de resposta nao revelar se a conta existe. Conta como falha no limite.
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{
+  "username": "{{waiterUsername}}",
+  "password": ""
+}
+
+> {%
+    client.test("senha vazia retorna 401 identico a senha errada", function() {
+        client.assert(response.status === 401, "esperado 401, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_CREDENTIALS", "code deveria ser INVALID_CREDENTIALS");
+        client.assert(response.body.detail === client.global.get("wrongPasswordDetail"), "detail deveria ser identico ao da senha errada");
+    });
+%}
+
+
+### 2c. Campo password ausente -> 401 INVALID_CREDENTIALS, resposta identica ao cenario 2
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{
+  "username": "{{frontDeskUsername}}"
+}
+
+> {%
+    client.test("password ausente retorna 401 identico a senha errada", function() {
+        client.assert(response.status === 401, "esperado 401, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_CREDENTIALS", "code deveria ser INVALID_CREDENTIALS");
+        client.assert(response.body.detail === client.global.get("wrongPasswordDetail"), "detail deveria ser identico ao da senha errada");
+    });
+%}
+
+
+### 3. Usuario inexistente -> 401 INVALID_CREDENTIALS, resposta identica ao cenario 2
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{
+  "username": "usuario.que.nao.existe",
+  "password": "qualquer-coisa"
+}
+
+> {%
+    client.test("usuario inexistente retorna 401 identico a senha errada", function() {
+        client.assert(response.status === 401, "esperado 401, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_CREDENTIALS", "code deveria ser INVALID_CREDENTIALS");
+        client.assert(response.body.detail === client.global.get("wrongPasswordDetail"), "detail deveria ser identico ao da senha errada");
+    });
+%}
+
+
+### 3b. Username em formato invalido -> 401 INVALID_CREDENTIALS, resposta identica ao cenario 2
+# "cozİnha" (I maiusculo com ponto, U+0130) nao e [a-z0-9._] nem depois de minusculas: e tratado
+# como usuario inexistente, sem consulta ao banco e com o BCrypt descartavel. Nunca autentica como
+# "cozinha", nem ganha 10 tentativas extras contra ela. A senha abaixo e a CORRETA do seed.
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{
+  "username": "cozİnha",
+  "password": "{{password}}"
+}
+
+> {%
+    client.test("username em formato invalido retorna 401 identico a usuario inexistente", function() {
+        client.assert(response.status === 401, "esperado 401, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_CREDENTIALS", "code deveria ser INVALID_CREDENTIALS");
+        client.assert(response.body.detail === client.global.get("wrongPasswordDetail"), "detail deveria ser identico ao da senha errada");
+        client.assert(response.body.accessToken === undefined, "nunca pode emitir token");
+    });
+%}
+
+
+### 4. Usuario inativo com senha correta -> 401 INVALID_CREDENTIALS, resposta identica ao cenario 2
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{
+  "username": "{{inactiveUsername}}",
+  "password": "{{password}}"
+}
+
+> {%
+    client.test("usuario inativo retorna 401 identico a senha errada", function() {
+        client.assert(response.status === 401, "esperado 401, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_CREDENTIALS", "code deveria ser INVALID_CREDENTIALS");
+        client.assert(response.body.detail === client.global.get("wrongPasswordDetail"), "detail deveria ser identico ao da senha errada");
+    });
+%}
+
+
+### 5. Username com maiusculas -> 200, mesmo usuario
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{
+  "username": "ADMIN",
+  "password": "{{password}}"
+}
+
+> {%
+    client.test("username em maiusculas ainda autentica", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        client.assert(response.body.user.username === "admin", "username normalizado deveria ser admin");
+    });
+    client.global.set("accessToken", response.body.accessToken);
+    client.global.set("refreshToken", response.body.refreshToken);
+%}
+
+
+### 6. Rota protegida sem token -> 401 AUTHENTICATION_REQUIRED
+GET {{host}}/api/auth/me
+
+> {%
+    client.test("rota protegida sem token retorna 401", function() {
+        client.assert(response.status === 401, "esperado 401, recebido " + response.status);
+        client.assert(response.body.code === "AUTHENTICATION_REQUIRED", "code deveria ser AUTHENTICATION_REQUIRED");
+        client.assert(response.contentType.mimeType === "application/problem+json", "content-type deveria ser application/problem+json");
+    });
+%}
+
+
+### 7. Rota protegida com token valido -> 200, sem hash de senha
+GET {{host}}/api/auth/me
+Authorization: Bearer {{accessToken}}
+
+> {%
+    client.test("rota protegida com token valido retorna 200", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        client.assert(response.body.username === "admin", "username deveria ser admin");
+        client.assert(response.body.passwordHash === undefined, "passwordHash nunca deve aparecer na resposta");
+    });
+%}
+
+
+### 8a. Login do garcom (WAITER), para o cenario 8
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{
+  "username": "{{waiterUsername}}",
+  "password": "{{password}}"
+}
+
+> {%
+    client.test("login do garcom retorna 200", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+    });
+    client.global.set("waiterAccessToken", response.body.accessToken);
+%}
+
+### 8. Rota de ADMIN com token de WAITER -> 403 ACCESS_DENIED
+GET {{host}}/api/admin/users
+Authorization: Bearer {{waiterAccessToken}}
+
+> {%
+    client.test("rota de ADMIN com token de WAITER retorna 403", function() {
+        client.assert(response.status === 403, "esperado 403, recebido " + response.status);
+        client.assert(response.body.code === "ACCESS_DENIED", "code deveria ser ACCESS_DENIED");
+        client.assert(response.contentType.mimeType === "application/problem+json", "content-type deveria ser application/problem+json");
+    });
+%}
+
+### 8b. Rota de ADMIN com token de ADMIN -> 200, lista sem hash de senha
+GET {{host}}/api/admin/users
+Authorization: Bearer {{accessToken}}
+
+> {%
+    client.test("rota de ADMIN com token de ADMIN retorna 200", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        client.assert(Array.isArray(response.body), "corpo deveria ser uma lista");
+        var inactive = response.body.find(function(user) { return user.username === "inativo"; });
+        client.assert(inactive !== undefined && inactive.isActive === false, "inativo deveria aparecer com isActive=false");
+        response.body.forEach(function(user) {
+            client.assert(user.passwordHash === undefined, "passwordHash nunca deve aparecer na resposta");
+        });
+    });
+%}
+
+
+### 9. Token expirado -> 401 TOKEN_EXPIRED
+# Token pre-gerado (HS256, segredo dev-only-insecure-secret-please-change-me-1234567890,
+# claim type "access"), ja expirado. So vale enquanto o segredo do perfil dev nao mudar.
+GET {{host}}/api/auth/me
+Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJmY2NiYjJhNS05MTU2LTRmOGQtOTBkNC1iZjEzOGIwZjA1MTgiLCJ0b2tlblZlcnNpb24iOjAsInR5cGUiOiJhY2Nlc3MiLCJyb2xlcyI6WyJBRE1JTiJdLCJpYXQiOjE3ODkyNTkyNDYsImV4cCI6MTc4OTI2MDE0Nn0.kuQw4GCwX3rxwEY2xZJZyHH6SIZFitjwXJJ2w_Libmw
+
+> {%
+    client.test("token expirado retorna 401 TOKEN_EXPIRED", function() {
+        client.assert(response.status === 401, "esperado 401, recebido " + response.status);
+        client.assert(response.body.code === "TOKEN_EXPIRED", "code deveria ser TOKEN_EXPIRED");
+        client.assert(response.contentType.mimeType === "application/problem+json", "content-type deveria ser application/problem+json");
+    });
+%}
+
+
+### 10. Token malformado -> 401 INVALID_TOKEN
+GET {{host}}/api/auth/me
+Authorization: Bearer isto-nao-e-um-jwt-valido
+
+> {%
+    client.test("token malformado retorna 401 INVALID_TOKEN", function() {
+        client.assert(response.status === 401, "esperado 401, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_TOKEN", "code deveria ser INVALID_TOKEN");
+    });
+%}
+
+
+### 11. Token assinado com outro segredo -> 401 INVALID_TOKEN
+# Token pre-gerado com outro segredo e exp em 2100: falha pela assinatura, nao pela expiracao.
+GET {{host}}/api/auth/me
+Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJmY2NiYjJhNS05MTU2LTRmOGQtOTBkNC1iZjEzOGIwZjA1MTgiLCJ0b2tlblZlcnNpb24iOjAsInR5cGUiOiJhY2Nlc3MiLCJyb2xlcyI6WyJBRE1JTiJdLCJpYXQiOjE3ODkyNjI4NDgsImV4cCI6NDEwMjQ0NDgwMH0.wUXfPx7BgAypm5cNh54O3APigr9asychB737-xk-DTg
+
+> {%
+    client.test("token assinado com outro segredo retorna 401 INVALID_TOKEN", function() {
+        client.assert(response.status === 401, "esperado 401, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_TOKEN", "code deveria ser INVALID_TOKEN");
+    });
+%}
+
+
+### 12. Refresh valido -> 200 + novo access token
+POST {{host}}/api/auth/refresh
+Content-Type: application/json
+
+{
+  "refreshToken": "{{refreshToken}}"
+}
+
+> {%
+    client.test("refresh valido retorna 200 com novo access token", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        client.assert(response.body.accessToken !== undefined, "accessToken ausente");
+        client.assert(response.body.expiresIn === 900, "expiresIn deveria ser 900 (15 min)");
+    });
+%}
+
+
+### 12b. Refresh com access token expirado no header Authorization -> 200
+# O filtro JWT nao roda em /api/auth/login nem /api/auth/refresh: um token velho
+# esquecido no header pelo cliente nao pode impedir a renovacao.
+POST {{host}}/api/auth/refresh
+Content-Type: application/json
+Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJmY2NiYjJhNS05MTU2LTRmOGQtOTBkNC1iZjEzOGIwZjA1MTgiLCJ0b2tlblZlcnNpb24iOjAsInR5cGUiOiJhY2Nlc3MiLCJyb2xlcyI6WyJBRE1JTiJdLCJpYXQiOjE3ODkyNTkyNDYsImV4cCI6MTc4OTI2MDE0Nn0.kuQw4GCwX3rxwEY2xZJZyHH6SIZFitjwXJJ2w_Libmw
+
+{
+  "refreshToken": "{{refreshToken}}"
+}
+
+> {%
+    client.test("refresh ignora access token expirado no header", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        client.assert(response.body.accessToken !== undefined, "accessToken ausente");
+    });
+%}
+
+
+### 13. Refresh usando access token -> 401 INVALID_TOKEN
+POST {{host}}/api/auth/refresh
+Content-Type: application/json
+
+{
+  "refreshToken": "{{accessToken}}"
+}
+
+> {%
+    client.test("refresh com access token retorna 401 INVALID_TOKEN", function() {
+        client.assert(response.status === 401, "esperado 401, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_TOKEN", "code deveria ser INVALID_TOKEN");
+    });
+%}
+
+
+### 14a. Novo login do admin (simula um segundo aparelho), invalida o token do cenario 5
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{
+  "username": "{{adminUsername}}",
+  "password": "{{password}}"
+}
+
+> {%
+    client.test("login no segundo aparelho retorna 200", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+    });
+    client.global.set("secondDeviceAccessToken", response.body.accessToken);
+%}
+
+### 14. Access token antigo apos novo login em outro aparelho -> 401 SESSION_SUPERSEDED
+GET {{host}}/api/auth/me
+Authorization: Bearer {{accessToken}}
+
+> {%
+    client.test("accessToken antigo apos novo login retorna 401 SESSION_SUPERSEDED", function() {
+        client.assert(response.status === 401, "esperado 401, recebido " + response.status);
+        client.assert(response.body.code === "SESSION_SUPERSEDED", "code deveria ser SESSION_SUPERSEDED");
+    });
+%}
+
+
+### 15a. Logout com o token do segundo aparelho -> 204 sem corpo
+POST {{host}}/api/auth/logout
+Authorization: Bearer {{secondDeviceAccessToken}}
+
+> {%
+    client.test("logout com token valido retorna 204 sem corpo", function() {
+        client.assert(response.status === 204, "esperado 204, recebido " + response.status);
+        client.assert(response.body === null || response.body === undefined || response.body === "", "logout nao deveria ter corpo");
+    });
+%}
+
+### 15. Access token apos logout -> 401 SESSION_SUPERSEDED
+GET {{host}}/api/auth/me
+Authorization: Bearer {{secondDeviceAccessToken}}
+
+> {%
+    client.test("accessToken apos logout retorna 401 SESSION_SUPERSEDED", function() {
+        client.assert(response.status === 401, "esperado 401, recebido " + response.status);
+        client.assert(response.body.code === "SESSION_SUPERSEDED", "code deveria ser SESSION_SUPERSEDED");
+    });
+%}
+
+
+### 16a. Login novo, os tokens anteriores foram invalidados nos cenarios 14 e 15
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{
+  "username": "{{adminUsername}}",
+  "password": "{{password}}"
+}
+
+> {%
+    client.global.set("finalAccessToken", response.body.accessToken);
+%}
+
+### 16. GET /api/auth/me autenticado -> 200 com papeis, sem hash de senha
+GET {{host}}/api/auth/me
+Authorization: Bearer {{finalAccessToken}}
+
+> {%
+    client.test("me retorna papeis e nunca o hash de senha", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        client.assert(Array.isArray(response.body.roles), "roles deveria ser uma lista");
+        client.assert(response.body.roles.length === 1 && response.body.roles[0] === "ADMIN", "admin do seed tem apenas o papel ADMIN");
+        client.assert(response.body.passwordHash === undefined, "passwordHash nunca deve aparecer na resposta");
+    });
+%}
+
+
+### 17. JSON malformado no login -> 400 MALFORMED_REQUEST (erro nao vira 401)
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{ "username": "admin", "password":
+
+> {%
+    client.test("JSON malformado retorna 400 MALFORMED_REQUEST", function() {
+        client.assert(response.status === 400, "esperado 400, recebido " + response.status);
+        client.assert(response.body.code === "MALFORMED_REQUEST", "code deveria ser MALFORMED_REQUEST");
+        client.assert(response.contentType.mimeType === "application/problem+json", "content-type deveria ser application/problem+json");
+    });
+%}
+
+
+### 17b. Senha sem aspas no JSON -> 400 MALFORMED_REQUEST, sem ecoar o valor
+# O valor invalido nunca pode voltar na resposta (nem aparecer no log da aplicacao).
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{"username":"admin","password":Canary123}
+
+> {%
+    client.test("senha sem aspas retorna 400 MALFORMED_REQUEST sem ecoar a senha", function() {
+        client.assert(response.status === 400, "esperado 400, recebido " + response.status);
+        client.assert(response.body.code === "MALFORMED_REQUEST", "code deveria ser MALFORMED_REQUEST");
+        client.assert(JSON.stringify(response.body).indexOf("Canary123") === -1, "a senha nunca deve aparecer na resposta");
+    });
+%}
+
+
+### 18. Rota inexistente com token valido -> 404 (erro nao vira 401)
+GET {{host}}/api/rota-que-nao-existe
+Authorization: Bearer {{finalAccessToken}}
+
+> {%
+    client.test("rota inexistente com token valido retorna 404", function() {
+        client.assert(response.status === 404, "esperado 404, recebido " + response.status);
+    });
+%}

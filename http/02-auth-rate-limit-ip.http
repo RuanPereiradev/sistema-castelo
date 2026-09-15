@@ -1,0 +1,1350 @@
+### Task 0.4 - limite de login, camada 2: IP inteiro
+###
+### ATENCAO: ESTE ARQUIVO BLOQUEIA O LOGIN DO SEU IP INTEIRO POR 1 MINUTO, PARA QUALQUER USERNAME.
+### Durante o minuto seguinte, todo login deste IP responde 429, inclusive o do 00-auth.http e o
+### do 01-auth-rate-limit.http, e inclusive com a senha correta. Rode-o ISOLADO, sozinho, numa
+### aplicacao recem-iniciada ou depois de 1 minuto sem nenhuma falha de login deste IP.
+###
+### Ambiente e pre-requisitos: os mesmos do 00-auth.http (perfil "dev" com seed).
+###
+### Regra: 100 falhas por minuto (janela deslizante) por IP, somando todos os usernames. Existe
+### contra password spraying (a mesma senha tentada em muitos usernames), que a camada 1 (10 por
+### par) nao pega. Cada username abaixo falha uma unica vez, entao nenhum par chega perto de 10.
+###
+### O IntelliJ HTTP Client nao repete requisicoes nem envia requisicoes a partir de script, por
+### isso as 100 falhas sao 100 blocos.
+
+
+### Cenario B - camada 2. ATENCAO: bloqueia o IP inteiro por 1 minuto.
+### 100 falhas em 100 usernames distintos e inexistentes; depois, um username ainda nao usado
+### neste arquivo recebe 429, mesmo com a senha correta.
+
+### Falha 1 de 100
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{ "username": "spray.001", "password": "senha-errada-rate-limit" }
+
+> {%
+    client.test("falha 1 retorna 401 INVALID_CREDENTIALS", function() {
+        client.assert(response.status === 401, "esperado 401, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_CREDENTIALS", "code deveria ser INVALID_CREDENTIALS");
+    });
+%}
+
+### Falha 2 de 100
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{ "username": "spray.002", "password": "senha-errada-rate-limit" }
+
+> {%
+    client.test("falha 2 retorna 401 INVALID_CREDENTIALS", function() {
+        client.assert(response.status === 401, "esperado 401, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_CREDENTIALS", "code deveria ser INVALID_CREDENTIALS");
+    });
+%}
+
+### Falha 3 de 100
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{ "username": "spray.003", "password": "senha-errada-rate-limit" }
+
+> {%
+    client.test("falha 3 retorna 401 INVALID_CREDENTIALS", function() {
+        client.assert(response.status === 401, "esperado 401, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_CREDENTIALS", "code deveria ser INVALID_CREDENTIALS");
+    });
+%}
+
+### Falha 4 de 100
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{ "username": "spray.004", "password": "senha-errada-rate-limit" }
+
+> {%
+    client.test("falha 4 retorna 401 INVALID_CREDENTIALS", function() {
+        client.assert(response.status === 401, "esperado 401, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_CREDENTIALS", "code deveria ser INVALID_CREDENTIALS");
+    });
+%}
+
+### Falha 5 de 100
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{ "username": "spray.005", "password": "senha-errada-rate-limit" }
+
+> {%
+    client.test("falha 5 retorna 401 INVALID_CREDENTIALS", function() {
+        client.assert(response.status === 401, "esperado 401, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_CREDENTIALS", "code deveria ser INVALID_CREDENTIALS");
+    });
+%}
+
+### Falha 6 de 100
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{ "username": "spray.006", "password": "senha-errada-rate-limit" }
+
+> {%
+    client.test("falha 6 retorna 401 INVALID_CREDENTIALS", function() {
+        client.assert(response.status === 401, "esperado 401, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_CREDENTIALS", "code deveria ser INVALID_CREDENTIALS");
+    });
+%}
+
+### Falha 7 de 100
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{ "username": "spray.007", "password": "senha-errada-rate-limit" }
+
+> {%
+    client.test("falha 7 retorna 401 INVALID_CREDENTIALS", function() {
+        client.assert(response.status === 401, "esperado 401, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_CREDENTIALS", "code deveria ser INVALID_CREDENTIALS");
+    });
+%}
+
+### Falha 8 de 100
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{ "username": "spray.008", "password": "senha-errada-rate-limit" }
+
+> {%
+    client.test("falha 8 retorna 401 INVALID_CREDENTIALS", function() {
+        client.assert(response.status === 401, "esperado 401, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_CREDENTIALS", "code deveria ser INVALID_CREDENTIALS");
+    });
+%}
+
+### Falha 9 de 100
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{ "username": "spray.009", "password": "senha-errada-rate-limit" }
+
+> {%
+    client.test("falha 9 retorna 401 INVALID_CREDENTIALS", function() {
+        client.assert(response.status === 401, "esperado 401, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_CREDENTIALS", "code deveria ser INVALID_CREDENTIALS");
+    });
+%}
+
+### Falha 10 de 100
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{ "username": "spray.010", "password": "senha-errada-rate-limit" }
+
+> {%
+    client.test("falha 10 retorna 401 INVALID_CREDENTIALS", function() {
+        client.assert(response.status === 401, "esperado 401, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_CREDENTIALS", "code deveria ser INVALID_CREDENTIALS");
+    });
+%}
+
+### Falha 11 de 100
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{ "username": "spray.011", "password": "senha-errada-rate-limit" }
+
+> {%
+    client.test("falha 11 retorna 401 INVALID_CREDENTIALS", function() {
+        client.assert(response.status === 401, "esperado 401, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_CREDENTIALS", "code deveria ser INVALID_CREDENTIALS");
+    });
+%}
+
+### Falha 12 de 100
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{ "username": "spray.012", "password": "senha-errada-rate-limit" }
+
+> {%
+    client.test("falha 12 retorna 401 INVALID_CREDENTIALS", function() {
+        client.assert(response.status === 401, "esperado 401, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_CREDENTIALS", "code deveria ser INVALID_CREDENTIALS");
+    });
+%}
+
+### Falha 13 de 100
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{ "username": "spray.013", "password": "senha-errada-rate-limit" }
+
+> {%
+    client.test("falha 13 retorna 401 INVALID_CREDENTIALS", function() {
+        client.assert(response.status === 401, "esperado 401, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_CREDENTIALS", "code deveria ser INVALID_CREDENTIALS");
+    });
+%}
+
+### Falha 14 de 100
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{ "username": "spray.014", "password": "senha-errada-rate-limit" }
+
+> {%
+    client.test("falha 14 retorna 401 INVALID_CREDENTIALS", function() {
+        client.assert(response.status === 401, "esperado 401, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_CREDENTIALS", "code deveria ser INVALID_CREDENTIALS");
+    });
+%}
+
+### Falha 15 de 100
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{ "username": "spray.015", "password": "senha-errada-rate-limit" }
+
+> {%
+    client.test("falha 15 retorna 401 INVALID_CREDENTIALS", function() {
+        client.assert(response.status === 401, "esperado 401, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_CREDENTIALS", "code deveria ser INVALID_CREDENTIALS");
+    });
+%}
+
+### Falha 16 de 100
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{ "username": "spray.016", "password": "senha-errada-rate-limit" }
+
+> {%
+    client.test("falha 16 retorna 401 INVALID_CREDENTIALS", function() {
+        client.assert(response.status === 401, "esperado 401, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_CREDENTIALS", "code deveria ser INVALID_CREDENTIALS");
+    });
+%}
+
+### Falha 17 de 100
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{ "username": "spray.017", "password": "senha-errada-rate-limit" }
+
+> {%
+    client.test("falha 17 retorna 401 INVALID_CREDENTIALS", function() {
+        client.assert(response.status === 401, "esperado 401, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_CREDENTIALS", "code deveria ser INVALID_CREDENTIALS");
+    });
+%}
+
+### Falha 18 de 100
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{ "username": "spray.018", "password": "senha-errada-rate-limit" }
+
+> {%
+    client.test("falha 18 retorna 401 INVALID_CREDENTIALS", function() {
+        client.assert(response.status === 401, "esperado 401, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_CREDENTIALS", "code deveria ser INVALID_CREDENTIALS");
+    });
+%}
+
+### Falha 19 de 100
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{ "username": "spray.019", "password": "senha-errada-rate-limit" }
+
+> {%
+    client.test("falha 19 retorna 401 INVALID_CREDENTIALS", function() {
+        client.assert(response.status === 401, "esperado 401, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_CREDENTIALS", "code deveria ser INVALID_CREDENTIALS");
+    });
+%}
+
+### Falha 20 de 100
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{ "username": "spray.020", "password": "senha-errada-rate-limit" }
+
+> {%
+    client.test("falha 20 retorna 401 INVALID_CREDENTIALS", function() {
+        client.assert(response.status === 401, "esperado 401, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_CREDENTIALS", "code deveria ser INVALID_CREDENTIALS");
+    });
+%}
+
+### Falha 21 de 100
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{ "username": "spray.021", "password": "senha-errada-rate-limit" }
+
+> {%
+    client.test("falha 21 retorna 401 INVALID_CREDENTIALS", function() {
+        client.assert(response.status === 401, "esperado 401, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_CREDENTIALS", "code deveria ser INVALID_CREDENTIALS");
+    });
+%}
+
+### Falha 22 de 100
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{ "username": "spray.022", "password": "senha-errada-rate-limit" }
+
+> {%
+    client.test("falha 22 retorna 401 INVALID_CREDENTIALS", function() {
+        client.assert(response.status === 401, "esperado 401, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_CREDENTIALS", "code deveria ser INVALID_CREDENTIALS");
+    });
+%}
+
+### Falha 23 de 100
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{ "username": "spray.023", "password": "senha-errada-rate-limit" }
+
+> {%
+    client.test("falha 23 retorna 401 INVALID_CREDENTIALS", function() {
+        client.assert(response.status === 401, "esperado 401, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_CREDENTIALS", "code deveria ser INVALID_CREDENTIALS");
+    });
+%}
+
+### Falha 24 de 100
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{ "username": "spray.024", "password": "senha-errada-rate-limit" }
+
+> {%
+    client.test("falha 24 retorna 401 INVALID_CREDENTIALS", function() {
+        client.assert(response.status === 401, "esperado 401, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_CREDENTIALS", "code deveria ser INVALID_CREDENTIALS");
+    });
+%}
+
+### Falha 25 de 100
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{ "username": "spray.025", "password": "senha-errada-rate-limit" }
+
+> {%
+    client.test("falha 25 retorna 401 INVALID_CREDENTIALS", function() {
+        client.assert(response.status === 401, "esperado 401, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_CREDENTIALS", "code deveria ser INVALID_CREDENTIALS");
+    });
+%}
+
+### Falha 26 de 100
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{ "username": "spray.026", "password": "senha-errada-rate-limit" }
+
+> {%
+    client.test("falha 26 retorna 401 INVALID_CREDENTIALS", function() {
+        client.assert(response.status === 401, "esperado 401, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_CREDENTIALS", "code deveria ser INVALID_CREDENTIALS");
+    });
+%}
+
+### Falha 27 de 100
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{ "username": "spray.027", "password": "senha-errada-rate-limit" }
+
+> {%
+    client.test("falha 27 retorna 401 INVALID_CREDENTIALS", function() {
+        client.assert(response.status === 401, "esperado 401, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_CREDENTIALS", "code deveria ser INVALID_CREDENTIALS");
+    });
+%}
+
+### Falha 28 de 100
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{ "username": "spray.028", "password": "senha-errada-rate-limit" }
+
+> {%
+    client.test("falha 28 retorna 401 INVALID_CREDENTIALS", function() {
+        client.assert(response.status === 401, "esperado 401, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_CREDENTIALS", "code deveria ser INVALID_CREDENTIALS");
+    });
+%}
+
+### Falha 29 de 100
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{ "username": "spray.029", "password": "senha-errada-rate-limit" }
+
+> {%
+    client.test("falha 29 retorna 401 INVALID_CREDENTIALS", function() {
+        client.assert(response.status === 401, "esperado 401, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_CREDENTIALS", "code deveria ser INVALID_CREDENTIALS");
+    });
+%}
+
+### Falha 30 de 100
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{ "username": "spray.030", "password": "senha-errada-rate-limit" }
+
+> {%
+    client.test("falha 30 retorna 401 INVALID_CREDENTIALS", function() {
+        client.assert(response.status === 401, "esperado 401, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_CREDENTIALS", "code deveria ser INVALID_CREDENTIALS");
+    });
+%}
+
+### Falha 31 de 100
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{ "username": "spray.031", "password": "senha-errada-rate-limit" }
+
+> {%
+    client.test("falha 31 retorna 401 INVALID_CREDENTIALS", function() {
+        client.assert(response.status === 401, "esperado 401, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_CREDENTIALS", "code deveria ser INVALID_CREDENTIALS");
+    });
+%}
+
+### Falha 32 de 100
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{ "username": "spray.032", "password": "senha-errada-rate-limit" }
+
+> {%
+    client.test("falha 32 retorna 401 INVALID_CREDENTIALS", function() {
+        client.assert(response.status === 401, "esperado 401, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_CREDENTIALS", "code deveria ser INVALID_CREDENTIALS");
+    });
+%}
+
+### Falha 33 de 100
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{ "username": "spray.033", "password": "senha-errada-rate-limit" }
+
+> {%
+    client.test("falha 33 retorna 401 INVALID_CREDENTIALS", function() {
+        client.assert(response.status === 401, "esperado 401, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_CREDENTIALS", "code deveria ser INVALID_CREDENTIALS");
+    });
+%}
+
+### Falha 34 de 100
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{ "username": "spray.034", "password": "senha-errada-rate-limit" }
+
+> {%
+    client.test("falha 34 retorna 401 INVALID_CREDENTIALS", function() {
+        client.assert(response.status === 401, "esperado 401, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_CREDENTIALS", "code deveria ser INVALID_CREDENTIALS");
+    });
+%}
+
+### Falha 35 de 100
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{ "username": "spray.035", "password": "senha-errada-rate-limit" }
+
+> {%
+    client.test("falha 35 retorna 401 INVALID_CREDENTIALS", function() {
+        client.assert(response.status === 401, "esperado 401, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_CREDENTIALS", "code deveria ser INVALID_CREDENTIALS");
+    });
+%}
+
+### Falha 36 de 100
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{ "username": "spray.036", "password": "senha-errada-rate-limit" }
+
+> {%
+    client.test("falha 36 retorna 401 INVALID_CREDENTIALS", function() {
+        client.assert(response.status === 401, "esperado 401, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_CREDENTIALS", "code deveria ser INVALID_CREDENTIALS");
+    });
+%}
+
+### Falha 37 de 100
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{ "username": "spray.037", "password": "senha-errada-rate-limit" }
+
+> {%
+    client.test("falha 37 retorna 401 INVALID_CREDENTIALS", function() {
+        client.assert(response.status === 401, "esperado 401, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_CREDENTIALS", "code deveria ser INVALID_CREDENTIALS");
+    });
+%}
+
+### Falha 38 de 100
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{ "username": "spray.038", "password": "senha-errada-rate-limit" }
+
+> {%
+    client.test("falha 38 retorna 401 INVALID_CREDENTIALS", function() {
+        client.assert(response.status === 401, "esperado 401, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_CREDENTIALS", "code deveria ser INVALID_CREDENTIALS");
+    });
+%}
+
+### Falha 39 de 100
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{ "username": "spray.039", "password": "senha-errada-rate-limit" }
+
+> {%
+    client.test("falha 39 retorna 401 INVALID_CREDENTIALS", function() {
+        client.assert(response.status === 401, "esperado 401, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_CREDENTIALS", "code deveria ser INVALID_CREDENTIALS");
+    });
+%}
+
+### Falha 40 de 100
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{ "username": "spray.040", "password": "senha-errada-rate-limit" }
+
+> {%
+    client.test("falha 40 retorna 401 INVALID_CREDENTIALS", function() {
+        client.assert(response.status === 401, "esperado 401, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_CREDENTIALS", "code deveria ser INVALID_CREDENTIALS");
+    });
+%}
+
+### Falha 41 de 100
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{ "username": "spray.041", "password": "senha-errada-rate-limit" }
+
+> {%
+    client.test("falha 41 retorna 401 INVALID_CREDENTIALS", function() {
+        client.assert(response.status === 401, "esperado 401, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_CREDENTIALS", "code deveria ser INVALID_CREDENTIALS");
+    });
+%}
+
+### Falha 42 de 100
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{ "username": "spray.042", "password": "senha-errada-rate-limit" }
+
+> {%
+    client.test("falha 42 retorna 401 INVALID_CREDENTIALS", function() {
+        client.assert(response.status === 401, "esperado 401, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_CREDENTIALS", "code deveria ser INVALID_CREDENTIALS");
+    });
+%}
+
+### Falha 43 de 100
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{ "username": "spray.043", "password": "senha-errada-rate-limit" }
+
+> {%
+    client.test("falha 43 retorna 401 INVALID_CREDENTIALS", function() {
+        client.assert(response.status === 401, "esperado 401, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_CREDENTIALS", "code deveria ser INVALID_CREDENTIALS");
+    });
+%}
+
+### Falha 44 de 100
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{ "username": "spray.044", "password": "senha-errada-rate-limit" }
+
+> {%
+    client.test("falha 44 retorna 401 INVALID_CREDENTIALS", function() {
+        client.assert(response.status === 401, "esperado 401, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_CREDENTIALS", "code deveria ser INVALID_CREDENTIALS");
+    });
+%}
+
+### Falha 45 de 100
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{ "username": "spray.045", "password": "senha-errada-rate-limit" }
+
+> {%
+    client.test("falha 45 retorna 401 INVALID_CREDENTIALS", function() {
+        client.assert(response.status === 401, "esperado 401, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_CREDENTIALS", "code deveria ser INVALID_CREDENTIALS");
+    });
+%}
+
+### Falha 46 de 100
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{ "username": "spray.046", "password": "senha-errada-rate-limit" }
+
+> {%
+    client.test("falha 46 retorna 401 INVALID_CREDENTIALS", function() {
+        client.assert(response.status === 401, "esperado 401, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_CREDENTIALS", "code deveria ser INVALID_CREDENTIALS");
+    });
+%}
+
+### Falha 47 de 100
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{ "username": "spray.047", "password": "senha-errada-rate-limit" }
+
+> {%
+    client.test("falha 47 retorna 401 INVALID_CREDENTIALS", function() {
+        client.assert(response.status === 401, "esperado 401, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_CREDENTIALS", "code deveria ser INVALID_CREDENTIALS");
+    });
+%}
+
+### Falha 48 de 100
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{ "username": "spray.048", "password": "senha-errada-rate-limit" }
+
+> {%
+    client.test("falha 48 retorna 401 INVALID_CREDENTIALS", function() {
+        client.assert(response.status === 401, "esperado 401, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_CREDENTIALS", "code deveria ser INVALID_CREDENTIALS");
+    });
+%}
+
+### Falha 49 de 100
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{ "username": "spray.049", "password": "senha-errada-rate-limit" }
+
+> {%
+    client.test("falha 49 retorna 401 INVALID_CREDENTIALS", function() {
+        client.assert(response.status === 401, "esperado 401, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_CREDENTIALS", "code deveria ser INVALID_CREDENTIALS");
+    });
+%}
+
+### Falha 50 de 100
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{ "username": "spray.050", "password": "senha-errada-rate-limit" }
+
+> {%
+    client.test("falha 50 retorna 401 INVALID_CREDENTIALS", function() {
+        client.assert(response.status === 401, "esperado 401, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_CREDENTIALS", "code deveria ser INVALID_CREDENTIALS");
+    });
+%}
+
+### Falha 51 de 100
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{ "username": "spray.051", "password": "senha-errada-rate-limit" }
+
+> {%
+    client.test("falha 51 retorna 401 INVALID_CREDENTIALS", function() {
+        client.assert(response.status === 401, "esperado 401, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_CREDENTIALS", "code deveria ser INVALID_CREDENTIALS");
+    });
+%}
+
+### Falha 52 de 100
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{ "username": "spray.052", "password": "senha-errada-rate-limit" }
+
+> {%
+    client.test("falha 52 retorna 401 INVALID_CREDENTIALS", function() {
+        client.assert(response.status === 401, "esperado 401, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_CREDENTIALS", "code deveria ser INVALID_CREDENTIALS");
+    });
+%}
+
+### Falha 53 de 100
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{ "username": "spray.053", "password": "senha-errada-rate-limit" }
+
+> {%
+    client.test("falha 53 retorna 401 INVALID_CREDENTIALS", function() {
+        client.assert(response.status === 401, "esperado 401, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_CREDENTIALS", "code deveria ser INVALID_CREDENTIALS");
+    });
+%}
+
+### Falha 54 de 100
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{ "username": "spray.054", "password": "senha-errada-rate-limit" }
+
+> {%
+    client.test("falha 54 retorna 401 INVALID_CREDENTIALS", function() {
+        client.assert(response.status === 401, "esperado 401, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_CREDENTIALS", "code deveria ser INVALID_CREDENTIALS");
+    });
+%}
+
+### Falha 55 de 100
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{ "username": "spray.055", "password": "senha-errada-rate-limit" }
+
+> {%
+    client.test("falha 55 retorna 401 INVALID_CREDENTIALS", function() {
+        client.assert(response.status === 401, "esperado 401, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_CREDENTIALS", "code deveria ser INVALID_CREDENTIALS");
+    });
+%}
+
+### Falha 56 de 100
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{ "username": "spray.056", "password": "senha-errada-rate-limit" }
+
+> {%
+    client.test("falha 56 retorna 401 INVALID_CREDENTIALS", function() {
+        client.assert(response.status === 401, "esperado 401, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_CREDENTIALS", "code deveria ser INVALID_CREDENTIALS");
+    });
+%}
+
+### Falha 57 de 100
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{ "username": "spray.057", "password": "senha-errada-rate-limit" }
+
+> {%
+    client.test("falha 57 retorna 401 INVALID_CREDENTIALS", function() {
+        client.assert(response.status === 401, "esperado 401, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_CREDENTIALS", "code deveria ser INVALID_CREDENTIALS");
+    });
+%}
+
+### Falha 58 de 100
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{ "username": "spray.058", "password": "senha-errada-rate-limit" }
+
+> {%
+    client.test("falha 58 retorna 401 INVALID_CREDENTIALS", function() {
+        client.assert(response.status === 401, "esperado 401, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_CREDENTIALS", "code deveria ser INVALID_CREDENTIALS");
+    });
+%}
+
+### Falha 59 de 100
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{ "username": "spray.059", "password": "senha-errada-rate-limit" }
+
+> {%
+    client.test("falha 59 retorna 401 INVALID_CREDENTIALS", function() {
+        client.assert(response.status === 401, "esperado 401, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_CREDENTIALS", "code deveria ser INVALID_CREDENTIALS");
+    });
+%}
+
+### Falha 60 de 100
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{ "username": "spray.060", "password": "senha-errada-rate-limit" }
+
+> {%
+    client.test("falha 60 retorna 401 INVALID_CREDENTIALS", function() {
+        client.assert(response.status === 401, "esperado 401, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_CREDENTIALS", "code deveria ser INVALID_CREDENTIALS");
+    });
+%}
+
+### Falha 61 de 100
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{ "username": "spray.061", "password": "senha-errada-rate-limit" }
+
+> {%
+    client.test("falha 61 retorna 401 INVALID_CREDENTIALS", function() {
+        client.assert(response.status === 401, "esperado 401, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_CREDENTIALS", "code deveria ser INVALID_CREDENTIALS");
+    });
+%}
+
+### Falha 62 de 100
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{ "username": "spray.062", "password": "senha-errada-rate-limit" }
+
+> {%
+    client.test("falha 62 retorna 401 INVALID_CREDENTIALS", function() {
+        client.assert(response.status === 401, "esperado 401, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_CREDENTIALS", "code deveria ser INVALID_CREDENTIALS");
+    });
+%}
+
+### Falha 63 de 100
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{ "username": "spray.063", "password": "senha-errada-rate-limit" }
+
+> {%
+    client.test("falha 63 retorna 401 INVALID_CREDENTIALS", function() {
+        client.assert(response.status === 401, "esperado 401, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_CREDENTIALS", "code deveria ser INVALID_CREDENTIALS");
+    });
+%}
+
+### Falha 64 de 100
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{ "username": "spray.064", "password": "senha-errada-rate-limit" }
+
+> {%
+    client.test("falha 64 retorna 401 INVALID_CREDENTIALS", function() {
+        client.assert(response.status === 401, "esperado 401, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_CREDENTIALS", "code deveria ser INVALID_CREDENTIALS");
+    });
+%}
+
+### Falha 65 de 100
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{ "username": "spray.065", "password": "senha-errada-rate-limit" }
+
+> {%
+    client.test("falha 65 retorna 401 INVALID_CREDENTIALS", function() {
+        client.assert(response.status === 401, "esperado 401, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_CREDENTIALS", "code deveria ser INVALID_CREDENTIALS");
+    });
+%}
+
+### Falha 66 de 100
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{ "username": "spray.066", "password": "senha-errada-rate-limit" }
+
+> {%
+    client.test("falha 66 retorna 401 INVALID_CREDENTIALS", function() {
+        client.assert(response.status === 401, "esperado 401, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_CREDENTIALS", "code deveria ser INVALID_CREDENTIALS");
+    });
+%}
+
+### Falha 67 de 100
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{ "username": "spray.067", "password": "senha-errada-rate-limit" }
+
+> {%
+    client.test("falha 67 retorna 401 INVALID_CREDENTIALS", function() {
+        client.assert(response.status === 401, "esperado 401, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_CREDENTIALS", "code deveria ser INVALID_CREDENTIALS");
+    });
+%}
+
+### Falha 68 de 100
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{ "username": "spray.068", "password": "senha-errada-rate-limit" }
+
+> {%
+    client.test("falha 68 retorna 401 INVALID_CREDENTIALS", function() {
+        client.assert(response.status === 401, "esperado 401, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_CREDENTIALS", "code deveria ser INVALID_CREDENTIALS");
+    });
+%}
+
+### Falha 69 de 100
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{ "username": "spray.069", "password": "senha-errada-rate-limit" }
+
+> {%
+    client.test("falha 69 retorna 401 INVALID_CREDENTIALS", function() {
+        client.assert(response.status === 401, "esperado 401, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_CREDENTIALS", "code deveria ser INVALID_CREDENTIALS");
+    });
+%}
+
+### Falha 70 de 100
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{ "username": "spray.070", "password": "senha-errada-rate-limit" }
+
+> {%
+    client.test("falha 70 retorna 401 INVALID_CREDENTIALS", function() {
+        client.assert(response.status === 401, "esperado 401, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_CREDENTIALS", "code deveria ser INVALID_CREDENTIALS");
+    });
+%}
+
+### Falha 71 de 100
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{ "username": "spray.071", "password": "senha-errada-rate-limit" }
+
+> {%
+    client.test("falha 71 retorna 401 INVALID_CREDENTIALS", function() {
+        client.assert(response.status === 401, "esperado 401, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_CREDENTIALS", "code deveria ser INVALID_CREDENTIALS");
+    });
+%}
+
+### Falha 72 de 100
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{ "username": "spray.072", "password": "senha-errada-rate-limit" }
+
+> {%
+    client.test("falha 72 retorna 401 INVALID_CREDENTIALS", function() {
+        client.assert(response.status === 401, "esperado 401, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_CREDENTIALS", "code deveria ser INVALID_CREDENTIALS");
+    });
+%}
+
+### Falha 73 de 100
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{ "username": "spray.073", "password": "senha-errada-rate-limit" }
+
+> {%
+    client.test("falha 73 retorna 401 INVALID_CREDENTIALS", function() {
+        client.assert(response.status === 401, "esperado 401, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_CREDENTIALS", "code deveria ser INVALID_CREDENTIALS");
+    });
+%}
+
+### Falha 74 de 100
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{ "username": "spray.074", "password": "senha-errada-rate-limit" }
+
+> {%
+    client.test("falha 74 retorna 401 INVALID_CREDENTIALS", function() {
+        client.assert(response.status === 401, "esperado 401, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_CREDENTIALS", "code deveria ser INVALID_CREDENTIALS");
+    });
+%}
+
+### Falha 75 de 100
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{ "username": "spray.075", "password": "senha-errada-rate-limit" }
+
+> {%
+    client.test("falha 75 retorna 401 INVALID_CREDENTIALS", function() {
+        client.assert(response.status === 401, "esperado 401, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_CREDENTIALS", "code deveria ser INVALID_CREDENTIALS");
+    });
+%}
+
+### Falha 76 de 100
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{ "username": "spray.076", "password": "senha-errada-rate-limit" }
+
+> {%
+    client.test("falha 76 retorna 401 INVALID_CREDENTIALS", function() {
+        client.assert(response.status === 401, "esperado 401, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_CREDENTIALS", "code deveria ser INVALID_CREDENTIALS");
+    });
+%}
+
+### Falha 77 de 100
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{ "username": "spray.077", "password": "senha-errada-rate-limit" }
+
+> {%
+    client.test("falha 77 retorna 401 INVALID_CREDENTIALS", function() {
+        client.assert(response.status === 401, "esperado 401, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_CREDENTIALS", "code deveria ser INVALID_CREDENTIALS");
+    });
+%}
+
+### Falha 78 de 100
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{ "username": "spray.078", "password": "senha-errada-rate-limit" }
+
+> {%
+    client.test("falha 78 retorna 401 INVALID_CREDENTIALS", function() {
+        client.assert(response.status === 401, "esperado 401, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_CREDENTIALS", "code deveria ser INVALID_CREDENTIALS");
+    });
+%}
+
+### Falha 79 de 100
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{ "username": "spray.079", "password": "senha-errada-rate-limit" }
+
+> {%
+    client.test("falha 79 retorna 401 INVALID_CREDENTIALS", function() {
+        client.assert(response.status === 401, "esperado 401, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_CREDENTIALS", "code deveria ser INVALID_CREDENTIALS");
+    });
+%}
+
+### Falha 80 de 100
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{ "username": "spray.080", "password": "senha-errada-rate-limit" }
+
+> {%
+    client.test("falha 80 retorna 401 INVALID_CREDENTIALS", function() {
+        client.assert(response.status === 401, "esperado 401, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_CREDENTIALS", "code deveria ser INVALID_CREDENTIALS");
+    });
+%}
+
+### Falha 81 de 100
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{ "username": "spray.081", "password": "senha-errada-rate-limit" }
+
+> {%
+    client.test("falha 81 retorna 401 INVALID_CREDENTIALS", function() {
+        client.assert(response.status === 401, "esperado 401, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_CREDENTIALS", "code deveria ser INVALID_CREDENTIALS");
+    });
+%}
+
+### Falha 82 de 100
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{ "username": "spray.082", "password": "senha-errada-rate-limit" }
+
+> {%
+    client.test("falha 82 retorna 401 INVALID_CREDENTIALS", function() {
+        client.assert(response.status === 401, "esperado 401, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_CREDENTIALS", "code deveria ser INVALID_CREDENTIALS");
+    });
+%}
+
+### Falha 83 de 100
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{ "username": "spray.083", "password": "senha-errada-rate-limit" }
+
+> {%
+    client.test("falha 83 retorna 401 INVALID_CREDENTIALS", function() {
+        client.assert(response.status === 401, "esperado 401, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_CREDENTIALS", "code deveria ser INVALID_CREDENTIALS");
+    });
+%}
+
+### Falha 84 de 100
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{ "username": "spray.084", "password": "senha-errada-rate-limit" }
+
+> {%
+    client.test("falha 84 retorna 401 INVALID_CREDENTIALS", function() {
+        client.assert(response.status === 401, "esperado 401, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_CREDENTIALS", "code deveria ser INVALID_CREDENTIALS");
+    });
+%}
+
+### Falha 85 de 100
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{ "username": "spray.085", "password": "senha-errada-rate-limit" }
+
+> {%
+    client.test("falha 85 retorna 401 INVALID_CREDENTIALS", function() {
+        client.assert(response.status === 401, "esperado 401, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_CREDENTIALS", "code deveria ser INVALID_CREDENTIALS");
+    });
+%}
+
+### Falha 86 de 100
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{ "username": "spray.086", "password": "senha-errada-rate-limit" }
+
+> {%
+    client.test("falha 86 retorna 401 INVALID_CREDENTIALS", function() {
+        client.assert(response.status === 401, "esperado 401, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_CREDENTIALS", "code deveria ser INVALID_CREDENTIALS");
+    });
+%}
+
+### Falha 87 de 100
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{ "username": "spray.087", "password": "senha-errada-rate-limit" }
+
+> {%
+    client.test("falha 87 retorna 401 INVALID_CREDENTIALS", function() {
+        client.assert(response.status === 401, "esperado 401, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_CREDENTIALS", "code deveria ser INVALID_CREDENTIALS");
+    });
+%}
+
+### Falha 88 de 100
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{ "username": "spray.088", "password": "senha-errada-rate-limit" }
+
+> {%
+    client.test("falha 88 retorna 401 INVALID_CREDENTIALS", function() {
+        client.assert(response.status === 401, "esperado 401, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_CREDENTIALS", "code deveria ser INVALID_CREDENTIALS");
+    });
+%}
+
+### Falha 89 de 100
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{ "username": "spray.089", "password": "senha-errada-rate-limit" }
+
+> {%
+    client.test("falha 89 retorna 401 INVALID_CREDENTIALS", function() {
+        client.assert(response.status === 401, "esperado 401, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_CREDENTIALS", "code deveria ser INVALID_CREDENTIALS");
+    });
+%}
+
+### Falha 90 de 100
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{ "username": "spray.090", "password": "senha-errada-rate-limit" }
+
+> {%
+    client.test("falha 90 retorna 401 INVALID_CREDENTIALS", function() {
+        client.assert(response.status === 401, "esperado 401, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_CREDENTIALS", "code deveria ser INVALID_CREDENTIALS");
+    });
+%}
+
+### Falha 91 de 100
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{ "username": "spray.091", "password": "senha-errada-rate-limit" }
+
+> {%
+    client.test("falha 91 retorna 401 INVALID_CREDENTIALS", function() {
+        client.assert(response.status === 401, "esperado 401, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_CREDENTIALS", "code deveria ser INVALID_CREDENTIALS");
+    });
+%}
+
+### Falha 92 de 100
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{ "username": "spray.092", "password": "senha-errada-rate-limit" }
+
+> {%
+    client.test("falha 92 retorna 401 INVALID_CREDENTIALS", function() {
+        client.assert(response.status === 401, "esperado 401, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_CREDENTIALS", "code deveria ser INVALID_CREDENTIALS");
+    });
+%}
+
+### Falha 93 de 100
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{ "username": "spray.093", "password": "senha-errada-rate-limit" }
+
+> {%
+    client.test("falha 93 retorna 401 INVALID_CREDENTIALS", function() {
+        client.assert(response.status === 401, "esperado 401, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_CREDENTIALS", "code deveria ser INVALID_CREDENTIALS");
+    });
+%}
+
+### Falha 94 de 100
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{ "username": "spray.094", "password": "senha-errada-rate-limit" }
+
+> {%
+    client.test("falha 94 retorna 401 INVALID_CREDENTIALS", function() {
+        client.assert(response.status === 401, "esperado 401, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_CREDENTIALS", "code deveria ser INVALID_CREDENTIALS");
+    });
+%}
+
+### Falha 95 de 100
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{ "username": "spray.095", "password": "senha-errada-rate-limit" }
+
+> {%
+    client.test("falha 95 retorna 401 INVALID_CREDENTIALS", function() {
+        client.assert(response.status === 401, "esperado 401, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_CREDENTIALS", "code deveria ser INVALID_CREDENTIALS");
+    });
+%}
+
+### Falha 96 de 100
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{ "username": "spray.096", "password": "senha-errada-rate-limit" }
+
+> {%
+    client.test("falha 96 retorna 401 INVALID_CREDENTIALS", function() {
+        client.assert(response.status === 401, "esperado 401, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_CREDENTIALS", "code deveria ser INVALID_CREDENTIALS");
+    });
+%}
+
+### Falha 97 de 100
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{ "username": "spray.097", "password": "senha-errada-rate-limit" }
+
+> {%
+    client.test("falha 97 retorna 401 INVALID_CREDENTIALS", function() {
+        client.assert(response.status === 401, "esperado 401, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_CREDENTIALS", "code deveria ser INVALID_CREDENTIALS");
+    });
+%}
+
+### Falha 98 de 100
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{ "username": "spray.098", "password": "senha-errada-rate-limit" }
+
+> {%
+    client.test("falha 98 retorna 401 INVALID_CREDENTIALS", function() {
+        client.assert(response.status === 401, "esperado 401, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_CREDENTIALS", "code deveria ser INVALID_CREDENTIALS");
+    });
+%}
+
+### Falha 99 de 100
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{ "username": "spray.099", "password": "senha-errada-rate-limit" }
+
+> {%
+    client.test("falha 99 retorna 401 INVALID_CREDENTIALS", function() {
+        client.assert(response.status === 401, "esperado 401, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_CREDENTIALS", "code deveria ser INVALID_CREDENTIALS");
+    });
+%}
+
+### Falha 100 de 100
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{ "username": "spray.100", "password": "senha-errada-rate-limit" }
+
+> {%
+    client.test("falha 100 retorna 401 INVALID_CREDENTIALS", function() {
+        client.assert(response.status === 401, "esperado 401, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_CREDENTIALS", "code deveria ser INVALID_CREDENTIALS");
+    });
+%}
+
+
+### B101. Username real ainda nao usado (garcom), senha CORRETA -> 429: o IP inteiro esta bloqueado
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{ "username": "{{waiterUsername}}", "password": "{{password}}" }
+
+> {%
+    client.test("username real ainda nao usado recebe 429 com o IP bloqueado", function() {
+        client.assert(response.status === 429, "esperado 429, recebido " + response.status);
+        client.assert(response.body.code === "TOO_MANY_LOGIN_ATTEMPTS", "code deveria ser TOO_MANY_LOGIN_ATTEMPTS");
+        client.assert(response.contentType.mimeType === "application/problem+json", "content-type deveria ser application/problem+json");
+        client.assert(response.body.accessToken === undefined, "nenhum token pode ser emitido com o IP bloqueado");
+    });
+%}
+
+
+### B102. Username inexistente ainda nao usado -> 429, e nao 401: o IP inteiro esta bloqueado
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{ "username": "spray.nunca.usado", "password": "senha-errada-rate-limit" }
+
+> {%
+    client.test("username inexistente ainda nao usado recebe 429 com o IP bloqueado", function() {
+        client.assert(response.status === 429, "esperado 429, recebido " + response.status);
+        client.assert(response.body.code === "TOO_MANY_LOGIN_ATTEMPTS", "code deveria ser TOO_MANY_LOGIN_ATTEMPTS");
+    });
+%}

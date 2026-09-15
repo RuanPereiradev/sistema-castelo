@@ -16,19 +16,21 @@ spring:
   flyway:
     clean-disabled: false
 
-  web:
-    cors:
-      allowed-origins: "*"
-      allowed-methods: "*"
-      allowed-headers: "*"
-
 logging:
   level:
     org.hibernate.SQL: DEBUG
-    org.hibernate.orm.jdbc.bind: TRACE
 
-# Placeholder de configuracao para seed de dados de exemplo em desenvolvimento.
-# A carga efetiva do seed sera implementada quando houver entidade de dominio.
+# Seed de usuarios de desenvolvimento (admin, recepcao, garcom, cozinha, inativo).
+# A senha e a mesma para todos e so tem valor padrao neste perfil.
 castel:
   dev:
     seed-enabled: true
+    seed-password: ${DEV_SEED_PASSWORD:admin123}
+
+app:
+  security:
+    jwt:
+      secret: ${JWT_SECRET:dev-only-insecure-secret-please-change-me-1234567890}
+  cors:
+    allowed-origins:
+      - "*"

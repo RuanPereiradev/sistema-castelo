@@ -89,6 +89,26 @@ final class ArchitectureRules {
     }
 
     // ---------------------------------------------------------------------------------------
+    // A5 - inside a module, the application layer depends on ports, never on the infra layer
+    // that implements them.
+    // ---------------------------------------------------------------------------------------
+
+    // Modules without an application or infra package yet (hotel, restaurant, ...) leave the
+    // rule with nothing to check, hence allowEmptyShould.
+    static void checkApplicationDoesNotDependOnInfraOfSameModule(
+            JavaClasses classes, String basePackage, List<String> modules) {
+        for (String module : modules) {
+            ArchRule rule = noClasses()
+                    .that().resideInAPackage(basePackage + "." + module + ".application..")
+                    .should().dependOnClassesThat().resideInAPackage(basePackage + "." + module + ".infra..")
+                    .because("the application layer of module '" + module + "' depends on ports it declares "
+                            + "(in application or domain), never on the infra classes that implement them")
+                    .allowEmptyShould(true);
+            rule.check(classes);
+        }
+    }
+
+    // ---------------------------------------------------------------------------------------
     // A2 - a module may only depend on the modules listed as allowed targets in its graph
     // entry (shared-kernel and the module itself are always allowed, because they are never
     // part of the iterated module list).
@@ -140,9 +160,10 @@ final class ArchitectureRules {
     // methods.
     // ---------------------------------------------------------------------------------------
 
-    // No @Entity exists in production yet, so this rule runs over an empty universe today;
-    // allowEmptyShould keeps it from failing for that reason alone, while still catching a real
-    // violation once an entity exists.
+    // identity.domain.User is a real @Entity now, so this rule runs a non-empty check in
+    // production. allowEmptyShould stays as a safeguard for modules (hotel, restaurant, billing,
+    // ...) that don't have an @Entity yet, so the rule doesn't start failing the moment one of
+    // them does before another gets one.
     static final ArchRule ENTITIES_MUST_NOT_HAVE_PUBLIC_SETTERS = noMethods()
             .that().areDeclaredInClassesThat().areAnnotatedWith(Entity.class)
             .and().arePublic()
@@ -180,9 +201,9 @@ final class ArchitectureRules {
         return call.getName().equals("requireValid") && call.getTargetOwner().isAssignableTo(EntityId.class);
     }
 
-    // No concrete EntityId record exists in production yet (only the interface in
-    // shared-kernel), so this rule runs over an empty universe today; allowEmptyShould keeps it
-    // from failing for that reason alone, while still catching a real violation once one exists.
+    // identity.api.UserId is a real EntityId record now, so this rule runs a non-empty check
+    // in production. allowEmptyShould stays as a safeguard for modules that don't have a
+    // concrete EntityId yet.
     static final ArchRule ENTITY_ID_MUST_VALIDATE_IN_CONSTRUCTOR = classes()
             .that().implement(EntityId.class)
             .should(CALL_ENTITY_ID_REQUIRE_VALID_FROM_CONSTRUCTOR)
@@ -193,9 +214,21 @@ final class ArchitectureRules {
     // C1 - java.time replaces java.util.Date and java.util.Calendar.
     // ---------------------------------------------------------------------------------------
 
+    /**
+     * {@code br.com.castel.identity.infra.JwtTokenIssuer} is a narrow, documented exception: the
+     * jjwt 0.13 builder/parser API ({@code JwtBuilder#issuedAt}, {@code #expiration},
+     * {@code io.jsonwebtoken.Clock#now}) only accepts {@code java.util.Date}, with no
+     * {@code java.time} overload. It converts from {@code Instant}/{@code Clock} at that single
+     * boundary and never leaks {@code java.util.Date} beyond it.
+     */
+    private static final String JWT_DATE_BOUNDARY_CLASS = "br.com.castel.identity.infra.JwtTokenIssuer";
+
     static final ArchRule NO_JAVA_UTIL_DATE_OR_CALENDAR = noClasses()
+            .that().doNotHaveFullyQualifiedName(JWT_DATE_BOUNDARY_CLASS)
             .should().dependOnClassesThat().belongToAnyOf(Date.class, Calendar.class)
-            .because("java.time replaces java.util.Date and java.util.Calendar throughout the project");
+            .because("java.time replaces java.util.Date and java.util.Calendar throughout the project, "
+                    + "except " + JWT_DATE_BOUNDARY_CLASS + ", where the jjwt builder/parser API only "
+                    + "accepts java.util.Date");
 
     // ---------------------------------------------------------------------------------------
     // C2 / C5 - domain scope: packages containing the "domain" segment, plus shared-kernel
@@ -254,9 +287,9 @@ final class ArchitectureRules {
                 || javaClass.isAssignableTo(JpaRepository.class);
     }
 
-    // No controller exists in production yet, so this rule runs over an empty universe today;
-    // allowEmptyShould keeps it from failing for that reason alone, while still catching a real
-    // violation once a controller exists.
+    // identity.web.AuthController is a real @RestController now, so this rule runs a non-empty
+    // check in production. allowEmptyShould stays as a safeguard for modules that don't have a
+    // controller yet.
     static final ArchRule CONTROLLERS_MUST_NOT_DEPEND_ON_REPOSITORY_OR_INFRA = noClasses()
             .that(IS_CONTROLLER)
             .should().dependOnClassesThat(IS_INFRA_OR_REPOSITORY)

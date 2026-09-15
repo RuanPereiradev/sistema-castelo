@@ -74,7 +74,7 @@ class BaselineMigrationTest extends AbstractIntegrationTest {
         assertColumnExistsAndNotNull("app_user", "id", true);
         assertColumnExistsAndNotNull("app_user", "property_id", true);
         assertColumnExistsAndNotNull("app_user", "full_name", true);
-        assertColumnExistsAndNotNull("app_user", "email", true);
+        assertColumnExistsAndNotNull("app_user", "email", false);
         assertColumnExistsAndNotNull("app_user", "password_hash", true);
         assertColumnExistsAndNotNull("app_user", "is_active", true);
         assertColumnExistsAndNotNull("app_user", "last_login_at", false);
@@ -138,6 +138,16 @@ class BaselineMigrationTest extends AbstractIntegrationTest {
 
         assertThatThrownBy(() -> insertAppUser(propertyId, "duplicate@castel.com"))
                 .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
+    void shouldAllowMultipleAppUsersWithNullEmail() {
+        UUID propertyId = insertProperty();
+
+        assertThatCode(() -> {
+            insertAppUser(propertyId, null);
+            insertAppUser(propertyId, null);
+        }).doesNotThrowAnyException();
     }
 
     // ---------------------------------------------------------------
@@ -242,10 +252,13 @@ class BaselineMigrationTest extends AbstractIntegrationTest {
 
     private UUID insertAppUser(UUID propertyId, String email) {
         UUID id = UUID.randomUUID();
+        String username = email == null
+                ? "user_" + id.toString().replace("-", "").substring(0, 8)
+                : email.split("@")[0];
         jdbcTemplate.update(
-                "insert into app_user (id, property_id, full_name, email, password_hash) "
-                        + "values (?, ?, ?, ?, ?)",
-                id, propertyId, "User " + id, email, "hash");
+                "insert into app_user (id, property_id, full_name, email, username, password_hash) "
+                        + "values (?, ?, ?, ?, ?, ?)",
+                id, propertyId, "User " + id, email, username, "hash");
         return id;
     }
 

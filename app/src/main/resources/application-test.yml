@@ -11,10 +11,13 @@ spring:
   flyway:
     clean-disabled: true
 
-  web:
-    cors:
-      allowed-origins: []
-
 logging:
   level:
     org.hibernate.SQL: WARN
+
+app:
+  security:
+    jwt:
+      secret: ${JWT_SECRET:dev-only-insecure-secret-please-change-me-1234567890}
+  cors:
+    allowed-origins: []

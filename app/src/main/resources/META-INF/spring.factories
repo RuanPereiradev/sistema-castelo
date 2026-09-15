@@ -1,0 +1,3 @@
+org.springframework.boot.EnvironmentPostProcessor=\
+br.com.castel.app.config.ProfileCombinationGuard,\
+br.com.castel.app.config.TrustedProxiesGuard
