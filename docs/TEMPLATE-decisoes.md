@@ -3,7 +3,7 @@
 > Registro acumulado das decisões tomadas durante a execução desta task.
 > Atualizado **a cada rodada**, nunca reconstruído de memória no fim.
 >
-> Regra: toda decisão que o Breno confirma entra aqui **na mesma resposta** em
+> Regra: toda decisão que o Ruan confirma entra aqui **na mesma resposta** em
 > que foi confirmada. Se não está aqui, não foi decidido.
 
 ---
@@ -36,8 +36,8 @@ Valores de status: `pendente` · `implementado` · `revertida pela #n`
 
 ## Escopo desta task
 
-Lista viva. Item aprovado pelo Breno **entra aqui** e só sai por decisão
-explícita dele.
+Lista viva. Item aprovado pelo Ruan **entra aqui** e só sai por decisão
+explícita do Ruan.
 
 - [ ] <item>
 - [x] <item concluído>
@@ -48,7 +48,7 @@ Só com aprovação explícita, e dizendo para qual task e por quê.
 
 | Item | Vai para | Motivo | Quem aprovou |
 |---|---|---|---|
-| <item> | 0.5b | <motivo> | Breno, rodada 3 |
+| <item> | 0.5b | <motivo> | Ruan, rodada 3 |
 
 ---
 
@@ -84,7 +84,7 @@ que a próxima rodada de review levante de novo como se fosse novidade.
 
 ## Pontos em aberto
 
-Aguardando decisão do Breno. Some daqui quando ele responder.
+Aguardando decisão do Ruan. Some daqui quando a resposta vier.
 
 | # | Pergunta | Desde a rodada |
 |---|---|---|

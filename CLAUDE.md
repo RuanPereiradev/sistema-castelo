@@ -316,8 +316,8 @@ aprovado reaparece como "pendência futura".
 
 Regras:
 
-- Decisão confirmada pelo Breno entra na tabela **imediatamente**
-- Item aprovado como escopo **não sai** da lista sem aprovação explícita dele,
+- Decisão confirmada pelo Ruan entra na tabela **imediatamente**
+- Item aprovado como escopo **não sai** da lista sem aprovação explícita do Ruan,
   registrando para qual task vai e por quê
 - Decisão revertida não é apagada: marque como revertida e adicione a nova
 - Antes de reportar o fim de uma rodada, **releia o arquivo** e confirme que

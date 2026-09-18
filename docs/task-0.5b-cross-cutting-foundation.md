@@ -125,7 +125,7 @@ nesta task.
 `created_by`/`updated_by` ficam **nullable** no banco. Torná-las `NOT NULL`
 exigiria uma migration, e a numeração de V3 a V9 já está reservada por task em
 `docs/MIGRATIONS.md` — renumerar por uma restrição que o `AuditorAware` já
-garante em código não se paga. **Aprovado pelo Breno** (decisão #8).
+garante em código não se paga. **Aprovado pelo Ruan** (decisão #8).
 
 ---
 

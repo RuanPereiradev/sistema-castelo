@@ -3,7 +3,7 @@
 > Registro acumulado das decisões tomadas durante a execução desta task.
 > Atualizado **a cada rodada**, nunca reconstruído de memória no fim.
 >
-> Regra: toda decisão que o Breno confirma entra aqui **na mesma resposta** em
+> Regra: toda decisão que o Ruan confirma entra aqui **na mesma resposta** em
 > que foi confirmada. Se não está aqui, não foi decidido.
 >
 > Exceção única: as rodadas 0 a 3 foram **reconstruídas** na rodada 4, quando
@@ -118,8 +118,8 @@ Valores de status: `pendente` · `implementado` · `revertida pela #n`
 
 ## Escopo desta task
 
-Lista viva. Item aprovado pelo Breno **entra aqui** e só sai por decisão
-explícita dele.
+Lista viva. Item aprovado pelo Ruan **entra aqui** e só sai por decisão
+explícita do Ruan.
 
 ### Entregue
 - [x] Migration V2 e renumeração em `docs/MIGRATIONS.md` e na seção 3 do schema
@@ -156,10 +156,10 @@ explícita dele.
 
 | Item | Vai para | Motivo | Quem aprovou |
 |---|---|---|---|
-| Corpo do 404 (e demais erros fora do identity) em RFC 7807 | 0.5b | Depende do handler global de erro, que nasce lá | Breno, rodada 4 |
-| Auditoria de `app_user` (`updated_at`/`updated_by`) | 0.5b | Infraestrutura de auditoria é da 0.5b; `last_login_at` já registra o que importa | Breno, rodada 2 (confirmado na 4) |
-| Campo `instance` ausente nos corpos de erro escritos pelo filtro JWT e pelo `SecurityConfig` | 0.5b | Mesma causa do 404: formato RFC 7807 unificado nasce com o handler global | Breno, rodada 5 |
-| Limite de tamanho do corpo da requisição (login aceita 2 MB) | 0.5b | Limite global nasce com o handler de erro; remendo só no login deixaria os próximos endpoints sem proteção (#78) | Breno, rodada 6 |
+| Corpo do 404 (e demais erros fora do identity) em RFC 7807 | 0.5b | Depende do handler global de erro, que nasce lá | Ruan, rodada 4 |
+| Auditoria de `app_user` (`updated_at`/`updated_by`) | 0.5b | Infraestrutura de auditoria é da 0.5b; `last_login_at` já registra o que importa | Ruan, rodada 2 (confirmado na 4) |
+| Campo `instance` ausente nos corpos de erro escritos pelo filtro JWT e pelo `SecurityConfig` | 0.5b | Mesma causa do 404: formato RFC 7807 unificado nasce com o handler global | Ruan, rodada 5 |
+| Limite de tamanho do corpo da requisição (login aceita 2 MB) | 0.5b | Limite global nasce com o handler de erro; remendo só no login deixaria os próximos endpoints sem proteção (#78) | Ruan, rodada 6 |
 
 ---
 
