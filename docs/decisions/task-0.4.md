@@ -12,7 +12,8 @@
 Rodadas: **0** spec e briefing · **1** primeira implementação e revisão ·
 **2** respostas à revisão 2 · **3** respostas à revisão 3 · **4** respostas à
 revisão 4 e instalação deste registro · **5** respostas à revisão final
-(última rodada da 0.4).
+(última rodada de código da 0.4) · **6** fechamento dos pontos em aberto, já com a
+task mergeada.
 
 ---
 
@@ -21,7 +22,7 @@ revisão 4 e instalação deste registro · **5** respostas à revisão final
 | | |
 |---|---|
 | Branch | `task/0.4-identity-auth` |
-| Rodada atual | 5 (última) |
+| Rodada atual | 6 — só fechamento dos pontos em aberto #14 a #17 (#76 a #79), sem mudança de código |
 | Build | passa (fim da rodada 5, ArchUnit incluído) |
 | Testes | 884 (shared-kernel 193 · identity 552 · app 139, ArchUnit 30 incluído), todos passando no fim da rodada 5. Após #75, o teste dos 20 logins simultâneos virou `shouldAnswerConcurrentCorrectLoginsWithinSlotCapacityOfSameIpWithOk`. Ele calcula quantos logins simultâneos cabem pelos parâmetros: `vagas × floor(timeout / BCrypt mais lento de 5 medições × 1.5)`, com mínimo igual a `vagas` e máximo igual a `vagas + espera máxima`. Nesta máquina deu 12 a 15 e passou em 3 rodadas isoladas e no build. Antes disso, a correção da senha vazia trouxe: dublê `ObservingPasswordEncoder`, que conta os hashes BCrypt de fato computados; `EmptyPasswordLoginTest`, com senha nula ou vazia em 4 situações de conta e um caso de controle; e 5 testes HTTP de senha vazia ou ausente (antes: 804, identity 477 · app 134) |
 
@@ -106,6 +107,10 @@ revisão 4 e instalação deste registro · **5** respostas à revisão final
 | 73 | 5 | Esta é a **última rodada** da 0.4. Corrigidos #61 e #62, a task mergeia. Achado novo da revisão final que não seja perda de dado ou falha de autenticação vira item registrado neste arquivo, não bloqueio | implementado (regra de processo) |
 | 74 | 5 | A partir da 0.5b: **teto de três rodadas de review por task**. Na terceira, o que não for bloqueio crítico é registrado e mergeado. Autenticação justificou tratamento especial; tasks comuns não | implementado (regra de processo) |
 | 75 | 5 | Timeout de vaga fica em **2 s** (#64). A prova "20 logins corretos simultâneos do mesmo IP passam" (rodada 4) não é requisito de negócio: o requisito é o funcionário não ver erro no uso normal. O teste passa a provar o garantido **derivado dos parâmetros**, `vagas × floor(timeout / duração do BCrypt)`, sem número fixo ancorado em tempo de parede; se ficar instável, custo de BCrypt reduzido no perfil de teste. Implementação: duração medida com o `PasswordEncoder` do contexto (pior de 5 amostras × 1,5), piso em `vagas` e teto técnico em `vagas + maxWaitingPasswordChecksPerIp` (acima dele a rejeição é imediata pelo teto de espera, #68, antes de qualquer timeout). Estável em 4 execuções (garantido 12–15) | implementado |
+| 76 | 6 | Ponto em aberto #14 fechado: resíduo de ~1,4 ms do `select` EAGER de papéis **aceito como limitação**. Abaixo do que se mede pela rede de forma confiável; `join fetch` não entra agora | implementado (registro) |
+| 77 | 6 | Ponto em aberto #15 fechado: sinal Kelvin (U+212A) como alias de `k` **aceito**. É alias, não bypass — cai no mesmo par (IP, username) do limitador e continua exigindo a senha correta | implementado (registro) |
+| 78 | 6 | Ponto em aberto #16 fechado: limite de tamanho de corpo entra na **0.5b**, global para toda a API junto com o handler RFC 7807, não como remendo só no login | pendente (0.5b) |
+| 79 | 6 | Ponto em aberto #17 fechado: a regra "nunca `@Autowired` em campo" vale **só para código de produção**. `@Autowired` em campo é idiomático em teste Spring e as regras estruturais já rodam apenas contra `main`. A exceção passa a estar escrita no `CLAUDE.md` (na 0.5b), para não virar dúvida a cada review | pendente (0.5b) |
 
 Valores de status: `pendente` · `implementado` · `revertida pela #n`
 
@@ -154,6 +159,7 @@ explícita dele.
 | Corpo do 404 (e demais erros fora do identity) em RFC 7807 | 0.5b | Depende do handler global de erro, que nasce lá | Breno, rodada 4 |
 | Auditoria de `app_user` (`updated_at`/`updated_by`) | 0.5b | Infraestrutura de auditoria é da 0.5b; `last_login_at` já registra o que importa | Breno, rodada 2 (confirmado na 4) |
 | Campo `instance` ausente nos corpos de erro escritos pelo filtro JWT e pelo `SecurityConfig` | 0.5b | Mesma causa do 404: formato RFC 7807 unificado nasce com o handler global | Breno, rodada 5 |
+| Limite de tamanho do corpo da requisição (login aceita 2 MB) | 0.5b | Limite global nasce com o handler de erro; remendo só no login deixaria os próximos endpoints sem proteção (#78) | Breno, rodada 6 |
 
 ---
 
@@ -202,6 +208,8 @@ explícita dele.
 | Testes do `app` importam `identity.domain`/`identity.infra` | Só em código de teste, para criar usuários e forjar tokens; ArchUnit ignora testes (#70) | — |
 | Rajada de logins do mesmo IP acima do que 3 vagas × 2 s comportam recebe 429 por timeout de vaga (#75) | 20 aparelhos logando no mesmo segundo não é uso normal num hotel com quatro perfis; aumentar o timeout reabriria o esgotamento de threads. Não conta como falha de credencial, e o usuário tenta de novo | — |
 | IPv6 chaveado pelo endereço completo: um /64 contorna as duas camadas e o semáforo | Hoje a rede e o proxy do hotel são IPv4 | **Resolver antes do deploy em produção**: chavear IPv6 por /64 (#71) |
+| Resíduo de ~1,4 ms no login de conta existente, do `select` EAGER de papéis | Muito abaixo do que um atacante mede de forma confiável pela rede; a diferença grande (BCrypt) já foi eliminada (#76) | `join fetch u.roles` se algum dia virar medida confiável |
+| `Kelvin.test` (U+212A) autentica como `kelvin.test` sem consumir tentativa extra | É alias, não bypass: mesmo par no limitador e senha correta ainda exigida. U+212A é o único code point que normaliza para dentro de `[a-z0-9._]` (#77) | Rejeitar não-ASCII antes de normalizar, se aparecer motivo |
 
 ---
 
@@ -242,9 +250,6 @@ explícita dele.
 
 ## Pontos em aberto
 
-| # | Pergunta | Desde a rodada |
-|---|---|---|
-| 14 | Não bloqueante (R2). Resíduo de ~1,4 ms da consulta EAGER de papéis em conta existente: aceitar como limitação ou exigir `join fetch` agora? | 5 |
-| 15 | Não bloqueante (R10). Kelvin (U+212A) como alias de `k` no login, sem tentativa extra: aceitável? | 5 |
-| 16 | Não bloqueante (R13). Limite de tamanho do corpo do login: vai para a 0.5b (handler global) ou entra já? | 5 |
-| 17 | Não bloqueante (R14). A regra "nunca `@Autowired` em campo" vale também para código de teste? | 5 |
+Nenhum. Os pontos 14 a 17 foram fechados na rodada 6 pelas decisões #76 a #79.
+Os itens #78 e #79 saem como escopo da 0.5b, registrados em
+`docs/decisions/task-0.5b.md`.
