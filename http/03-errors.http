@@ -7,6 +7,8 @@
 ###
 ### Todo cenario aqui e negativo. O que cada corpo tem de trazer, sem excecao:
 ### type, title, status, detail, instance e code. O code e estavel e o front o traduz.
+### Os corpos escritos pelo identity (cenarios 5, 6 e 7) so passaram a trazer type depois
+### da correcao que uniformizou o formato; antes o campo faltava so neles.
 ###
 ### Sem cenario aqui, coberto so no teste de integracao ErrorResponseHttpIntegrationTest:
 ### - 422 (DomainException), 409 (ConflictException) e 404 com code da propria excecao:
@@ -131,6 +133,7 @@ Content-Type: application/json
     client.test("corpo dentro do limite e processado normalmente", function() {
         client.assert(response.status === 401, "esperado 401, recebido " + response.status);
         client.assert(response.body.code === "INVALID_CREDENTIALS", "code deveria ser INVALID_CREDENTIALS");
+        client.assert(response.body.type === "about:blank", "type ausente no corpo do AuthExceptionHandler");
     });
 %}
 
@@ -160,6 +163,7 @@ Authorization: Bearer isto-nao-e-um-jwt-valido
         client.assert(response.status === 401, "esperado 401, recebido " + response.status);
         client.assert(response.body.code === "INVALID_TOKEN", "code deveria ser INVALID_TOKEN");
         client.assert(response.body.instance === "/api/auth/me", "instance deveria ser o caminho da requisicao");
+        client.assert(response.body.type === "about:blank", "type ausente no corpo escrito pelo filtro JWT");
     });
 %}
 

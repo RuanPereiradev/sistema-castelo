@@ -17,7 +17,7 @@ que não for bloqueio crítico é registrado aqui e mergeado.
 |---|---|
 | Branch | `task/0.5b-cross-cutting-foundation` |
 | Rodada atual | 1 — implementação (DEV e TEST em paralelo a partir da spec) |
-| Build | `./mvnw clean install` **verde** — 223 testes no `app`, 0 falhas (2026-09-18) |
+| Build | `./mvnw clean install` **verde** — 975 testes, 0 falhas. `http/03-errors.http` (11) e `http/00-auth.http` (28) verdes no `jetbrains/intellij-http-client` (2026-09-18) |
 | Testes | 884 herdados da 0.4 + os da 0.5b escritos pelo agente TEST |
 
 ---
@@ -66,6 +66,8 @@ que não for bloqueio crítico é registrado aqui e mergeado.
 
 | 35 | 1 | A `property` única dos testes de integração do `app` é **semeada uma vez**, em `AbstractIntegrationTest`, antes de qualquer contexto subir, com o id compartilhado `0b7e3b8e-3c52-4c1e-9d0e-4a1f00000001`. Cada classe de teste tinha a sua própria `property`, e como cada uma roda sob uma configuração de contexto diferente, a segunda a subir encontrava mais de uma linha e o `SinglePropertyId` da #27 derrubava o contexto — corretamente. Semear exige o schema, então o Flyway também roda ali; o Flyway de cada contexto passa a não achar nada pendente, que é o que o `BaselineMigrationTest` já afirmava (fecha o ponto em aberto 7) | implementado |
 | 36 | 1 | O teste `shouldRejectWriteOfAKeyThatWasNeverConfigured` foi escrito contra a #18 (`save` só atualiza chave existente), que a **#33 substituiu** por upsert quando a #27 resolveu o `property_id`. Virou `shouldInsertTheKeyWhenAWriteFindsNoRow`: gravar chave ausente insere. Nenhum código de produção mudou; o teste é que estava uma decisão atrás | implementado |
+
+| 37 | pós-merge | O `identity` passa a escrever `type` nos seus corpos de erro, fechando a única divergência de formato que sobrou: o `AuthExceptionHandler` e o filtro JWT respondiam sem o campo, enquanto o handler global respondia `about:blank`, e o contrato aqui promete os seis campos **sempre**. Descoberto ao rodar a aplicação de verdade, depois do merge do PR #6 — o `.http` não pegava porque só afirmava `type` no cenário do handler global. A constante vira `ProblemType.BLANK` no `shared-kernel`, uma definição só para os três lugares que escrevem corpo de erro. Nenhum `code` e nenhum status mudou | implementado |
 
 Valores de status: `pendente` · `implementado` · `revertida pela #n`
 

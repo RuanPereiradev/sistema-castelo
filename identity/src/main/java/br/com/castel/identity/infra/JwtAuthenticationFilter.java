@@ -8,6 +8,7 @@ import br.com.castel.identity.application.SessionSupersededException;
 import br.com.castel.identity.application.TokenExpiredException;
 import br.com.castel.identity.application.UserInactiveException;
 import br.com.castel.sharedkernel.DomainException;
+import br.com.castel.sharedkernel.ProblemType;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -116,6 +117,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             throws IOException {
         ProblemDetail problemDetail =
                 ProblemDetail.forStatusAndDetail(HttpStatus.UNAUTHORIZED, exception.getMessage());
+        problemDetail.setType(ProblemType.BLANK);
         problemDetail.setProperty("code", exception.code());
         problemDetail.setInstance(URI.create(request.getRequestURI()));
         response.setStatus(HttpStatus.UNAUTHORIZED.value());

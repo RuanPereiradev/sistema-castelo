@@ -11,6 +11,7 @@ import br.com.castel.identity.domain.PasswordTooLongException;
 import br.com.castel.identity.domain.UserWithoutRolesException;
 import br.com.castel.identity.domain.WeakPasswordException;
 import br.com.castel.sharedkernel.DomainException;
+import br.com.castel.sharedkernel.ProblemType;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpStatus;
@@ -104,12 +105,14 @@ public class AuthExceptionHandler {
     public ProblemDetail handleMalformedRequest() {
         ProblemDetail problemDetail =
                 ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, "Request body is missing or malformed");
+        problemDetail.setType(ProblemType.BLANK);
         problemDetail.setProperty("code", MALFORMED_REQUEST_CODE);
         return problemDetail;
     }
 
     private static ProblemDetail problemDetail(HttpStatus status, DomainException exception) {
         ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(status, exception.getMessage());
+        problemDetail.setType(ProblemType.BLANK);
         problemDetail.setProperty("code", exception.code());
         return problemDetail;
     }
