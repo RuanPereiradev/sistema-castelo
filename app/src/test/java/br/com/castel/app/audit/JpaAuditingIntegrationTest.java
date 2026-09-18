@@ -43,7 +43,6 @@ import org.springframework.transaction.support.TransactionTemplate;
 @Import(JpaAuditingIntegrationTest.SwitchableCurrentUserConfiguration.class)
 class JpaAuditingIntegrationTest extends AbstractIntegrationTest {
 
-    private static final UUID PROPERTY_ID = UUID.fromString("0b7e3b8e-3c52-4c1e-9d0e-4a1f00000006");
     private static final String PASSWORD = "Auditing-Password-42";
 
     static class SwitchableCurrentUserProvider implements CurrentUserProvider {
@@ -90,11 +89,7 @@ class JpaAuditingIntegrationTest extends AbstractIntegrationTest {
     private TransactionTemplate transactionTemplate;
 
     @BeforeEach
-    void createPropertyAndClearUser() {
-        jdbcTemplate.update(
-                "insert into property (id, legal_name) values (?, ?) on conflict (id) do nothing",
-                PROPERTY_ID,
-                "Auditing Property");
+    void clearCurrentUser() {
         currentUserProvider.clear();
     }
 

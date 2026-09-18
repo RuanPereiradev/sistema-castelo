@@ -12,7 +12,6 @@ import br.com.castel.sharedkernel.SettingRepository;
 import br.com.castel.sharedkernel.Settings;
 import java.time.LocalTime;
 import java.util.UUID;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -29,7 +28,6 @@ import org.springframework.jdbc.core.JdbcTemplate;
 @SpringBootTest
 class SettingsIntegrationTest extends AbstractIntegrationTest {
 
-    private static final UUID PROPERTY_ID = UUID.fromString("0b7e3b8e-3c52-4c1e-9d0e-4a1f00000007");
     private static final String UPPER_SNAKE_CASE = "^[A-Z][A-Z0-9]*(_[A-Z0-9]+)*$";
 
     @Autowired
@@ -40,14 +38,6 @@ class SettingsIntegrationTest extends AbstractIntegrationTest {
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
-
-    @BeforeEach
-    void createProperty() {
-        jdbcTemplate.update(
-                "insert into property (id, legal_name) values (?, ?) on conflict (id) do nothing",
-                PROPERTY_ID,
-                "Settings Property");
-    }
 
     private String givenSetting(String valueType, String value) {
         String key = "test." + valueType.toLowerCase() + "." + UUID.randomUUID().toString().substring(0, 8);
@@ -238,17 +228,15 @@ class SettingsIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
-    void shouldRejectWriteOfAKeyThatWasNeverConfigured() {
+    void shouldInsertTheKeyWhenAWriteFindsNoRow() {
         Setting neverConfigured = settingRepository
                 .findByKey(givenSetting("INTEGER", "5"))
                 .orElseThrow();
         jdbcTemplate.update("delete from setting where setting_key = ?", neverConfigured.settingKey());
 
-        DomainException failure =
-                catchThrowableOfType(DomainException.class, () -> settingRepository.save(neverConfigured));
+        settingRepository.save(neverConfigured.withValue("9"));
 
-        assertThat(failure).isNotNull();
-        assertThat(failure.code()).matches(UPPER_SNAKE_CASE);
+        assertThat(settings.asInteger(neverConfigured.settingKey())).isEqualTo(9);
     }
 
     // ------------------------------------------------------------- missing key

@@ -19,8 +19,8 @@ import org.springframework.jdbc.core.JdbcTemplate;
  * without losing anything, and that its {@code username} backfill from {@code email} works.
  *
  * <p>By the time this class runs, the shared Postgres container from {@link
- * AbstractIntegrationTest} may already be fully migrated (V1 + V2) on the {@code public} schema,
- * because another test class's {@code @SpringBootTest} context started first. Inserting a row and
+ * AbstractIntegrationTest} is already fully migrated (V1 + V2) on the {@code public} schema, since
+ * that class migrates it before the first context starts. Inserting a row and
  * calling {@code flyway.migrate()} on that shared state again would prove nothing, since V2 would
  * already be applied. To genuinely control the sequence "apply only V1 -> insert data -> apply V2
  * -> assert", this test runs its own {@link Flyway} instances against a dedicated schema, sharing

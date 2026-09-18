@@ -17,7 +17,7 @@ que não for bloqueio crítico é registrado aqui e mergeado.
 |---|---|
 | Branch | `task/0.5b-cross-cutting-foundation` |
 | Rodada atual | 1 — implementação (DEV e TEST em paralelo a partir da spec) |
-| Build | `./mvnw clean install` verde ao fim da rodada 1 de implementação |
+| Build | `./mvnw clean install` **verde** — 223 testes no `app`, 0 falhas (2026-09-18) |
 | Testes | 884 herdados da 0.4 + os da 0.5b escritos pelo agente TEST |
 
 ---
@@ -63,6 +63,9 @@ que não for bloqueio crítico é registrado aqui e mergeado.
 | 32 | 1 | **Consequência direta da #30, não prevista por ela:** com `org.springframework..` proibido no `shared-kernel`, a auditoria do Spring Data JPA fica **impossível de usar**. `@CreatedDate`, `@CreatedBy`, `@LastModifiedDate`, `@LastModifiedBy` e `@EntityListeners(AuditingEntityListener.class)` são todos `org.springframework.data..` e teriam de estar nos campos da superclasse, que agora mora no `shared-kernel`. Substituído por auditoria de **JPA puro**: `AuditedEntity` (`@MappedSuperclass`) declara as quatro colunas e delega a `AuditingListener`, um entity listener de JPA com `@PrePersist`/`@PreUpdate`, registrado como bean no `app` para receber `AuditorAware` e `Clock` **por construtor** (o provedor de persistência resolve o listener pelo bean container do Spring, o mesmo mecanismo pelo qual o `AuditingEntityListener` do Spring Data era injetado). `@EnableJpaAuditing` sai; a porta `AuditorAware` passa a ser uma interface de Java puro no `shared-kernel`, com o mesmo nome que a spec usa. Comportamento externo idêntico: os 13 testes de auditoria passam sem alteração | pendente (DEV, aguarda Breno) |
 | 33 | 1 | `SettingRepository.save` virou **upsert** (`on conflict (property_id, setting_key) do update`) com o `property_id` resolvido pela #27, e não mais só atualização de chave existente. O `value_type` de uma chave existente **não** é reescrito: setting que muda de tipo é outro parâmetro | pendente (DEV, aguarda Breno) |
 | 34 | 1 | A leitura de `setting` continua filtrando **só por `setting_key`**, e isso agora é seguro por construção: a #27 já provou na inicialização que existe no máximo uma `property`. Filtrar também por `property_id` não acrescentaria garantia nenhuma e só faria a consulta mentir sobre o que protege | pendente (DEV, aguarda Breno) |
+
+| 35 | 1 | A `property` única dos testes de integração do `app` é **semeada uma vez**, em `AbstractIntegrationTest`, antes de qualquer contexto subir, com o id compartilhado `0b7e3b8e-3c52-4c1e-9d0e-4a1f00000001`. Cada classe de teste tinha a sua própria `property`, e como cada uma roda sob uma configuração de contexto diferente, a segunda a subir encontrava mais de uma linha e o `SinglePropertyId` da #27 derrubava o contexto — corretamente. Semear exige o schema, então o Flyway também roda ali; o Flyway de cada contexto passa a não achar nada pendente, que é o que o `BaselineMigrationTest` já afirmava (fecha o ponto em aberto 7) | implementado |
+| 36 | 1 | O teste `shouldRejectWriteOfAKeyThatWasNeverConfigured` foi escrito contra a #18 (`save` só atualiza chave existente), que a **#33 substituiu** por upsert quando a #27 resolveu o `property_id`. Virou `shouldInsertTheKeyWhenAWriteFindsNoRow`: gravar chave ausente insere. Nenhum código de produção mudou; o teste é que estava uma decisão atrás | implementado |
 
 Valores de status: `pendente` · `implementado` · `revertida pela #n`
 
@@ -148,9 +151,10 @@ explícita dele.
 
 ## Pontos em aberto
 
-Nenhum. Os pontos 3 a 6 foram fechados pelas decisões #25 a #29, e os dois de
+Nenhum. Os pontos 3 a 6 foram fechados pelas decisões #25 a #29, os dois de
 arquitetura (onde moram a superclasse de auditoria e o `Setting`) pelas decisões
-#30 e #31.
+#30 e #31, e o ponto 7 (colisão de fixture de `property` entre classes de teste)
+pela decisão #35.
 
 | # | Pergunta | Desde a rodada |
 |---|---|---|

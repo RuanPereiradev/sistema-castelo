@@ -56,7 +56,6 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.core.Ordered;
 import org.springframework.http.HttpMethod;
-import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Controller;
@@ -85,7 +84,6 @@ import tools.jackson.databind.json.JsonMapper;
 @ExtendWith(OutputCaptureExtension.class)
 class ErrorResponseHttpIntegrationTest extends AbstractIntegrationTest {
 
-    private static final UUID PROPERTY_ID = UUID.fromString("0b7e3b8e-3c52-4c1e-9d0e-4a1f00000005");
     private static final String PASSWORD = "Integration-Password-42";
     private static final String OTHER_SECRET = "another-jwt-secret-also-longer-than-256-bits-fedcba9876543210";
     private static final String PROBLEM_JSON = "application/problem+json";
@@ -300,9 +298,6 @@ class ErrorResponseHttpIntegrationTest extends AbstractIntegrationTest {
     private PasswordEncoder passwordEncoder;
 
     @Autowired
-    private JdbcTemplate jdbcTemplate;
-
-    @Autowired
     private Clock clock;
 
     @Value("${app.security.jwt.secret}")
@@ -314,11 +309,7 @@ class ErrorResponseHttpIntegrationTest extends AbstractIntegrationTest {
     private String waiterToken;
 
     @BeforeEach
-    void createPropertyAndToken() {
-        jdbcTemplate.update(
-                "insert into property (id, legal_name) values (?, ?) on conflict (id) do nothing",
-                PROPERTY_ID,
-                "Error Handling Property");
+    void createWaiterToken() {
         waiterToken = accessTokenFor(createUser(Role.WAITER));
     }
 
