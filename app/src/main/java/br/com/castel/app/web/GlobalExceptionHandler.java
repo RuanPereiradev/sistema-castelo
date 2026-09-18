@@ -21,12 +21,15 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.AuthenticationException;
+import org.springframework.context.MessageSourceResolvable;
 import org.springframework.validation.FieldError;
 import org.springframework.validation.ObjectError;
+import org.springframework.validation.method.ParameterValidationResult;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.HandlerMethodValidationException;
 import org.springframework.web.servlet.NoHandlerFoundException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
@@ -93,6 +96,24 @@ public class GlobalExceptionHandler {
         for (ObjectError objectError : exception.getBindingResult().getGlobalErrors()) {
             invalidFields.add(
                     new InvalidField(objectError.getObjectName(), ValidationRuleCode.of(objectError.getCode())));
+        }
+        return validationFailed(request, invalidFields);
+    }
+
+    /**
+     * Validation of a parameter that is not the request body: {@code @RequestParam},
+     * {@code @PathVariable}, or {@code @Valid} on a simple argument. Spring raises a different
+     * exception for those than for a body, and both answer the same code: from the caller's side it
+     * is the same failure.
+     */
+    @ExceptionHandler(HandlerMethodValidationException.class)
+    public ProblemDetail handleInvalidRequestParameter(
+            HandlerMethodValidationException exception, HttpServletRequest request) {
+        List<InvalidField> invalidFields = new ArrayList<>();
+        for (ParameterValidationResult result : exception.getParameterValidationResults()) {
+            for (MessageSourceResolvable error : result.getResolvableErrors()) {
+                invalidFields.add(new InvalidField(fieldNameOf(error, result), ruleCodeOf(error)));
+            }
         }
         return validationFailed(request, invalidFields);
     }
@@ -197,6 +218,33 @@ public class GlobalExceptionHandler {
                 ProblemResponse.of(request, ApiErrorCode.VALIDATION_FAILED, VALIDATION_FAILED_DETAIL);
         problemDetail.setProperty(ProblemResponse.ERRORS_PROPERTY, List.copyOf(invalidFields));
         return problemDetail;
+    }
+
+    /** The field the error is about: the bean property when there is one, the parameter otherwise. */
+    private static String fieldNameOf(MessageSourceResolvable error, ParameterValidationResult result) {
+        if (error instanceof FieldError fieldError) {
+            return fieldError.getField();
+        }
+        String parameterName = result.getMethodParameter().getParameterName();
+        return parameterName == null ? String.valueOf(result.getMethodParameter().getParameterIndex()) : parameterName;
+    }
+
+    /**
+     * The name of the constraint that failed. A {@link FieldError} or {@link ObjectError} carries it
+     * in {@code code}; a bare resolvable carries codes like {@code Min.quantity}, whose first segment
+     * is the constraint.
+     */
+    private static String ruleCodeOf(MessageSourceResolvable error) {
+        if (error instanceof ObjectError objectError) {
+            return ValidationRuleCode.of(objectError.getCode());
+        }
+        String[] codes = error.getCodes();
+        if (codes == null || codes.length == 0 || codes[0] == null) {
+            return ValidationRuleCode.UNKNOWN_RULE_CODE;
+        }
+        String firstCode = codes[0];
+        int firstSeparator = firstCode.indexOf('.');
+        return ValidationRuleCode.of(firstSeparator < 0 ? firstCode : firstCode.substring(0, firstSeparator));
     }
 
     private static String lastNodeOf(ConstraintViolation<?> violation) {
