@@ -17,8 +17,8 @@ que não for bloqueio crítico é registrado aqui e mergeado.
 |---|---|
 | Branch | `task/0.5b-cross-cutting-foundation` |
 | Rodada atual | 1 — implementação (DEV e TEST em paralelo a partir da spec) |
-| Build | ver a última linha da seção "Decisões confirmadas" |
-| Testes | 884 herdados da 0.4 |
+| Build | `./mvnw clean install` verde ao fim da rodada 1 de implementação |
+| Testes | 884 herdados da 0.4 + os da 0.5b escritos pelo agente TEST |
 
 ---
 
@@ -38,11 +38,20 @@ que não for bloqueio crítico é registrado aqui e mergeado.
 
 | 10 | 1 | Prefixo da propriedade do limite de corpo: `castel.web.max-request-body-size`, tipo `DataSize`, default `64KB` no `application.yml`. Segue o prefixo `castel.*` já usado por `castel.auth.login-rate-limit` e `castel.dev` | pendente (DEV, aguarda Breno) |
 | 11 | 1 | Formato do `errors` do 400 `VALIDATION_FAILED`: lista de objetos `{ "field": "<camelCase>", "code": "<REGRA>" }`, em que `code` é o nome da anotação de Bean Validation em `UPPER_SNAKE_CASE` (`@NotBlank` → `NOT_BLANK`). Nenhuma mensagem do Hibernate Validator vai para o corpo. Erro que não é de campo usa o nome do objeto validado em `field` | pendente (DEV, aguarda Breno) |
-| 12 | 1 | O identificador de correlação do 500 trafega no corpo no campo `correlationId` (UUID v7) e aparece no log junto com a stack. `detail` do 500 é fixo: `Unexpected internal error` | pendente (DEV, aguarda Breno) |
-| 13 | 1 | O handler global declara `@ExceptionHandler` explícito para `AccessDeniedException` (403 `ACCESS_DENIED`) e `AuthenticationException` (401 `AUTHENTICATION_REQUIRED`), com os **mesmos códigos** que o `SecurityConfig` já emite. Sem isso, o `@ExceptionHandler(Exception.class)` engoliria o `AccessDeniedException` do method security e o 403 da 0.4 viraria 500 | pendente (DEV, aguarda Breno) |
+| 12 | 1 | O identificador de correlação do 500 trafega no corpo no campo `correlationId` (UUID aleatório, não v7: é um token de log, não identidade de agregado) e aparece no log junto com a stack. `detail` do 500 é fixo: `Unexpected internal error` | pendente (DEV, aguarda Breno) |
+| 13 | 1 | O handler global declara `@ExceptionHandler` explícito para `AccessDeniedException` (403 `ACCESS_DENIED`) e `AuthenticationException` (401 `AUTHENTICATION_REQUIRED`), com os **mesmos códigos** que o `SecurityConfig` já emite. Sem isso, o `@ExceptionHandler(Exception.class)` engoliria o `AccessDeniedException` do method security e o 403 da 0.4 viraria 500. Não são códigos novos: são os dois da 0.4, escritos agora em dois lugares porque o `@PreAuthorize` dentro do controller não passa pelos handlers da cadeia | pendente (DEV, aguarda Breno) |
 | 14 | 1 | O UUID reservado de sistema da decisão #6 é `00000000-0000-0000-0000-000000000001`, constante `SystemAuthor.SYSTEM_USER_ID`. Zeros à esquerda o tornam reconhecível numa consulta e ele não colide com UUID v7 gerado | pendente (DEV, aguarda Breno) |
 | 15 | 1 | A auditoria de data lê o bean `Clock` do projeto, por um `DateTimeProvider`, em vez do relógio interno do Spring Data. Mantém a data de auditoria controlável no teste, como o resto do sistema | pendente (DEV, aguarda Breno) |
 | 16 | 1 | `MALFORMED_REQUEST` cujo *root cause* é o limite de corpo (corpo sem `Content-Length`, `chunked`) responde **413 `REQUEST_BODY_TOO_LARGE`**, não 400. É o mesmo limite, detectado durante a leitura em vez de no cabeçalho | pendente (DEV, aguarda Breno) |
+
+| 17 | 1 | `Setting` **não** é `@Entity`. É um agregado de Java puro no `shared-kernel` (chave, valor, `valueType`, com os seis leitores tipados), lido e escrito por um adaptador JDBC no `app`. Motivo: a regra ArchUnit D1 da 0.5a proíbe `@Entity` no `app` e a A4 proíbe JPA no `shared-kernel` — ver ponto em aberto 2. Três colunas lidas por chave não pagam um mapeamento JPA, e assim a regra de tipo fica testável sem banco | pendente (DEV, aguarda Breno) |
+| 18 | 1 | Porta de persistência `SettingRepository` (`findByKey`, `save`) no `shared-kernel`, com o cache Caffeine no **decorador da porta** (`CachingSettingRepository`), não no leitor tipado. Miss **não** é cacheado (chave configurada depois da primeira leitura tem de aparecer) e `save` invalida a chave antes de retornar. `save` só atualiza o valor de uma chave existente: inserir exigiria resolver `property_id`, que é o ponto em aberto 3 | pendente (DEV, aguarda Breno) |
+| 19 | 1 | `Percentage` gravada em **pontos percentuais**: `"10.00"` com `value_type = DECIMAL` é dez por cento, não 1000%. A spec não diz; é a forma como o operador digita | pendente (DEV, aguarda Breno) |
+| 20 | 1 | A superclasse `@MappedSuperclass` de auditoria **não entra nesta rodada** (ponto em aberto 1, sem casa possível). As quatro colunas entram direto em `User`, satisfazendo a decisão #5 e o aceite 7. Extraí-las para a superclasse depois é mecânico | pendente (DEV, aguarda Breno) |
+| 21 | 1 | O handler global e o `AuthExceptionHandler` do `identity` precisam de precedência **explícita**: Spring ordena `@ControllerAdvice` só por `@Order`, e `basePackages` não torna um advice "mais específico". **Provado pelo build**: sem ordem, o advice global vence (é descoberto antes) e `INVALID_CREDENTIALS`/`TOO_MANY_LOGIN_ATTEMPTS` passaram a responder 422, quebrando 9 testes da 0.4. Correção: global em `@Order(LOWEST_PRECEDENCE)` **e** `AuthExceptionHandler` em `@Order(HIGHEST_PRECEDENCE)` — uma anotação e um parágrafo de javadoc, nenhum código nem código de erro alterado | pendente (DEV, aguarda Breno) |
+| 24 | 1 | `type` de todo corpo de erro é `about:blank`, escrito explicitamente. O Spring 7 deixa `type` nulo por padrão e o campo desaparece do JSON; a spec exige os seis campos sempre. `about:blank` é o valor que a RFC 9457 assume na ausência do campo, então nada de novo é inventado. Alternativa, se o Breno preferir: uma URI por problema apontando para documentação | pendente (DEV, aguarda Breno) |
+| 22 | 1 | `spring-boot-starter-validation` entra no `pom` do `app`: Bean Validation não estava no classpath e as duas linhas de validação da tabela do item 2 não existiriam sem ele. Nenhum DTO existente ganha anotação (o login não valida campo obrigatório de propósito, contrato da 0.4) | pendente (DEV, aguarda Breno) |
+| 23 | 1 | Spring Data preenche `updated_at`/`updated_by` **também no insert** (comportamento padrão do `AuditingHandler`). Aceito: o schema permite, e a alternativa seria reimplementar o listener | pendente (DEV, aguarda Breno) |
 
 Valores de status: `pendente` · `implementado` · `revertida pela #n`
 
@@ -54,17 +63,18 @@ Lista viva. Item aprovado pelo Breno **entra aqui** e só sai por decisão
 explícita dele.
 
 ### Vindo da Onda 0 (seção 6, task 0.5)
-- [ ] `GlobalExceptionHandler` → `ProblemDetail` RFC 7807 com campo `code`
-- [ ] Mapeamento de status: `DomainException` → 422 · conflito de estado → 409 · não encontrado → 404 · validação → 400
-- [ ] JPA Auditing com `AuditorAware` lendo o usuário do JWT
-- [ ] `Setting` com cache e leitura tipada
+- [x] `GlobalExceptionHandler` → `ProblemDetail` RFC 7807 com campo `code`
+- [x] Mapeamento de status: `DomainException` → 422 · conflito de estado → 409 · não encontrado → 404 · validação → 400
+- [x] JPA Auditing com `AuditorAware` lendo o usuário do JWT
+- [x] `Setting` com cache e leitura tipada
+- [ ] Superclasse `@MappedSuperclass` de auditoria — bloqueada pelo ponto em aberto 1 (#20)
 
 ### Herdado da 0.4
-- [ ] Corpo do 404 e demais erros fora do `identity` em RFC 7807 (#3)
-- [ ] `instance` nos corpos de erro do filtro JWT e do `SecurityConfig` (#4)
-- [ ] Auditoria de `app_user` (#5)
-- [ ] Limite global de tamanho de corpo da requisição (#1)
-- [ ] Exceção de `@Autowired` em teste escrita no `CLAUDE.md` (#2)
+- [x] Corpo do 404 e demais erros fora do `identity` em RFC 7807 (#3)
+- [x] `instance` nos corpos de erro do filtro JWT e do `SecurityConfig` (#4)
+- [x] Auditoria de `app_user` (#5)
+- [x] Limite global de tamanho de corpo da requisição (#1)
+- [ ] Exceção de `@Autowired` em teste escrita no `CLAUDE.md` (#2) — o `CLAUDE.md` é configuração do projeto e não é alterado pelo agente DEV; precisa da mão do Breno
 
 ### Não faz parte da entrega
 - Migration: a task não muda schema (#8). As colunas de auditoria e a tabela `setting` já vieram na `V1__baseline.sql`
@@ -79,17 +89,34 @@ explícita dele.
 
 ## Contrato com o front
 
-**Códigos de erro**
+**Códigos de erro** (novos nesta task; os do `identity` seguem no registro da 0.4, inalterados)
 
 | Código | HTTP | Quando |
 |---|---|---|
-| | | |
+| *code da própria exceção* | 422 | `DomainException`: regra de domínio violada por um pedido bem formado |
+| *code da própria exceção* | 409 | `ConflictException`: o estado atual do agregado recusa a operação |
+| *code da própria exceção* | 404 | `NotFoundException`: o recurso pedido não existe |
+| `VALIDATION_FAILED` | 400 | Bean Validation reprovou um ou mais campos; os campos vão em `errors` |
+| `MALFORMED_REQUEST` | 400 | Corpo ausente ou ilegível (mesmo código que o `identity` já usa) |
+| `REQUEST_BODY_TOO_LARGE` | 413 | Corpo acima de 64 KB, em qualquer rota |
+| `RESOURCE_NOT_FOUND` | 404 | Nenhuma rota e nenhum recurso estático responde o caminho |
+| `METHOD_NOT_ALLOWED` | 405 | O método HTTP não é aceito pela rota |
+| `INTERNAL_ERROR` | 500 | Qualquer falha não mapeada; corpo sem mensagem interna, com `correlationId` |
+| `SETTING_NOT_FOUND` | 404 | Chave de `setting` não configurada |
+| `SETTING_TYPE_MISMATCH` | 422 | `setting` lida como tipo diferente do gravado |
+| `MALFORMED_SETTING_VALUE` | 422 | Valor gravado não parseia no `value_type` que declara |
 
 **Formatos e unidades**
 
 | Campo | Formato |
 |---|---|
-| | |
+| Corpo de erro | `application/problem+json` com `type`, `title`, `status`, `detail`, `instance` e `code`, sempre |
+| `instance` | Só o caminho da requisição, sem query string (pode carregar token ou CPF) |
+| `errors` | `[{ "field": "guestName", "code": "NOT_BLANK" }]` |
+| `correlationId` | Presente apenas no 500; o mesmo valor aparece no log com a stack |
+| Limite de corpo | 64 KB, em `castel.web.max-request-body-size` |
+| UUID de sistema | `00000000-0000-0000-0000-000000000001` |
+| `setting` de percentual | Pontos percentuais: `"10.00"` é dez por cento |
 
 ---
 
@@ -97,7 +124,10 @@ explícita dele.
 
 | Limitação | Por que foi aceita | Mitigação futura |
 |---|---|---|
-| | | |
+| `setting` é lido só por `setting_key`, sem `property_id` | A v1 roda uma única propriedade e o contrato do item 3 não tem propriedade. Se duas propriedades gravarem a mesma chave, a consulta falha alto em vez de escolher uma | Ponto em aberto 3 |
+| Não há caminho de escrita de `setting` além do `save` da porta (atualização de chave existente) | Tela de administração é Onda 4; o `save` existe para sustentar a invalidação do cache | Onda 4 |
+| Sem superclasse `@MappedSuperclass` de auditoria: as colunas estão em `User` | Nenhum módulo pode hospedá-la hoje (ponto em aberto 1) | Extração mecânica na task que decidir a casa |
+| `ConstraintViolationException` lançada fora de um `@Valid` perde o prefixo do caminho (usa só o último nó) | O nome do campo em `camelCase` é o que o front precisa | — |
 
 ---
 
@@ -107,4 +137,7 @@ explícita dele.
 |---|---|---|
 | 1 | **Onde mora a superclasse `@MappedSuperclass` de auditoria?** Ela não cabe em `shared-kernel` (a regra ArchUnit A4 da 0.5a proíbe `org.springframework..` e `jakarta.persistence..` lá, e o módulo não tem essas dependências no `pom`) e não cabe em `app` (nenhum módulo pode depender de `app`; entidade em `app` também é proibida pela regra D1). Colocá-la em `identity` faria `hotel`/`restaurant`/`billing` dependerem de `identity`, fora do grafo permitido. As saídas são: **(a)** módulo novo de plataforma ao lado do `shared-kernel`, do qual todos dependem; **(b)** abrir exceção na regra A4 e dar ao `shared-kernel` as dependências de `jakarta.persistence` e `spring-data-commons`. Nenhuma das duas é decisão do DEV, e a decisão #7 diz que nenhum pacote ou diretório novo nasce nesta task | 1 |
 | 2 | **Onde mora o agregado `Setting` (`@Entity`)?** Mesmo impasse da pergunta 1: `@Entity` em `app` é proibida pela regra D1 e `shared-kernel` não pode ver JPA. A interface `Settings` no `shared-kernel` (decisão #7) resolve o lado do *consumidor*, não o da implementação. Opção de menor custo sem módulo novo: `Setting` em `identity` (o glossário agrupa `Setting` em "Identidade e transversais"), com os outros módulos dependendo só da interface — mas configuração de hotel e restaurante dentro do módulo de identidade é uma escolha de arquitetura, não de implementação | 1 |
+| 4 | **`HandlerMethodValidationException` entra na tabela de mapeamento?** É o que o Spring 7 lança quando a validação falha num parâmetro que não é `@RequestBody` (`@RequestParam`, `@PathVariable`, `@Valid` em parâmetro simples). Não está na tabela do item 2 e nenhum endpoint atual a provoca, então hoje ela cai no `@ExceptionHandler(Exception.class)` e responde **500 `INTERNAL_ERROR`**. Recomendação do DEV: mapear para 400 `VALIDATION_FAILED`, como as outras duas de validação. Sem ação até a decisão | 1 |
+| 5 | **Valor de `type`:** implementado como `about:blank` (decisão #24) para o build não ficar vermelho, isolado numa única constante (`ProblemResponse.BLANK_TYPE`). Trocar por uma URI por família de erro é uma linha. Aguarda a decisão do Breno | 1 |
+| 6 | **Exceção de `@Autowired` em campo no `CLAUDE.md`** (decisão #2 / #79 da 0.4): aprovada pelo Breno, mas o `CLAUDE.md` é configuração do projeto e o agente DEV não o altera. Precisa da mão do Breno ou de outro agente com essa autorização | 1 |
 | 3 | **Qual `property_id` a leitura de `setting` usa?** A tabela tem `property_id NOT NULL` e única `(property_id, setting_key)`, mas o contrato do item 3 é `asText(String key)`, sem propriedade. Não existe conceito de "propriedade corrente" no código (o `DevUserSeeder` cria uma sob demanda). A v1 é de uma só propriedade, então ler por `setting_key` funciona hoje; o que falta é a regra: ler pela propriedade do usuário autenticado, ou assumir propriedade única e falhar se houver mais de uma linha para a chave | 1 |
