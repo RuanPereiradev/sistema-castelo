@@ -47,18 +47,22 @@ que não for bloqueio crítico é registrado aqui e mergeado.
 | 17 | 1 | `Setting` **não** é `@Entity`. É um agregado de Java puro no `shared-kernel` (chave, valor, `valueType`, com os seis leitores tipados), lido e escrito por um adaptador JDBC no `app`. Motivo: a regra ArchUnit D1 da 0.5a proíbe `@Entity` no `app` e a A4 proíbe JPA no `shared-kernel` — ver ponto em aberto 2. Três colunas lidas por chave não pagam um mapeamento JPA, e assim a regra de tipo fica testável sem banco | pendente (DEV, aguarda Breno) |
 | 18 | 1 | Porta de persistência `SettingRepository` (`findByKey`, `save`) no `shared-kernel`, com o cache Caffeine no **decorador da porta** (`CachingSettingRepository`), não no leitor tipado. Miss **não** é cacheado (chave configurada depois da primeira leitura tem de aparecer) e `save` invalida a chave antes de retornar. `save` só atualiza o valor de uma chave existente: inserir exigiria resolver `property_id`, que é o ponto em aberto 3 | pendente (DEV, aguarda Breno) |
 | 19 | 1 | `Percentage` gravada em **pontos percentuais**: `"10.00"` com `value_type = DECIMAL` é dez por cento, não 1000%. A spec não diz; é a forma como o operador digita | pendente (DEV, aguarda Breno) |
-| 20 | 1 | A superclasse `@MappedSuperclass` de auditoria **não entra nesta rodada** (ponto em aberto 1, sem casa possível). As quatro colunas entram direto em `User`, satisfazendo a decisão #5 e o aceite 7. Extraí-las para a superclasse depois é mecânico | pendente (DEV, aguarda Breno) |
+| 20 | 1 | A superclasse `@MappedSuperclass` de auditoria **não entra nesta rodada** (ponto em aberto 1, sem casa possível). As quatro colunas entram direto em `User`, satisfazendo a decisão #5 e o aceite 7. Extraí-las para a superclasse depois é mecânico | **revertida pela #30** |
 | 21 | 1 | O handler global e o `AuthExceptionHandler` do `identity` precisam de precedência **explícita**: Spring ordena `@ControllerAdvice` só por `@Order`, e `basePackages` não torna um advice "mais específico". **Provado pelo build**: sem ordem, o advice global vence (é descoberto antes) e `INVALID_CREDENTIALS`/`TOO_MANY_LOGIN_ATTEMPTS` passaram a responder 422, quebrando 9 testes da 0.4. Correção: global em `@Order(LOWEST_PRECEDENCE)` **e** `AuthExceptionHandler` em `@Order(HIGHEST_PRECEDENCE)` — uma anotação e um parágrafo de javadoc, nenhum código nem código de erro alterado | pendente (DEV, aguarda Breno) |
 | 24 | 1 | `type` de todo corpo de erro é `about:blank`, escrito explicitamente. O Spring 7 deixa `type` nulo por padrão e o campo desaparece do JSON; a spec exige os seis campos sempre. `about:blank` é o valor que a RFC 9457 assume na ausência do campo, então nada de novo é inventado. Alternativa, se o Breno preferir: uma URI por problema apontando para documentação | pendente (DEV, aguarda Breno) |
 | 22 | 1 | `spring-boot-starter-validation` entra no `pom` do `app`: Bean Validation não estava no classpath e as duas linhas de validação da tabela do item 2 não existiriam sem ele. Nenhum DTO existente ganha anotação (o login não valida campo obrigatório de propósito, contrato da 0.4) | pendente (DEV, aguarda Breno) |
-| 23 | 1 | Spring Data preenche `updated_at`/`updated_by` **também no insert** (comportamento padrão do `AuditingHandler`). Aceito: o schema permite, e a alternativa seria reimplementar o listener | pendente (DEV, aguarda Breno) |
+| 23 | 1 | `updated_at`/`updated_by` são preenchidos **também no insert**. Era o comportamento padrão do `AuditingHandler` do Spring Data e foi mantido de propósito no listener próprio da #32: a primeira versão da linha também é uma escrita, e a coluna nunca fica "alterada por ninguém, nunca" | pendente (DEV, aguarda Breno) |
 | 25 | 1 | `type` fica em **`about:blank`** (confirma a #24). É o valor que a RFC 9457 assume na ausência do campo; o `code` continua sendo o que o front traduz. URI por família de erro criaria uma segunda fonte da verdade além do `code` | implementado |
 | 26 | 1 | `asPercentage` lê **pontos percentuais**: `"10.00"` em `setting_value` é dez por cento, convertido na leitura para a fração que o `Percentage` armazena. Mantém a coluna legível para quem dá suporte olhando o banco | implementado |
-| 27 | 1 | A v1 é **mono-propriedade**. O `Settings` resolve a única `property` existente e **derruba a inicialização** se encontrar mais de uma — falha explícita em vez de ler a linha errada em silêncio. `propertyId` não entra na assinatura (contaminaria todos os chamadores das Ondas 1 a 3 com um parâmetro que a v1 nunca varia) e não nasce `CurrentPropertyProvider`, que é infraestrutura de multi-propriedade (backlog v2) | pendente |
-| 28 | 1 | Entram na tabela de mapeamento as duas linhas que faltavam: `HandlerMethodValidationException` → 400 `VALIDATION_FAILED` e `AccessDeniedException` → 403 `ACCESS_DENIED`. A segunda já foi implementada na rodada 1 (#13); o 403 funcionando por omissão do catch-all era regressão silenciosa esperando acontecer | parcial: `AccessDeniedException` implementado, `HandlerMethodValidationException` pendente |
+| 27 | 1 | A v1 é **mono-propriedade**. O `Settings` resolve a única `property` existente e **derruba a inicialização** se encontrar mais de uma — falha explícita em vez de ler a linha errada em silêncio. `propertyId` não entra na assinatura (contaminaria todos os chamadores das Ondas 1 a 3 com um parâmetro que a v1 nunca varia) e não nasce `CurrentPropertyProvider`, que é infraestrutura de multi-propriedade (backlog v2) | implementado (ver ponto em aberto 7) |
+| 28 | 1 | Entram na tabela de mapeamento as duas linhas que faltavam: `HandlerMethodValidationException` → 400 `VALIDATION_FAILED` e `AccessDeniedException` → 403 `ACCESS_DENIED`. A segunda já foi implementada na rodada 1 (#13); o 403 funcionando por omissão do catch-all era regressão silenciosa esperando acontecer | implementado |
 | 29 | 1 | A exceção de `@Autowired` em campo para código de teste está escrita no `CLAUDE.md`, na seção "Técnico" (fecha o ponto em aberto 6 e a decisão #2) | implementado |
-| 30 | 1 | A superclasse `@MappedSuperclass` de auditoria mora no **`shared-kernel`**, que ganha `jakarta.persistence-api` (só anotações; nem Hibernate nem Spring). A regra ArchUnit A4 passa a proibir `org.springframework..` e `org.hibernate..` e a **liberar** `jakarta.persistence..`, com nova prova de violação 1:1. Sem módulo novo e sem colunas de auditoria repetidas à mão em ~20 entidades das Ondas 1 a 3 (fecha o ponto em aberto 1 e a decisão #20) | pendente |
+| 30 | 1 | A superclasse `@MappedSuperclass` de auditoria mora no **`shared-kernel`**, que ganha `jakarta.persistence-api` (só anotações; nem Hibernate nem Spring). A regra ArchUnit A4 passa a proibir `org.springframework..` e `org.hibernate..` e a **liberar** `jakarta.persistence..`, com nova prova de violação 1:1. Sem módulo novo e sem colunas de auditoria repetidas à mão em ~20 entidades das Ondas 1 a 3 (fecha o ponto em aberto 1 e a decisão #20) | implementado (ver #32) |
 | 31 | 1 | `Setting` **fica como está**: Java puro no `shared-kernel`, lido por adaptador `JdbcClient` no `app`, sem `@Entity`. Três colunas lidas por chave não pagam mapeamento JPA e a regra de tipo fica testável sem banco (fecha o ponto em aberto 2) | implementado |
+
+| 32 | 1 | **Consequência direta da #30, não prevista por ela:** com `org.springframework..` proibido no `shared-kernel`, a auditoria do Spring Data JPA fica **impossível de usar**. `@CreatedDate`, `@CreatedBy`, `@LastModifiedDate`, `@LastModifiedBy` e `@EntityListeners(AuditingEntityListener.class)` são todos `org.springframework.data..` e teriam de estar nos campos da superclasse, que agora mora no `shared-kernel`. Substituído por auditoria de **JPA puro**: `AuditedEntity` (`@MappedSuperclass`) declara as quatro colunas e delega a `AuditingListener`, um entity listener de JPA com `@PrePersist`/`@PreUpdate`, registrado como bean no `app` para receber `AuditorAware` e `Clock` **por construtor** (o provedor de persistência resolve o listener pelo bean container do Spring, o mesmo mecanismo pelo qual o `AuditingEntityListener` do Spring Data era injetado). `@EnableJpaAuditing` sai; a porta `AuditorAware` passa a ser uma interface de Java puro no `shared-kernel`, com o mesmo nome que a spec usa. Comportamento externo idêntico: os 13 testes de auditoria passam sem alteração | pendente (DEV, aguarda Breno) |
+| 33 | 1 | `SettingRepository.save` virou **upsert** (`on conflict (property_id, setting_key) do update`) com o `property_id` resolvido pela #27, e não mais só atualização de chave existente. O `value_type` de uma chave existente **não** é reescrito: setting que muda de tipo é outro parâmetro | pendente (DEV, aguarda Breno) |
+| 34 | 1 | A leitura de `setting` continua filtrando **só por `setting_key`**, e isso agora é seguro por construção: a #27 já provou na inicialização que existe no máximo uma `property`. Filtrar também por `property_id` não acrescentaria garantia nenhuma e só faria a consulta mentir sobre o que protege | pendente (DEV, aguarda Breno) |
 
 Valores de status: `pendente` · `implementado` · `revertida pela #n`
 
@@ -74,14 +78,17 @@ explícita dele.
 - [x] Mapeamento de status: `DomainException` → 422 · conflito de estado → 409 · não encontrado → 404 · validação → 400
 - [x] JPA Auditing com `AuditorAware` lendo o usuário do JWT
 - [x] `Setting` com cache e leitura tipada
-- [ ] Superclasse `@MappedSuperclass` de auditoria — bloqueada pelo ponto em aberto 1 (#20)
+- [x] Superclasse `@MappedSuperclass` de auditoria, no `shared-kernel` (#30), com auditoria de JPA puro (#32)
+- [x] Regra ArchUnit A4 reescrita: proíbe Spring e Hibernate, libera `jakarta.persistence`, com prova 1:1 para cada metade
+- [x] Propriedade única resolvida na inicialização (#27)
+- [x] `HandlerMethodValidationException` → 400 `VALIDATION_FAILED` (#28)
 
 ### Herdado da 0.4
 - [x] Corpo do 404 e demais erros fora do `identity` em RFC 7807 (#3)
 - [x] `instance` nos corpos de erro do filtro JWT e do `SecurityConfig` (#4)
 - [x] Auditoria de `app_user` (#5)
 - [x] Limite global de tamanho de corpo da requisição (#1)
-- [ ] Exceção de `@Autowired` em teste escrita no `CLAUDE.md` (#2) — o `CLAUDE.md` é configuração do projeto e não é alterado pelo agente DEV; precisa da mão do Breno
+- [x] Exceção de `@Autowired` em teste escrita no `CLAUDE.md` (#2) — feita pelo coordenador com autorização do Breno (#29)
 
 ### Não faz parte da entrega
 - Migration: a task não muda schema (#8). As colunas de auditoria e a tabela `setting` já vieram na `V1__baseline.sql`
@@ -131,9 +138,10 @@ explícita dele.
 
 | Limitação | Por que foi aceita | Mitigação futura |
 |---|---|---|
-| `setting` é lido só por `setting_key`, sem `property_id` | A v1 roda uma única propriedade e o contrato do item 3 não tem propriedade. Se duas propriedades gravarem a mesma chave, a consulta falha alto em vez de escolher uma | Ponto em aberto 3 |
-| Não há caminho de escrita de `setting` além do `save` da porta (atualização de chave existente) | Tela de administração é Onda 4; o `save` existe para sustentar a invalidação do cache | Onda 4 |
-| Sem superclasse `@MappedSuperclass` de auditoria: as colunas estão em `User` | Nenhum módulo pode hospedá-la hoje (ponto em aberto 1) | Extração mecânica na task que decidir a casa |
+| `setting` é lido só por `setting_key`, sem `property_id` | A instalação é mono-propriedade e isso é **provado na inicialização** (#27), então o filtro por chave é exato | Multi-propriedade é backlog v2 |
+| Não há endpoint de escrita de `setting`; só o `save` da porta | Tela de administração é Onda 4; o `save` existe para sustentar a invalidação do cache | Onda 4 |
+| A auditoria não usa Spring Data JPA | Consequência da #30: as anotações do Spring Data teriam de morar no `shared-kernel` (#32). Comportamento externo idêntico | — |
+| `AuditingListener` depende do bean container do provedor de persistência para receber suas dependências | É o mesmo mecanismo pelo qual o `AuditingEntityListener` do Spring Data já era injetado neste projeto, e os 13 testes de auditoria o exercitam de ponta a ponta | — |
 | `ConstraintViolationException` lançada fora de um `@Valid` perde o prefixo do caminho (usa só o último nó) | O nome do campo em `camelCase` é o que o front precisa | — |
 
 ---
