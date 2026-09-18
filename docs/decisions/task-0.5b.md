@@ -140,11 +140,9 @@ explícita dele.
 
 ## Pontos em aberto
 
-Os pontos 3, 4, 5 e 6 foram fechados na rodada 1 pelas decisões #25 a #29.
-Sobram os dois de arquitetura, que dependem de onde as classes JPA transversais
-podem morar.
+Nenhum. Os pontos 3 a 6 foram fechados pelas decisões #25 a #29, e os dois de
+arquitetura (onde moram a superclasse de auditoria e o `Setting`) pelas decisões
+#30 e #31.
 
 | # | Pergunta | Desde a rodada |
 |---|---|---|
-| 1 | **Onde mora a superclasse `@MappedSuperclass` de auditoria?** Ela não cabe em `shared-kernel` (a regra ArchUnit A4 da 0.5a proíbe `org.springframework..` e `jakarta.persistence..` lá, e o módulo não tem essas dependências no `pom`) e não cabe em `app` (nenhum módulo pode depender de `app`; entidade em `app` também é proibida pela regra D1). Colocá-la em `identity` faria `hotel`/`restaurant`/`billing` dependerem de `identity`, fora do grafo permitido. As saídas são: **(a)** módulo novo de plataforma ao lado do `shared-kernel`, do qual todos dependem; **(b)** abrir exceção na regra A4 e dar ao `shared-kernel` as dependências de `jakarta.persistence` e `spring-data-commons`. Nenhuma das duas é decisão do DEV, e a decisão #7 diz que nenhum pacote ou diretório novo nasce nesta task | 1 |
-| 2 | **Onde mora o agregado `Setting` (`@Entity`)?** Mesmo impasse da pergunta 1: `@Entity` em `app` é proibida pela regra D1 e `shared-kernel` não pode ver JPA. A interface `Settings` no `shared-kernel` (decisão #7) resolve o lado do *consumidor*, não o da implementação. Opção de menor custo sem módulo novo: `Setting` em `identity` (o glossário agrupa `Setting` em "Identidade e transversais"), com os outros módulos dependendo só da interface — mas configuração de hotel e restaurante dentro do módulo de identidade é uma escolha de arquitetura, não de implementação | 1 |
