@@ -32,6 +32,8 @@ que não for bloqueio crítico é registrado aqui e mergeado.
 | 4 | 0 | Campo `instance` passa a estar presente nos corpos de erro escritos pelo filtro JWT e pelo `SecurityConfig` (herdado da 0.4, rodada 5) | pendente |
 | 5 | 0 | Auditoria de `app_user` (`updated_at`/`updated_by`) entra com a infraestrutura de auditoria desta task (herdado da 0.4, rodada 2, confirmado na 4) | pendente |
 | 6 | 0 | Quando não há usuário autenticado no contexto (seed do dev, migration, job futuro), `created_by`/`updated_by` recebem um **UUID reservado de sistema**, constante e documentado — não `null` nem uma string mágica. Mantém a coluna `NOT NULL`, é rastreável nos dados e não quebra FK futura | pendente |
+| 7 | 0 | Interface `Settings` mora no **`shared-kernel`**, não em um `api/` novo no `app`: todos os módulos já dependem do shared-kernel e o projeto já tem diretório suficiente. Nenhum pacote novo nasce nesta task | pendente |
+| 8 | 0 | `created_by`/`updated_by` seguem **nullable** no banco, sem migration. Tornar `NOT NULL` custaria renumerar V3 a V9, já reservadas por task, por uma restrição que o `AuditorAware` garante em código. Esta task **não muda schema** | pendente |
 
 Valores de status: `pendente` · `implementado` · `revertida pela #n`
 
@@ -54,6 +56,9 @@ explícita dele.
 - [ ] Auditoria de `app_user` (#5)
 - [ ] Limite global de tamanho de corpo da requisição (#1)
 - [ ] Exceção de `@Autowired` em teste escrita no `CLAUDE.md` (#2)
+
+### Não faz parte da entrega
+- Migration: a task não muda schema (#8). As colunas de auditoria e a tabela `setting` já vieram na `V1__baseline.sql`
 
 ### Movido para outra task
 
@@ -91,4 +96,4 @@ explícita dele.
 
 | # | Pergunta | Desde a rodada |
 |---|---|---|
-| | | |
+| 1 | Valor default do limite de tamanho de corpo. Proposta do agente: **64 KB** — o maior corpo legítimo previsto na v1 é uma comanda com muitos itens, na casa de poucos KB | 0 |

@@ -111,8 +111,9 @@ public interface Settings {
 }
 ```
 
-O módulo que ler configuração depende só desta interface. Onde ela mora
-(`shared-kernel` ou um `api/` próprio) é decisão da rodada 0 — ver item 10.
+O módulo que ler configuração depende só desta interface. Ela mora no
+`shared-kernel` (decisão #7): todos já dependem dele e nenhum pacote novo nasce
+nesta task.
 
 ---
 
@@ -124,7 +125,7 @@ O módulo que ler configuração depende só desta interface. Onde ela mora
 `created_by`/`updated_by` ficam **nullable** no banco. Torná-las `NOT NULL`
 exigiria uma migration, e a numeração de V3 a V9 já está reservada por task em
 `docs/MIGRATIONS.md` — renumerar por uma restrição que o `AuditorAware` já
-garante em código não se paga. Registrado para aprovação.
+garante em código não se paga. **Aprovado pelo Breno** (decisão #8).
 
 ---
 
@@ -201,16 +202,13 @@ de fatia vertical — não tem controller nem endpoint novo.
 
 ---
 
-## 10. Decisões da rodada 0 a confirmar
+## 10. Decisões da rodada 0
 
-Três pontos que mudam código e eu não decido sozinho:
-
-1. **Onde mora a interface `Settings`** — `shared-kernel` (todos já dependem
-   dele, mas configuração não é value object) ou um `api/` no `app`, que é a raiz
-   de composição. Proposta: `shared-kernel`, pela dependência já existente.
-2. **Valor default do limite de corpo.** Proposta: 64 KB. O maior corpo legítimo
-   previsto na v1 é uma comanda com muitos itens, na casa de poucos KB.
-3. **`created_by`/`updated_by` seguem nullable no banco** (item 4), sem migration.
+| Ponto | Situação |
+|---|---|
+| Onde mora a interface `Settings` | `shared-kernel`, sem diretório novo — decisão #7 |
+| `created_by`/`updated_by` nullable, sem migration | aprovado — decisão #8 |
+| Valor default do limite de corpo | **em aberto**, proposta 64 KB |
 
 ---
 
