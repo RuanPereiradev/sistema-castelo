@@ -1,5 +1,7 @@
 package br.com.castel.app.security;
 
+import br.com.castel.app.web.ApiErrorCode;
+import br.com.castel.app.web.ProblemResponse;
 import br.com.castel.identity.api.IdentitySecurityConfigurer;
 import jakarta.servlet.DispatcherType;
 import jakarta.servlet.http.HttpServletRequest;
@@ -11,7 +13,6 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ProblemDetail;
 import org.springframework.security.access.AccessDeniedException;
@@ -84,18 +85,25 @@ public class SecurityConfig {
 
     private void commenceUnauthenticated(HttpServletRequest request, HttpServletResponse response, AuthenticationException exception)
             throws IOException {
-        writeProblem(response, HttpStatus.UNAUTHORIZED, "AUTHENTICATION_REQUIRED", "Authentication is required to access this resource");
+        writeProblem(request, response, ApiErrorCode.AUTHENTICATION_REQUIRED,
+                "Authentication is required to access this resource");
     }
 
     private void denyAccess(HttpServletRequest request, HttpServletResponse response, AccessDeniedException exception)
             throws IOException {
-        writeProblem(response, HttpStatus.FORBIDDEN, "ACCESS_DENIED", "You do not have permission to access this resource");
+        writeProblem(request, response, ApiErrorCode.ACCESS_DENIED,
+                "You do not have permission to access this resource");
     }
 
-    private void writeProblem(HttpServletResponse response, HttpStatus status, String code, String detail) throws IOException {
-        ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(status, detail);
-        problemDetail.setProperty("code", code);
-        response.setStatus(status.value());
+    /**
+     * Written by hand because these two run in the filter chain, outside any
+     * {@code @RestControllerAdvice}. The shape comes from {@link ProblemResponse}, so the body
+     * carries {@code instance} like every other error of the API.
+     */
+    private void writeProblem(HttpServletRequest request, HttpServletResponse response, ApiErrorCode errorCode, String detail)
+            throws IOException {
+        ProblemDetail problemDetail = ProblemResponse.of(request, errorCode, detail);
+        response.setStatus(errorCode.status().value());
         response.setContentType(MediaType.APPLICATION_PROBLEM_JSON_VALUE);
         response.setCharacterEncoding(StandardCharsets.UTF_8.name());
         objectMapper.writeValue(response.getWriter(), problemDetail);

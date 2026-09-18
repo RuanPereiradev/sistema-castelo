@@ -30,6 +30,11 @@ server:
   port: 8080
 
 castel:
+  web:
+    # Limite de tamanho do corpo da requisicao, para toda a API. Corpo acima dele: 413
+    # REQUEST_BODY_TOO_LARGE, recusado antes da cadeia de seguranca e sem ser lido na memoria.
+    max-request-body-size: 64KB
+
   auth:
     login-rate-limit:
       # Camada 1: falhas por par (IP, username). Camada 2: falhas por IP, somando os usernames.
