@@ -68,7 +68,6 @@ class AuthenticationHttpIntegrationTest extends AbstractIntegrationTest {
     private static final Instant BASE_INSTANT = Instant.parse("2026-09-13T12:00:00Z");
     private static final Duration ACCESS_LIFETIME = Duration.ofMinutes(15);
     private static final Duration REFRESH_LIFETIME = Duration.ofDays(7);
-    private static final UUID PROPERTY_ID = UUID.fromString("0b7e3b8e-3c52-4c1e-9d0e-4a1f00000004");
     private static final String PASSWORD = "Integration-Password-42";
     private static final String WRONG_PASSWORD = "Wrong-Password-99";
     private static final String OTHER_SECRET = "another-jwt-secret-also-longer-than-256-bits-fedcba9876543210";
@@ -122,10 +121,6 @@ class AuthenticationHttpIntegrationTest extends AbstractIntegrationTest {
         clock.setInstant(BASE_INSTANT);
         loginFailuresByPair.invalidateAll();
         loginFailuresByIp.invalidateAll();
-        jdbcTemplate.update(
-                "insert into property (id, legal_name) values (?, ?) on conflict (id) do nothing",
-                PROPERTY_ID,
-                "Integration Property");
     }
 
     // ---------------------------------------------------------------- fixtures

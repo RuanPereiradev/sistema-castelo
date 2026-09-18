@@ -60,10 +60,14 @@ class ArchitectureRulesTest {
                 .check(productionClasses);
     }
 
+    /**
+     * Also the proof that {@code jakarta.persistence} is allowed in {@code shared-kernel}: the real
+     * module carries {@code AuditedEntity} with {@code @MappedSuperclass} and this rule passes.
+     */
     @Test
-    @DisplayName("A4: shared-kernel does not depend on Spring or JPA")
-    void sharedKernelDoesNotDependOnSpringOrJpa() {
-        ArchitectureRules.sharedKernelMustNotDependOnSpringOrJpa(ArchitectureRules.SHARED_KERNEL_PACKAGE)
+    @DisplayName("A4: shared-kernel does not depend on Spring or Hibernate")
+    void sharedKernelDoesNotDependOnSpringOrHibernate() {
+        ArchitectureRules.sharedKernelMustNotDependOnSpringOrHibernate(ArchitectureRules.SHARED_KERNEL_PACKAGE)
                 .check(productionClasses);
     }
 

@@ -150,7 +150,9 @@ código procedural com anotação, e **não é o padrão deste projeto**.
 - Dinheiro é `Money`. Nunca `double`, `float` ou `BigDecimal` solto.
 - Datas com `java.time`. Nunca `java.util.Date` ou `Calendar`.
 - `@Enumerated(EnumType.STRING)`.
-- Injeção por construtor. Nunca `@Autowired` em campo.
+- Injeção por construtor. Nunca `@Autowired` em campo **em código de produção**.
+  Em `src/test/java` o `@Autowired` em campo é aceito: é o padrão idiomático de
+  teste Spring, e as regras estruturais do ArchUnit rodam só contra `main`.
 - Migration Flyway é **forward-only**: nunca edite uma migration já aplicada.
 
 ---

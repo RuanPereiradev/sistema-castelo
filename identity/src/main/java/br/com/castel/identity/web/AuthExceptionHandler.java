@@ -11,6 +11,8 @@ import br.com.castel.identity.domain.PasswordTooLongException;
 import br.com.castel.identity.domain.UserWithoutRolesException;
 import br.com.castel.identity.domain.WeakPasswordException;
 import br.com.castel.sharedkernel.DomainException;
+import org.springframework.core.Ordered;
+import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -27,7 +29,13 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
  *
  * <p>Scoped to {@code br.com.castel.identity.web} on purpose, so it never competes with the
  * project-wide {@code @RestControllerAdvice} that a later task adds for every other module.
+ *
+ * <p>{@code basePackages} alone does not give it that precedence. Spring orders
+ * {@code @ControllerAdvice} beans only by {@code @Order}, and the first advice with any matching
+ * handler wins; the project-wide advice matches {@code DomainException}, which is the supertype of
+ * every exception below. Ordered first here so the codes of this module keep their own statuses.
  */
+@Order(Ordered.HIGHEST_PRECEDENCE)
 @RestControllerAdvice(basePackages = "br.com.castel.identity.web")
 public class AuthExceptionHandler {
 

@@ -2,6 +2,7 @@ package br.com.castel.identity.domain;
 
 import br.com.castel.identity.api.Role;
 import br.com.castel.identity.api.UserId;
+import br.com.castel.sharedkernel.AuditedEntity;
 import jakarta.persistence.AttributeOverride;
 import jakarta.persistence.CollectionTable;
 import jakarta.persistence.Column;
@@ -36,7 +37,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
  */
 @Entity
 @Table(name = "app_user")
-public class User {
+public class User extends AuditedEntity {
 
     /** Minimum length of a raw password, counted in Unicode code points. */
     public static final int MINIMUM_PASSWORD_LENGTH = 8;

@@ -1,0 +1,204 @@
+### Task 0.5b - fundacao transversal: corpos de erro RFC 7807
+### Ambiente: selecione "dev" (ou "local") no IntelliJ HTTP Client, com
+### http-client.env.json + http-client.private.env.json (copie o .example).
+###
+### Pre-requisito: aplicacao rodando com o perfil "dev" e castel.dev.seed-enabled=true.
+### Rode o arquivo inteiro, em ordem: o cenario 0 salva o token que os demais usam.
+###
+### Todo cenario aqui e negativo. O que cada corpo tem de trazer, sem excecao:
+### type, title, status, detail, instance e code. O code e estavel e o front o traduz.
+###
+### Sem cenario aqui, coberto so no teste de integracao ErrorResponseHttpIntegrationTest:
+### - 422 (DomainException), 409 (ConflictException) e 404 com code da propria excecao:
+###   nenhum endpoint desta task lanca excecao de dominio (a task nao cria endpoint);
+### - 400 VALIDATION_FAILED com a lista "errors": nenhum endpoint usa Bean Validation ainda.
+###   O login nao valida campo obrigatorio de proposito: senha ausente responde 401
+###   INVALID_CREDENTIALS, identico a senha errada, para nao revelar se a conta existe
+###   (contrato da 0.4). O primeiro endpoint com @Valid nasce na 0.8;
+### - 500 INTERNAL_ERROR sem vazar mensagem e com correlationId repetido no log:
+###   provocar um 500 de proposito exige endpoint de teste.
+
+
+### 0. Login do admin, para os cenarios autenticados
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{
+  "username": "{{adminUsername}}",
+  "password": "{{password}}"
+}
+
+> {%
+    client.test("login do admin retorna 200", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+    });
+    client.global.set("accessToken", response.body.accessToken);
+%}
+
+
+### 1. Rota inexistente, autenticado -> 404 RESOURCE_NOT_FOUND com instance
+# Antes desta task o 404 saia no formato do container, sem code e sem instance.
+GET {{host}}/api/does-not-exist
+Authorization: Bearer {{accessToken}}
+
+> {%
+    client.test("rota inexistente retorna 404 RESOURCE_NOT_FOUND", function() {
+        client.assert(response.status === 404, "esperado 404, recebido " + response.status);
+        client.assert(response.body.code === "RESOURCE_NOT_FOUND", "code deveria ser RESOURCE_NOT_FOUND");
+        client.assert(response.contentType.mimeType === "application/problem+json", "content-type deveria ser application/problem+json");
+    });
+    client.test("corpo do 404 traz os seis campos do contrato", function() {
+        client.assert(response.body.type !== undefined, "type ausente");
+        client.assert(response.body.title !== undefined, "title ausente");
+        client.assert(response.body.status === 404, "status no corpo deveria ser 404");
+        client.assert(response.body.detail !== undefined, "detail ausente");
+        client.assert(response.body.instance === "/api/does-not-exist", "instance deveria ser o caminho da requisicao");
+    });
+%}
+
+
+### 2. Metodo nao suportado na rota -> 405 METHOD_NOT_ALLOWED
+# /api/auth/me so aceita GET.
+DELETE {{host}}/api/auth/me
+Authorization: Bearer {{accessToken}}
+
+> {%
+    client.test("metodo nao suportado retorna 405 METHOD_NOT_ALLOWED", function() {
+        client.assert(response.status === 405, "esperado 405, recebido " + response.status);
+        client.assert(response.body.code === "METHOD_NOT_ALLOWED", "code deveria ser METHOD_NOT_ALLOWED");
+        client.assert(response.contentType.mimeType === "application/problem+json", "content-type deveria ser application/problem+json");
+        client.assert(response.body.instance === "/api/auth/me", "instance deveria ser o caminho da requisicao");
+    });
+%}
+
+
+### 3. JSON malformado -> 400 MALFORMED_REQUEST, sem ecoar o corpo
+# O valor invalido nunca aparece na resposta nem no log da aplicacao: a mensagem do parser
+# ecoa o token ofensor, e um "password":Canary123 sem aspas vazaria a senha.
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{"username":"admin","password":Canary987}
+
+> {%
+    client.test("JSON malformado retorna 400 MALFORMED_REQUEST", function() {
+        client.assert(response.status === 400, "esperado 400, recebido " + response.status);
+        client.assert(response.body.code === "MALFORMED_REQUEST", "code deveria ser MALFORMED_REQUEST");
+        client.assert(response.contentType.mimeType === "application/problem+json", "content-type deveria ser application/problem+json");
+    });
+    client.test("corpo malformado nunca volta ecoado", function() {
+        client.assert(JSON.stringify(response.body).indexOf("Canary987") === -1, "o valor invalido nunca deve aparecer na resposta");
+    });
+%}
+
+
+### 4. Corpo acima do limite de 64 KB -> 413 REQUEST_BODY_TOO_LARGE
+# O limite vale para toda a API, inclusive para rota publica como o login, e e aplicado
+# antes da cadeia de seguranca: nenhum BCrypt roda e o corpo nao e lido na memoria.
+< {%
+    var padding = "A".repeat(70 * 1024);
+    request.variables.set("oversizedPadding", padding);
+%}
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{"username":"admin","password":"{{oversizedPadding}}"}
+
+> {%
+    client.test("corpo acima do limite retorna 413 REQUEST_BODY_TOO_LARGE", function() {
+        client.assert(response.status === 413, "esperado 413, recebido " + response.status);
+        client.assert(response.body.code === "REQUEST_BODY_TOO_LARGE", "code deveria ser REQUEST_BODY_TOO_LARGE");
+        client.assert(response.contentType.mimeType === "application/problem+json", "content-type deveria ser application/problem+json");
+        client.assert(response.body.instance === "/api/auth/login", "instance deveria ser o caminho da requisicao");
+    });
+    client.test("413 nunca vira 401 nem 400", function() {
+        client.assert(response.body.code !== "INVALID_CREDENTIALS", "o corpo nem chega a ser interpretado");
+    });
+%}
+
+
+### 5. Corpo dentro do limite ainda passa -> 401 INVALID_CREDENTIALS
+# Controle do cenario 4: prova que o 413 e do tamanho, nao da rota.
+< {%
+    request.variables.set("smallPadding", "A".repeat(1024));
+%}
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{"username":"admin","password":"{{smallPadding}}"}
+
+> {%
+    client.test("corpo dentro do limite e processado normalmente", function() {
+        client.assert(response.status === 401, "esperado 401, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_CREDENTIALS", "code deveria ser INVALID_CREDENTIALS");
+    });
+%}
+
+
+### 6. Rota protegida sem token -> 401 com code do identity e instance
+# O corpo e escrito pelo AuthenticationEntryPoint, fora de qualquer @RestControllerAdvice.
+# O campo instance passou a estar presente nesta task.
+GET {{host}}/api/auth/me
+
+> {%
+    client.test("rota protegida sem token retorna 401 AUTHENTICATION_REQUIRED", function() {
+        client.assert(response.status === 401, "esperado 401, recebido " + response.status);
+        client.assert(response.body.code === "AUTHENTICATION_REQUIRED", "code deveria ser AUTHENTICATION_REQUIRED");
+        client.assert(response.contentType.mimeType === "application/problem+json", "content-type deveria ser application/problem+json");
+        client.assert(response.body.instance === "/api/auth/me", "instance deveria ser o caminho da requisicao");
+    });
+%}
+
+
+### 7. Token invalido -> 401 INVALID_TOKEN com instance
+# Corpo escrito pelo filtro JWT, tambem fora do @RestControllerAdvice.
+GET {{host}}/api/auth/me
+Authorization: Bearer isto-nao-e-um-jwt-valido
+
+> {%
+    client.test("token invalido retorna 401 INVALID_TOKEN com instance", function() {
+        client.assert(response.status === 401, "esperado 401, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_TOKEN", "code deveria ser INVALID_TOKEN");
+        client.assert(response.body.instance === "/api/auth/me", "instance deveria ser o caminho da requisicao");
+    });
+%}
+
+
+### 8a. Login do garcom (WAITER), para o cenario 8
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{
+  "username": "{{waiterUsername}}",
+  "password": "{{password}}"
+}
+
+> {%
+    client.global.set("waiterAccessToken", response.body.accessToken);
+%}
+
+### 8. Papel insuficiente -> 403 ACCESS_DENIED com instance
+GET {{host}}/api/admin/users
+Authorization: Bearer {{waiterAccessToken}}
+
+> {%
+    client.test("papel insuficiente retorna 403 ACCESS_DENIED com instance", function() {
+        client.assert(response.status === 403, "esperado 403, recebido " + response.status);
+        client.assert(response.body.code === "ACCESS_DENIED", "code deveria ser ACCESS_DENIED");
+        client.assert(response.contentType.mimeType === "application/problem+json", "content-type deveria ser application/problem+json");
+        client.assert(response.body.instance === "/api/admin/users", "instance deveria ser o caminho da requisicao");
+    });
+%}
+
+
+### 9. Rota inexistente sem token -> 401, nao 404
+# Rota desconhecida tambem e protegida: responder 404 antes de autenticar diria a um
+# atacante quais caminhos existem.
+GET {{host}}/api/does-not-exist
+
+> {%
+    client.test("rota inexistente sem token retorna 401", function() {
+        client.assert(response.status === 401, "esperado 401, recebido " + response.status);
+        client.assert(response.body.code === "AUTHENTICATION_REQUIRED", "code deveria ser AUTHENTICATION_REQUIRED");
+    });
+%}

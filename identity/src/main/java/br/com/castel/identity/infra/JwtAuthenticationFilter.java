@@ -13,6 +13,7 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
+import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import org.springframework.http.HttpStatus;
@@ -79,7 +80,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         try {
             authenticatedUser = authenticationService.authenticateAccessToken(token);
         } catch (TokenExpiredException | InvalidTokenException | UserInactiveException | SessionSupersededException e) {
-            writeUnauthorized(response, e);
+            writeUnauthorized(request, response, e);
             return;
         }
 
@@ -105,10 +106,18 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 .toList();
     }
 
-    private void writeUnauthorized(HttpServletResponse response, DomainException exception) throws IOException {
+    /**
+     * Writes the 401 body by hand, because this filter runs before any
+     * {@code @RestControllerAdvice}. {@code instance} carries the path of the request, so the shape
+     * matches every other error body of the API; only the path, never the query string, which can
+     * carry a token.
+     */
+    private void writeUnauthorized(HttpServletRequest request, HttpServletResponse response, DomainException exception)
+            throws IOException {
         ProblemDetail problemDetail =
                 ProblemDetail.forStatusAndDetail(HttpStatus.UNAUTHORIZED, exception.getMessage());
         problemDetail.setProperty("code", exception.code());
+        problemDetail.setInstance(URI.create(request.getRequestURI()));
         response.setStatus(HttpStatus.UNAUTHORIZED.value());
         response.setContentType(MediaType.APPLICATION_PROBLEM_JSON_VALUE);
         response.setCharacterEncoding(StandardCharsets.UTF_8.name());
