@@ -265,6 +265,39 @@ Task sem `.http` executável está incompleta.
 
 ---
 
+## Orçamento de teste
+
+O volume de teste segue o **risco de negócio**, não a busca por cobertura. A
+referência é **uma linha de teste para cada linha de produção**. Passar disso
+precisa de motivo; o dobro ou o triplo, como aconteceu na 0.4, é sinal de que se
+testou o que não paga.
+
+**Teste denso — onde errar custa dinheiro ou confiança do operador:**
+
+- Invariante de agregado: comanda fechada não recebe item, folio não fecha com saldo
+- Cálculo monetário: total, saldo, taxa de serviço, rateio, venda por peso
+- Concorrência real: `daily_inventory` em reserva simultânea, fechamento de comanda
+- Transição de estado: o que cada `Status` aceita e recusa
+- Fechamento de caixa e conferência de valores
+
+**Teste enxuto — um caso que prova a regra, e segue:**
+
+- Cenário adversarial de segurança. **Ninguém vai fazer força bruta neste sistema:**
+  é um hotel, não um banco, e o custo do ataque supera o ganho. Limite de tentativa
+  e afins existem e continuam testados, mas com um caso por regra, não com uma
+  suíte exaustiva.
+- Encanamento que a fundação transversal já cobre: erro RFC 7807, auditoria,
+  limite de corpo, leitura de `setting`. Já tem teste; não se reescreve por módulo.
+- Variação de entrada que não muda a regra: não parametrize vinte valores quando
+  três provam o limite, o meio e a borda.
+- Getter, DTO e mapeamento sem lógica.
+
+Cobertura não é meta. Teste que só descreve o que o código faz é custo de
+manutenção sem retorno — o teste existe para pegar a regra errada, não para
+repetir a implementação.
+
+---
+
 ## Regra para agentes
 
 Se a especificação estiver ambígua ou faltar uma regra de negócio, **pare e
