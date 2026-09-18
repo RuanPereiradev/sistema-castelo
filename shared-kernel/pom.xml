@@ -17,6 +17,15 @@
     <description>Money, Cpf, DateRange, DomainEvent, IDs tipados e demais tipos compartilhados</description>
 
     <dependencies>
+        <!--
+          Only the JPA mapping annotations, so the audit superclass of task 0.5b can live here.
+          No Hibernate and no Spring: the ArchUnit rule A4 keeps both out of this module.
+        -->
+        <dependency>
+            <groupId>jakarta.persistence</groupId>
+            <artifactId>jakarta.persistence-api</artifactId>
+        </dependency>
+
         <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter</artifactId>

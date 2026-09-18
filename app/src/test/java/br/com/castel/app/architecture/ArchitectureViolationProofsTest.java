@@ -1,5 +1,6 @@
 package br.com.castel.app.architecture;
 
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.tngtech.archunit.core.domain.JavaClasses;
@@ -26,6 +27,19 @@ class ArchitectureViolationProofsTest {
     private static final String FAKE_BASE_PACKAGE = VIOLATIONS_PACKAGE + ".modulegraph.fake";
 
     private static final String FAKE_SHARED_KERNEL_PACKAGE = FAKE_BASE_PACKAGE + ".fakesharedkernel";
+
+    /**
+     * A second shared-kernel analog, holding only the Hibernate fixture. Separate from
+     * {@link #FAKE_SHARED_KERNEL_PACKAGE} so each forbidden namespace of rule A4 is proved on its
+     * own: running the rule over a package that violates it twice would not show that the Hibernate
+     * clause works.
+     */
+    private static final String FAKE_SHARED_KERNEL_HIBERNATE_PACKAGE =
+            FAKE_BASE_PACKAGE + ".fakesharedkernelhibernate";
+
+    /** A third shared-kernel analog, holding the fixture that rule A4 must accept. */
+    private static final String FAKE_SHARED_KERNEL_JAKARTA_PERSISTENCE_PACKAGE =
+            FAKE_BASE_PACKAGE + ".fakesharedkerneljakartapersistence";
 
     private static final List<String> FAKE_DOMAIN_MODULES =
             List.of("fakehotel", "fakerestaurant", "fakebilling", "fakeidentity", "faketaxinvoice", "fakepayment");
@@ -81,11 +95,36 @@ class ArchitectureViolationProofsTest {
 
     @Test
     @DisplayName("A4 fails when shared-kernel depends on Spring")
-    void sharedKernelDoesNotDependOnSpringOrJpaFailsOnViolation() {
+    void sharedKernelDoesNotDependOnSpringFailsOnViolation() {
         assertThatThrownBy(() -> ArchitectureRules
-                        .sharedKernelMustNotDependOnSpringOrJpa(FAKE_SHARED_KERNEL_PACKAGE)
+                        .sharedKernelMustNotDependOnSpringOrHibernate(FAKE_SHARED_KERNEL_PACKAGE)
                         .check(violationClasses))
-                .isInstanceOf(AssertionError.class);
+                .isInstanceOf(AssertionError.class)
+                .hasMessageContaining("FakeSharedKernelUsingSpring");
+    }
+
+    @Test
+    @DisplayName("A4 fails when shared-kernel depends on Hibernate")
+    void sharedKernelDoesNotDependOnHibernateFailsOnViolation() {
+        assertThatThrownBy(() -> ArchitectureRules
+                        .sharedKernelMustNotDependOnSpringOrHibernate(FAKE_SHARED_KERNEL_HIBERNATE_PACKAGE)
+                        .check(violationClasses))
+                .isInstanceOf(AssertionError.class)
+                .hasMessageContaining("FakeSharedKernelUsingHibernate");
+    }
+
+    /**
+     * The other half of rule A4: the JPA mapping annotations are allowed in {@code shared-kernel}.
+     * Proved on a fixture that uses {@code jakarta.persistence} and nothing else, in its own package,
+     * so the rule has no other reason to fail.
+     */
+    @Test
+    @DisplayName("A4 allows shared-kernel to use the jakarta.persistence annotations")
+    void sharedKernelMayDependOnJakartaPersistence() {
+        assertThatCode(() -> ArchitectureRules
+                        .sharedKernelMustNotDependOnSpringOrHibernate(FAKE_SHARED_KERNEL_JAKARTA_PERSISTENCE_PACKAGE)
+                        .check(violationClasses))
+                .doesNotThrowAnyException();
     }
 
     @Test

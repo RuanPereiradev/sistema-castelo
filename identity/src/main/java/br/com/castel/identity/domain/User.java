@@ -2,13 +2,13 @@ package br.com.castel.identity.domain;
 
 import br.com.castel.identity.api.Role;
 import br.com.castel.identity.api.UserId;
+import br.com.castel.sharedkernel.AuditedEntity;
 import jakarta.persistence.AttributeOverride;
 import jakarta.persistence.CollectionTable;
 import jakarta.persistence.Column;
 import jakarta.persistence.ElementCollection;
 import jakarta.persistence.EmbeddedId;
 import jakarta.persistence.Entity;
-import jakarta.persistence.EntityListeners;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
@@ -24,11 +24,6 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.regex.Pattern;
-import org.springframework.data.annotation.CreatedBy;
-import org.springframework.data.annotation.CreatedDate;
-import org.springframework.data.annotation.LastModifiedBy;
-import org.springframework.data.annotation.LastModifiedDate;
-import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 /**
@@ -42,8 +37,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
  */
 @Entity
 @Table(name = "app_user")
-@EntityListeners(AuditingEntityListener.class)
-public class User {
+public class User extends AuditedEntity {
 
     /** Minimum length of a raw password, counted in Unicode code points. */
     public static final int MINIMUM_PASSWORD_LENGTH = 8;
@@ -84,27 +78,6 @@ public class User {
 
     @Column(name = "last_login_at")
     private Instant lastLoginAt;
-
-    /**
-     * Audit columns, filled by JPA auditing and by nothing else: there is no business method that
-     * changes them, and {@code created_*} is not updatable, so the row's author cannot be rewritten
-     * by a later save. The author with nobody authenticated is the reserved system UUID, never null.
-     */
-    @CreatedDate
-    @Column(name = "created_at", nullable = false, updatable = false)
-    private Instant createdAt;
-
-    @CreatedBy
-    @Column(name = "created_by", updatable = false)
-    private UUID createdBy;
-
-    @LastModifiedDate
-    @Column(name = "updated_at")
-    private Instant updatedAt;
-
-    @LastModifiedBy
-    @Column(name = "updated_by")
-    private UUID updatedBy;
 
     @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(name = "user_role", joinColumns = @JoinColumn(name = "app_user_id"))
@@ -308,22 +281,6 @@ public class User {
 
     public Instant lastLoginAt() {
         return lastLoginAt;
-    }
-
-    public Instant createdAt() {
-        return createdAt;
-    }
-
-    public UUID createdBy() {
-        return createdBy;
-    }
-
-    public Instant updatedAt() {
-        return updatedAt;
-    }
-
-    public UUID updatedBy() {
-        return updatedBy;
     }
 
     public Set<Role> roles() {

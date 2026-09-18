@@ -145,14 +145,23 @@ final class ArchitectureRules {
     }
 
     // ---------------------------------------------------------------------------------------
-    // A4 - shared-kernel must stay a plain Java module, free of Spring or JPA.
+    // A4 - shared-kernel stays free of framework code: no Spring and no Hibernate. The
+    // jakarta.persistence mapping annotations are allowed, and only them, so the audit
+    // superclass can be declared once for every module (decision #30 of task 0.5b).
     // ---------------------------------------------------------------------------------------
 
-    static ArchRule sharedKernelMustNotDependOnSpringOrJpa(String sharedKernelPackage) {
+    /**
+     * {@code jakarta.persistence} is deliberately absent from the forbidden list. That it is really
+     * allowed is not proved by a fixture but by the production run of this rule: the real
+     * {@code shared-kernel} carries {@code AuditedEntity}, annotated with {@code @MappedSuperclass},
+     * and the rule passes over it.
+     */
+    static ArchRule sharedKernelMustNotDependOnSpringOrHibernate(String sharedKernelPackage) {
         return noClasses()
                 .that().resideInAPackage(sharedKernelPackage + "..")
-                .should().dependOnClassesThat().resideInAnyPackage("org.springframework..", "jakarta.persistence..")
-                .because("shared-kernel must stay a plain Java module, free of framework dependencies");
+                .should().dependOnClassesThat().resideInAnyPackage("org.springframework..", "org.hibernate..")
+                .because("shared-kernel must stay free of framework code: the JPA mapping annotations are "
+                        + "allowed there, the persistence provider and the container are not");
     }
 
     // ---------------------------------------------------------------------------------------
