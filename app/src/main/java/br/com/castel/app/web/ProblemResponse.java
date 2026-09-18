@@ -1,5 +1,6 @@
 package br.com.castel.app.web;
 
+import br.com.castel.sharedkernel.ProblemType;
 import jakarta.servlet.http.HttpServletRequest;
 import java.net.URI;
 import org.springframework.http.HttpStatus;
@@ -25,14 +26,8 @@ public final class ProblemResponse {
     /** Property name of the list of invalid fields inside a validation problem body. */
     public static final String ERRORS_PROPERTY = "errors";
 
-    /**
-     * Value of {@code type} in every error body.
-     *
-     * <p>RFC 9457 lets {@code type} be absent and assumes {@code about:blank} then, and Spring 7
-     * leaves it null by default, which drops the field from the JSON. It is set explicitly so the
-     * shape of an error body never varies: the front parses the same six fields every time.
-     */
-    public static final URI BLANK_TYPE = URI.create("about:blank");
+    /** Value of {@code type} in every error body, declared once in the shared kernel. */
+    public static final URI BLANK_TYPE = ProblemType.BLANK;
 
     private ProblemResponse() {
     }

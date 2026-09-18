@@ -724,6 +724,20 @@ class ErrorResponseHttpIntegrationTest extends AbstractIntegrationTest {
             assertThat(response.code()).isNotBlank();
         }
 
+        /**
+         * The body the JWT filter writes lives outside every {@code @RestControllerAdvice}, so it
+         * used to be the one place in the API where {@code type} was missing. One case is enough:
+         * the same helper writes every error body of the identity module.
+         */
+        @Test
+        void shouldCarryTypeOnErrorWrittenByTheIdentityModule() {
+            HttpResult response = getAuthenticatedWith(BASE + "/ping", tokenSignedWithAnotherSecret());
+
+            assertThat(RFC_7807_FIELDS).allSatisfy(field -> assertThat(response.json().path(field).isMissingNode())
+                    .as("field %s is missing from %s", field, response.body())
+                    .isFalse());
+        }
+
         /** A token with a valid shape and a wrong signature is rejected by the JWT filter itself. */
         @Test
         void shouldCarryInstanceOnErrorWrittenByTheJwtFilter() {
