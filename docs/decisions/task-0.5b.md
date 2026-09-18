@@ -17,7 +17,7 @@ que não for bloqueio crítico é registrado aqui e mergeado.
 |---|---|
 | Branch | `task/0.5b-cross-cutting-foundation` |
 | Rodada atual | 1 — implementação (DEV e TEST em paralelo a partir da spec) |
-| Build | não rodado nesta branch |
+| Build | ver a última linha da seção "Decisões confirmadas" |
 | Testes | 884 herdados da 0.4 |
 
 ---
@@ -35,6 +35,14 @@ que não for bloqueio crítico é registrado aqui e mergeado.
 | 7 | 0 | Interface `Settings` mora no **`shared-kernel`**, não em um `api/` novo no `app`: todos os módulos já dependem do shared-kernel e o projeto já tem diretório suficiente. Nenhum pacote novo nasce nesta task | pendente |
 | 8 | 0 | `created_by`/`updated_by` seguem **nullable** no banco, sem migration. Tornar `NOT NULL` custaria renumerar V3 a V9, já reservadas por task, por uma restrição que o `AuditorAware` garante em código. Esta task **não muda schema** | pendente |
 | 9 | 0 | Limite default de tamanho de corpo da requisição: **64 KB**, configurável por propriedade. O maior corpo legítimo previsto na v1 é uma comanda com muitos itens, na casa de poucos KB; 64 KB dá uma ordem de grandeza de folga e fecha o corpo de 2 MB aceito hoje no login | pendente |
+
+| 10 | 1 | Prefixo da propriedade do limite de corpo: `castel.web.max-request-body-size`, tipo `DataSize`, default `64KB` no `application.yml`. Segue o prefixo `castel.*` já usado por `castel.auth.login-rate-limit` e `castel.dev` | pendente (DEV, aguarda Breno) |
+| 11 | 1 | Formato do `errors` do 400 `VALIDATION_FAILED`: lista de objetos `{ "field": "<camelCase>", "code": "<REGRA>" }`, em que `code` é o nome da anotação de Bean Validation em `UPPER_SNAKE_CASE` (`@NotBlank` → `NOT_BLANK`). Nenhuma mensagem do Hibernate Validator vai para o corpo. Erro que não é de campo usa o nome do objeto validado em `field` | pendente (DEV, aguarda Breno) |
+| 12 | 1 | O identificador de correlação do 500 trafega no corpo no campo `correlationId` (UUID v7) e aparece no log junto com a stack. `detail` do 500 é fixo: `Unexpected internal error` | pendente (DEV, aguarda Breno) |
+| 13 | 1 | O handler global declara `@ExceptionHandler` explícito para `AccessDeniedException` (403 `ACCESS_DENIED`) e `AuthenticationException` (401 `AUTHENTICATION_REQUIRED`), com os **mesmos códigos** que o `SecurityConfig` já emite. Sem isso, o `@ExceptionHandler(Exception.class)` engoliria o `AccessDeniedException` do method security e o 403 da 0.4 viraria 500 | pendente (DEV, aguarda Breno) |
+| 14 | 1 | O UUID reservado de sistema da decisão #6 é `00000000-0000-0000-0000-000000000001`, constante `SystemAuthor.SYSTEM_USER_ID`. Zeros à esquerda o tornam reconhecível numa consulta e ele não colide com UUID v7 gerado | pendente (DEV, aguarda Breno) |
+| 15 | 1 | A auditoria de data lê o bean `Clock` do projeto, por um `DateTimeProvider`, em vez do relógio interno do Spring Data. Mantém a data de auditoria controlável no teste, como o resto do sistema | pendente (DEV, aguarda Breno) |
+| 16 | 1 | `MALFORMED_REQUEST` cujo *root cause* é o limite de corpo (corpo sem `Content-Length`, `chunked`) responde **413 `REQUEST_BODY_TOO_LARGE`**, não 400. É o mesmo limite, detectado durante a leitura em vez de no cabeçalho | pendente (DEV, aguarda Breno) |
 
 Valores de status: `pendente` · `implementado` · `revertida pela #n`
 
@@ -97,4 +105,6 @@ explícita dele.
 
 | # | Pergunta | Desde a rodada |
 |---|---|---|
-| | Nenhum. O ponto do limite de corpo foi fechado pela decisão #9 | |
+| 1 | **Onde mora a superclasse `@MappedSuperclass` de auditoria?** Ela não cabe em `shared-kernel` (a regra ArchUnit A4 da 0.5a proíbe `org.springframework..` e `jakarta.persistence..` lá, e o módulo não tem essas dependências no `pom`) e não cabe em `app` (nenhum módulo pode depender de `app`; entidade em `app` também é proibida pela regra D1). Colocá-la em `identity` faria `hotel`/`restaurant`/`billing` dependerem de `identity`, fora do grafo permitido. As saídas são: **(a)** módulo novo de plataforma ao lado do `shared-kernel`, do qual todos dependem; **(b)** abrir exceção na regra A4 e dar ao `shared-kernel` as dependências de `jakarta.persistence` e `spring-data-commons`. Nenhuma das duas é decisão do DEV, e a decisão #7 diz que nenhum pacote ou diretório novo nasce nesta task | 1 |
+| 2 | **Onde mora o agregado `Setting` (`@Entity`)?** Mesmo impasse da pergunta 1: `@Entity` em `app` é proibida pela regra D1 e `shared-kernel` não pode ver JPA. A interface `Settings` no `shared-kernel` (decisão #7) resolve o lado do *consumidor*, não o da implementação. Opção de menor custo sem módulo novo: `Setting` em `identity` (o glossário agrupa `Setting` em "Identidade e transversais"), com os outros módulos dependendo só da interface — mas configuração de hotel e restaurante dentro do módulo de identidade é uma escolha de arquitetura, não de implementação | 1 |
+| 3 | **Qual `property_id` a leitura de `setting` usa?** A tabela tem `property_id NOT NULL` e única `(property_id, setting_key)`, mas o contrato do item 3 é `asText(String key)`, sem propriedade. Não existe conceito de "propriedade corrente" no código (o `DevUserSeeder` cria uma sob demanda). A v1 é de uma só propriedade, então ler por `setting_key` funciona hoje; o que falta é a regra: ler pela propriedade do usuário autenticado, ou assumir propriedade única e falhar se houver mais de uma linha para a chave | 1 |
