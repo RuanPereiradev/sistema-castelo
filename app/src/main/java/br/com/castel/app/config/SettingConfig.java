@@ -14,9 +14,18 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 @Configuration
 public class SettingConfig {
 
+    /**
+     * Resolved eagerly, while the context starts: an installation with more than one property brings
+     * the boot down here, not at the first read of a setting months from now.
+     */
     @Bean
-    public SettingRepository settingRepository(JdbcClient jdbcClient) {
-        return new CachingSettingRepository(new JdbcSettingRepository(jdbcClient));
+    public SinglePropertyId singlePropertyId(JdbcClient jdbcClient) {
+        return SinglePropertyId.resolvedFrom(jdbcClient);
+    }
+
+    @Bean
+    public SettingRepository settingRepository(JdbcClient jdbcClient, SinglePropertyId singlePropertyId) {
+        return new CachingSettingRepository(new JdbcSettingRepository(jdbcClient, singlePropertyId));
     }
 
     @Bean
