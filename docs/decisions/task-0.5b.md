@@ -16,7 +16,7 @@ que não for bloqueio crítico é registrado aqui e mergeado.
 | | |
 |---|---|
 | Branch | `task/0.5b-cross-cutting-foundation` |
-| Rodada atual | 0 — spec e briefing |
+| Rodada atual | 1 — implementação (DEV e TEST em paralelo a partir da spec) |
 | Build | não rodado nesta branch |
 | Testes | 884 herdados da 0.4 |
 
@@ -34,6 +34,7 @@ que não for bloqueio crítico é registrado aqui e mergeado.
 | 6 | 0 | Quando não há usuário autenticado no contexto (seed do dev, migration, job futuro), `created_by`/`updated_by` recebem um **UUID reservado de sistema**, constante e documentado — não `null` nem uma string mágica. Mantém a coluna `NOT NULL`, é rastreável nos dados e não quebra FK futura | pendente |
 | 7 | 0 | Interface `Settings` mora no **`shared-kernel`**, não em um `api/` novo no `app`: todos os módulos já dependem do shared-kernel e o projeto já tem diretório suficiente. Nenhum pacote novo nasce nesta task | pendente |
 | 8 | 0 | `created_by`/`updated_by` seguem **nullable** no banco, sem migration. Tornar `NOT NULL` custaria renumerar V3 a V9, já reservadas por task, por uma restrição que o `AuditorAware` garante em código. Esta task **não muda schema** | pendente |
+| 9 | 0 | Limite default de tamanho de corpo da requisição: **64 KB**, configurável por propriedade. O maior corpo legítimo previsto na v1 é uma comanda com muitos itens, na casa de poucos KB; 64 KB dá uma ordem de grandeza de folga e fecha o corpo de 2 MB aceito hoje no login | pendente |
 
 Valores de status: `pendente` · `implementado` · `revertida pela #n`
 
@@ -96,4 +97,4 @@ explícita dele.
 
 | # | Pergunta | Desde a rodada |
 |---|---|---|
-| 1 | Valor default do limite de tamanho de corpo. Proposta do agente: **64 KB** — o maior corpo legítimo previsto na v1 é uma comanda com muitos itens, na casa de poucos KB | 0 |
+| | Nenhum. O ponto do limite de corpo foi fechado pela decisão #9 | |

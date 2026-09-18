@@ -53,7 +53,7 @@ ir ao banco a cada chamada.
 - Filtro único, antes da cadeia de segurança, recusando corpo acima do limite com
   413 e `code` estável, sem ler o corpo inteiro na memória.
 - Vale para toda a API, não só para o login.
-- Limite configurável por propriedade, com default no `application.yml`.
+- Limite configurável por propriedade, default **64 KB** no `application.yml` (decisão #9).
 
 **Auditoria JPA**
 - `@EnableJpaAuditing` com `AuditorAware<UUID>` lendo o `CurrentUserProvider` do
@@ -208,7 +208,7 @@ de fatia vertical — não tem controller nem endpoint novo.
 |---|---|
 | Onde mora a interface `Settings` | `shared-kernel`, sem diretório novo — decisão #7 |
 | `created_by`/`updated_by` nullable, sem migration | aprovado — decisão #8 |
-| Valor default do limite de corpo | **em aberto**, proposta 64 KB |
+| Valor default do limite de corpo | 64 KB, configurável por propriedade — decisão #9 |
 
 ---
 
