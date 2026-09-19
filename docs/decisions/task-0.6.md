@@ -36,6 +36,11 @@ compilar e o ArchUnit segurar as fronteiras.
 | 3 | 0 | `ChargeRequest` leva **valor total e descrição**, um lançamento por comanda (`"Restaurante — comanda #142"`), não item a item. A conta do quarto fica legível e o detalhe do consumo continua vivo na comanda. Custo aceito: quem quiser conferir item a item pede a segunda via da comanda | pendente |
 | 4 | 0 | A colisão de nome se resolve do lado do pagamento: o adquirente recebe **`PaymentRequest`**, e `ChargeRequest` fica com o significado do glossário (Lançamento = `Charge`). Alinha com `Payment`, que já é o termo do glossário | pendente |
 
+| 5 | 0 | **Estorno existe na v1.** O `FolioFacade` ganha uma operação de estorno, em vez de deixar tudo para o `AdjustmentCharge` do `ADMIN`: lançamento no quarto errado é erro de operação corriqueiro, e obrigar o gerente a abrir um ajuste manual toda vez transformaria o caso comum em exceção burocrática. O estorno **não apaga** o lançamento: gera um lançamento contrário, com autor e motivo, seguindo o mesmo princípio que o plano já aplica ao item de comanda cancelado (seção 6.1). O histórico do folio é append-only | pendente |
+| 6 | 0 | `FolioView` devolve **a lista de lançamentos** junto com cabeçalho e saldo, não só o saldo. É o que a recepção precisa ver na tela de check-out. Sem paginação na v1: uma estadia lança uma diária por noite mais um lançamento por comanda (#3), o que mantém a conta na casa das dezenas de linhas | pendente |
+| 7 | 0 | **Nenhum evento de domínio nasce nesta task.** Evento se declara quando existe quem consuma; declarar agora congelaria um contrato sobre suposição. O `DomainEvent` do `shared-kernel` já está pronto para quando o primeiro consumidor aparecer | pendente |
+| 8 | 0 | **Na troca de quarto, o folio acompanha o hóspede.** O `code` do `FolioReference` passa a ser o quarto novo e o quarto anterior fica zerado — sem conta aberta atrelada a ele. O folio é o mesmo: os lançamentos feitos enquanto o hóspede estava no quarto antigo continuam nele, porque a conta é da estadia, não do quarto. Isso também responde ao quarto reaproveitado: a busca por número acha **apenas folio aberto**, e a estadia anterior, já fechada, nunca aparece | pendente |
+
 Valores de status: `pendente` · `implementado` · `revertida pela #n`
 
 ---
@@ -78,19 +83,16 @@ Esta task não cria endpoint. O contrato aqui é entre módulos, não com o fron
 
 | Limitação | Por que foi aceita | Mitigação futura |
 |---|---|---|
-| | | |
+| Depois de uma troca de quarto, o extrato mostra o quarto **atual** também nos lançamentos feitos enquanto o hóspede estava no anterior | O `FolioReference` é um só por folio, e a conta é da estadia, não do quarto (#8). O `created_at` de cada lançamento continua registrando quando ele aconteceu | Guardar o histórico de referências do folio, se a recepção sentir falta |
+| `FolioOwner` não distingue em compilação um `TabId` de um `ReservationId` | Consequência aceita da #1, para manter o grafo de dependências intacto. O `OwnerType` é a guarda, em tempo de execução | — |
+| `FolioView` não pagina | Uma estadia gera uma diária por noite mais um lançamento por comanda (#3, #6) | Paginar quando existir conta que justifique |
 
 ---
 
 ## Pontos em aberto
 
-Aguardando decisão do Ruan. Some daqui quando a resposta vier.
-
-Os pontos 1 a 4 foram fechados pelas decisões #1 a #4.
+Nenhum. Os pontos 1 a 4 foram fechados pelas decisões #1 a #4, e os pontos 5 a 8
+pelas decisões #5 a #8, todos na rodada 0.
 
 | # | Pergunta | Desde a rodada |
 |---|---|---|
-| 5 | **Estorno.** Comanda lançada no quarto por engano: o `FolioFacade` precisa de uma operação de estorno na v1, ou se resolve com `AdjustmentCharge` autorizado por `ADMIN`, que os invariantes do `Folio` já preveem? | 0 |
-| 6 | **O que `FolioView` devolve.** Só cabeçalho e saldo, ou a lista de lançamentos junto? Se vier a lista, ela pagina — e uma conta de estadia longa com muitos consumos é justamente o caso que pesa | 0 |
-| 7 | **Quais eventos de domínio nascem agora.** O plano diz que efeito colateral (notificar KDS, enviar e-mail) usa evento interno, não a chamada síncrona. Declarar quais eventos já nesta task congela o contrato; deixar para as ondas seguintes evita inventar evento que ninguém consome | 0 |
-| 8 | **Quem escreve e atualiza o `FolioReference`** (derivado da #2). Para o `billing` achar o folio pelo número do quarto sem saber o que é um quarto, o `hotel` precisa gravar o `code` no folio — no check-in, quando o quarto é atribuído. Isso levanta duas perguntas: o que acontece na **troca de quarto** no meio da estadia (o `code` muda e o histórico se perde?), e o que impede o número `102` de achar a estadia **anterior** daquele quarto, já encerrada | 0 |
