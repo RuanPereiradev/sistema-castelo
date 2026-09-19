@@ -21,9 +21,9 @@ compilar e o ArchUnit segurar as fronteiras.
 | | |
 |---|---|
 | Branch | `task/0.6-module-contracts` |
-| Rodada atual | 0 — levantamento, antes da primeira linha de código |
-| Build | não iniciado |
-| Testes | 976 herdados (shared-kernel 200, identity 552, app 224) |
+| Rodada atual | 1 — contratos escritos |
+| Build | `./mvnw clean install` **verde** — 977 testes, 0 falhas |
+| Testes | 977: os 976 herdados mais a regra A6 e sua prova de violação |
 
 ---
 
@@ -41,6 +41,13 @@ compilar e o ArchUnit segurar as fronteiras.
 | 7 | 0 | **Nenhum evento de domínio nasce nesta task.** Evento se declara quando existe quem consuma; declarar agora congelaria um contrato sobre suposição. O `DomainEvent` do `shared-kernel` já está pronto para quando o primeiro consumidor aparecer | pendente |
 | 8 | 0 | **Na troca de quarto, o folio acompanha o hóspede.** O `code` do `FolioReference` passa a ser o quarto novo e o quarto anterior fica zerado — sem conta aberta atrelada a ele. O folio é o mesmo: os lançamentos feitos enquanto o hóspede estava no quarto antigo continuam nele, porque a conta é da estadia, não do quarto. Isso também responde ao quarto reaproveitado: a busca por número acha **apenas folio aberto**, e a estadia anterior, já fechada, nunca aparece | pendente |
 
+| 9 | 1 | `ChargeRequest` **não carrega o autor**. A tentação era `postedBy`, mas isso levaria o `billing` a depender de `identity.api` pelo `UserId`, o que o grafo não permite — e seria uma segunda cópia de um fato que a auditoria da 0.5b já grava em `created_by`, livre para discordar da primeira. O precedente já existe: o `AuditorAware` do `shared-kernel` devolve `UUID`, não `UserId` | implementado |
+| 10 | 1 | `openStayFolio` recebe `(FolioOwner reservation, FolioReference reference)`, **sem o `guestId`** que a assinatura do plano trazia. O `billing` não faz nada com a identidade do hóspede: o dono da conta é a reserva, e o nome que a recepção lê está no `label` do `FolioReference`. Um parâmetro que ninguém usa vira um parâmetro que alguém preenche errado | implementado |
+| 11 | 1 | Aplicação da #4 ao método, não só ao DTO: `PaymentProcessor.createCharge` vira **`createPayment`**. Manter `createCharge(PaymentRequest)` deixaria o verbo e o objeto contando histórias diferentes | implementado |
+| 12 | 1 | Campo opcional de DTO de contrato é `Optional` **no próprio componente** do record, não campo nulo. Um `record` não deixa o acessor mudar o tipo de retorno, e a opcionalidade é parte do contrato: quem chama não deveria descobrir isso por um `null` | implementado |
+| 13 | 1 | Nasce a regra ArchUnit **A6**: o `api/` de um módulo não depende de `domain/`, `application/`, `infra/` nem `web/` do próprio módulo. Sem ela, um tipo do `api/` que alcançasse o interior arrastaria todo chamador junto, e a fronteira viraria decoração. Com prova de violação 1:1, como as outras | implementado |
+| 14 | 1 | O `FolioFacade` ganha duas operações que a assinatura do plano não tinha, porque as decisões #2 e #8 as exigem: `findOpenStayFolioByCode(String)` — como o garçom acha a conta pelo número do quarto — e `changeReference(FolioId, FolioReference)` — a troca de quarto | implementado |
+
 Valores de status: `pendente` · `implementado` · `revertida pela #n`
 
 ---
@@ -52,12 +59,12 @@ explícita do Ruan.
 
 Vindo da Onda 0, seção 6 (`docs/onda-0-execucao.md`, task 0.6):
 
-- [ ] `billing/api`: `FolioFacade`, `FolioView`, `ChargeRequest`, IDs tipados do módulo
-- [ ] `tax-invoice/api`: `TaxInvoiceIssuer` e seus DTOs (`TaxInvoiceRequest`, `IssuedInvoice`, `AccessKey`)
-- [ ] `payment/api`: `PaymentProcessor` e seus DTOs (`PaymentIntent`, `PaymentStatus`)
-- [ ] IDs tipados de cada módulo, sobre o `EntityId` do `shared-kernel`
-- [ ] Eventos de domínio compartilhados, sobre o `DomainEvent` do `shared-kernel`
-- [ ] Regra ArchUnit: `api/` não depende de `domain/` nem de `infra/` do próprio módulo
+- [x] `billing/api`: `FolioFacade`, `FolioView`, `ChargeRequest`, IDs tipados do módulo
+- [x] `tax-invoice/api`: `TaxInvoiceIssuer` e seus DTOs (`TaxInvoiceRequest`, `IssuedInvoice`, `AccessKey`)
+- [x] `payment/api`: `PaymentProcessor` e seus DTOs (`PaymentIntent`, `PaymentStatus`)
+- [x] IDs tipados de cada módulo, sobre o `EntityId` do `shared-kernel`
+- [x] Eventos de domínio compartilhados — **nenhum nasce agora** (#7)
+- [x] Regra ArchUnit: `api/` não depende de `domain/` nem de `infra/` do próprio módulo
 
 ### Fora do escopo
 
@@ -86,6 +93,7 @@ Esta task não cria endpoint. O contrato aqui é entre módulos, não com o fron
 | Depois de uma troca de quarto, o extrato mostra o quarto **atual** também nos lançamentos feitos enquanto o hóspede estava no anterior | O `FolioReference` é um só por folio, e a conta é da estadia, não do quarto (#8). O `created_at` de cada lançamento continua registrando quando ele aconteceu | Guardar o histórico de referências do folio, se a recepção sentir falta |
 | `FolioOwner` não distingue em compilação um `TabId` de um `ReservationId` | Consequência aceita da #1, para manter o grafo de dependências intacto. O `OwnerType` é a guarda, em tempo de execução | — |
 | `FolioView` não pagina | Uma estadia gera uma diária por noite mais um lançamento por comanda (#3, #6) | Paginar quando existir conta que justifique |
+| Os DTOs do `tax-invoice` são o mínimo para o porta existir | O que um emissor real precisa (códigos de serviço, regime tributário, detalhamento por item) depende de descobrir como a propriedade emite hoje, que o plano técnico mantém como pendência da v1.2 | Revisitar na v1.2, com a informação em mãos |
 
 ---
 
