@@ -22,8 +22,8 @@ compilar e o ArchUnit segurar as fronteiras.
 |---|---|
 | Branch | `task/0.6-module-contracts` |
 | Rodada atual | 1 — contratos escritos |
-| Build | `./mvnw clean install` **verde** — 977 testes, 0 falhas |
-| Testes | 977: os 976 herdados mais a regra A6 e sua prova de violação |
+| Build | `./mvnw clean install` **verde** — 978 testes, 0 falhas (shared-kernel 200, identity 552, app 226) |
+| Testes | 978: os 976 da 0.5b, mais o teste do `type` do PR #7, mais a regra A6 e sua prova de violação |
 
 ---
 
