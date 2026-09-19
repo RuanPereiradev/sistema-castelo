@@ -109,6 +109,32 @@ final class ArchitectureRules {
     }
 
     // ---------------------------------------------------------------------------------------
+    // A6 - a module's api package is the contract other modules program against, so it must not
+    // drag them into the module's own internals.
+    // ---------------------------------------------------------------------------------------
+
+    // Modules whose api package does not exist yet (hotel, restaurant) leave the rule with
+    // nothing to check, hence allowEmptyShould.
+    static void checkApiDoesNotDependOnInternalsOfSameModule(
+            JavaClasses classes, String basePackage, List<String> modules) {
+        for (String module : modules) {
+            ArchRule rule = noClasses()
+                    .that().resideInAPackage(basePackage + "." + module + ".api..")
+                    .should().dependOnClassesThat()
+                    .resideInAnyPackage(
+                            basePackage + "." + module + ".domain..",
+                            basePackage + "." + module + ".application..",
+                            basePackage + "." + module + ".infra..",
+                            basePackage + "." + module + ".web..")
+                    .because("the api package of module '" + module + "' is what other modules compile "
+                            + "against; a type of it that reaches into domain, application, infra or web "
+                            + "would pull every caller in with it")
+                    .allowEmptyShould(true);
+            rule.check(classes);
+        }
+    }
+
+    // ---------------------------------------------------------------------------------------
     // A2 - a module may only depend on the modules listed as allowed targets in its graph
     // entry (shared-kernel and the module itself are always allowed, because they are never
     // part of the iterated module list).

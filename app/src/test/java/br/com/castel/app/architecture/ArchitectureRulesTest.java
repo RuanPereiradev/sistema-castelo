@@ -53,6 +53,14 @@ class ArchitectureRulesTest {
     }
 
     @Test
+    @DisplayName("A6: a module's api package does not depend on that module's own internals")
+    void apiDoesNotDependOnInternalsOfSameModule() {
+        assertThatCode(() -> ArchitectureRules.checkApiDoesNotDependOnInternalsOfSameModule(
+                        productionClasses, ArchitectureRules.BASE_PACKAGE, ArchitectureRules.DOMAIN_MODULES))
+                .doesNotThrowAnyException();
+    }
+
+    @Test
     @DisplayName("A3: shared-kernel does not depend on any other module of the project")
     void sharedKernelDoesNotDependOnProjectModules() {
         ArchitectureRules.sharedKernelMustNotDependOnProjectModules(
