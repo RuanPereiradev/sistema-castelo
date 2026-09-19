@@ -1,5 +1,6 @@
 package br.com.castel.app.config;
 
+import br.com.castel.sharedkernel.CurrentProperty;
 import br.com.castel.sharedkernel.SettingRepository;
 import br.com.castel.sharedkernel.Settings;
 import br.com.castel.sharedkernel.SettingsFromRepository;
@@ -21,6 +22,12 @@ public class SettingConfig {
     @Bean
     public SinglePropertyId singlePropertyId(JdbcClient jdbcClient) {
         return SinglePropertyId.resolvedFrom(jdbcClient);
+    }
+
+    /** The port every module writing a {@code property_id} reads the value from. */
+    @Bean
+    public CurrentProperty currentProperty(SinglePropertyId singlePropertyId, JdbcClient jdbcClient) {
+        return new ResolvedCurrentProperty(singlePropertyId, jdbcClient);
     }
 
     @Bean

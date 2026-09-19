@@ -113,6 +113,13 @@
                     <artifactId>maven-compiler-plugin</artifactId>
                     <configuration>
                         <release>${java.version}</release>
+                        <!--
+                            Spring Boot's parent sets this, and declaring a configuration block here
+                            replaces it instead of adding to it. Without it Spring cannot read the
+                            name of a @PathVariable or @RequestParam from the bytecode, and every
+                            route carrying one answers 500 at runtime, never at build time.
+                        -->
+                        <parameters>true</parameters>
                     </configuration>
                 </plugin>
                 <plugin>
