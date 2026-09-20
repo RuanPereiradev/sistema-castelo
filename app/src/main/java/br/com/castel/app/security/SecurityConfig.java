@@ -40,8 +40,15 @@ import tools.jackson.databind.ObjectMapper;
 @EnableConfigurationProperties(CorsProperties.class)
 public class SecurityConfig {
 
+    /**
+     * Routes anyone reaches without a token.
+     *
+     * <p>{@code /public/**} is the whole open surface, kept under one prefix so that what is open is
+     * visible in one line instead of scattered among the authenticated routes. The menu lives there
+     * (task 0.8, decisions #1 and #2).
+     */
     private static final String[] PUBLIC_ROUTES = {
-        "/api/auth/login", "/api/auth/refresh", "/actuator/health"
+        "/api/auth/login", "/api/auth/refresh", "/actuator/health", "/public/**"
     };
 
     private final ObjectMapper objectMapper;

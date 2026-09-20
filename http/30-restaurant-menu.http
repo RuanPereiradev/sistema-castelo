@@ -1,0 +1,321 @@
+### Task 0.8 - cardapio: cadastro interno (ADMIN) e leitura publica (sem token)
+### Ambiente: selecione "dev" no IntelliJ HTTP Client, com http-client.env.json
+### + http-client.private.env.json (copie o .example). Ver http/README.md.
+###
+### Pre-requisito: aplicacao rodando no perfil "dev" com o seed habilitado.
+### Rode o arquivo inteiro, em ordem: o cenario 0 salva o token do admin e os
+### cenarios 1 e 2 salvam os ids que os demais usam.
+###
+### Nomes levam um sufixo aleatorio porque nome de categoria e de item e unico
+### por propriedade: sem isso, a segunda execucao do arquivo bateria em 409.
+
+
+### 0. Login do admin
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{
+  "username": "{{adminUsername}}",
+  "password": "{{password}}"
+}
+
+> {%
+    client.test("login do admin retorna 200", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+    });
+    client.global.set("accessToken", response.body.accessToken);
+    client.global.set("suffix", Math.random().toString(36).substring(2, 8));
+%}
+
+
+### 1. Cria a categoria
+POST {{host}}/api/restaurant/menu-categories
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "name": "Pizzas {{suffix}}",
+  "displayOrder": 1
+}
+
+> {%
+    client.test("categoria criada retorna 201", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+        client.assert(response.body.isActive === true, "categoria nasce ativa");
+    });
+    client.global.set("categoryId", response.body.id);
+%}
+
+
+### 2. Cria um item vendido por unidade
+POST {{host}}/api/restaurant/menu-items
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "categoryId": "{{categoryId}}",
+  "name": "Pizza Margherita {{suffix}}",
+  "description": "Molho, mucarela e manjericao",
+  "prepStation": "PIZZA",
+  "soldByWeight": false,
+  "price": "62.00"
+}
+
+> {%
+    client.test("item criado retorna 201 com preco em string decimal", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+        client.assert(response.body.price === "62.00", "preco deveria trafegar como string decimal");
+        client.assert(response.body.soldByWeight === false, "item nao e vendido por peso");
+        client.assert(response.body.isAvailable === true, "item nasce disponivel");
+        client.assert(response.body.prepStation === "PIZZA", "setor de preparo deveria ser PIZZA");
+    });
+    client.global.set("menuItemId", response.body.id);
+%}
+
+
+### 3. Cria um item vendido por peso
+POST {{host}}/api/restaurant/menu-items
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "categoryId": "{{categoryId}}",
+  "name": "Buffet por quilo {{suffix}}",
+  "prepStation": "KITCHEN",
+  "soldByWeight": true,
+  "price": "89.90"
+}
+
+> {%
+    client.test("item por peso retorna 201 com preco por quilo", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+        client.assert(response.body.soldByWeight === true, "item deveria ser vendido por peso");
+        client.assert(response.body.price === "89.90", "preco por quilo deveria ser 89.90");
+    });
+%}
+
+
+### 4. Janela de disponibilidade: pizza das 18:30 as 23:00
+POST {{host}}/api/restaurant/menu-items/{{menuItemId}}/availability-windows
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "startTime": "18:30",
+  "endTime": "23:00"
+}
+
+> {%
+    client.test("janela criada retorna 201 e aparece no item", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+        client.assert(response.body.availabilityWindows.length === 1, "item deveria ter uma janela");
+        client.assert(response.body.availabilityWindows[0].startTime === "18:30", "janela abre 18:30");
+    });
+%}
+
+
+### 5. Leitura publica do cardapio, SEM token
+# Esta e a rota que qualquer um com o link abre. Nao manda Authorization de proposito.
+GET {{host}}/public/menu
+
+> {%
+    client.test("cardapio publico responde 200 sem autenticacao", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+    });
+    client.test("cardapio publico nao vaza campo de operacao", function() {
+        var corpo = JSON.stringify(response.body);
+        client.assert(corpo.indexOf("prepStation") === -1, "prepStation nao deveria aparecer no cardapio publico");
+        client.assert(corpo.indexOf("isActive") === -1, "isActive nao deveria aparecer no cardapio publico");
+        client.assert(corpo.indexOf("createdBy") === -1, "createdBy nao deveria aparecer no cardapio publico");
+    });
+%}
+
+
+### 6. Troca de preco
+PATCH {{host}}/api/restaurant/menu-items/{{menuItemId}}/price
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "price": "68.00"
+}
+
+> {%
+    client.test("preco alterado retorna 200 com o valor novo", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        client.assert(response.body.price === "68.00", "preco deveria ser 68.00");
+    });
+%}
+
+
+### 7. A cozinha acabou: marca indisponivel
+POST {{host}}/api/restaurant/menu-items/{{menuItemId}}/unavailable
+Authorization: Bearer {{accessToken}}
+
+> {%
+    client.test("item marcado indisponivel retorna 200", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        client.assert(response.body.isAvailable === false, "item deveria estar indisponivel");
+    });
+%}
+
+
+### ------------------------------------------------------------------
+### Cenarios negativos
+### ------------------------------------------------------------------
+
+
+### 8. Nome repetido -> 409 MENU_ITEM_NAME_ALREADY_USED
+POST {{host}}/api/restaurant/menu-items
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "categoryId": "{{categoryId}}",
+  "name": "Pizza Margherita {{suffix}}",
+  "prepStation": "PIZZA",
+  "soldByWeight": false,
+  "price": "62.00"
+}
+
+> {%
+    client.test("nome repetido retorna 409 com code estavel", function() {
+        client.assert(response.status === 409, "esperado 409, recebido " + response.status);
+        client.assert(response.body.code === "MENU_ITEM_NAME_ALREADY_USED", "code deveria ser MENU_ITEM_NAME_ALREADY_USED");
+        client.assert(response.body.type === "about:blank", "type ausente no corpo de erro");
+        client.assert(response.body.instance === "/api/restaurant/menu-items", "instance deveria ser o caminho");
+    });
+%}
+
+
+### 9. Preco zero -> 422 INVALID_MENU_ITEM_PRICING
+POST {{host}}/api/restaurant/menu-items
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "categoryId": "{{categoryId}}",
+  "name": "Brinde {{suffix}}",
+  "prepStation": "BAR",
+  "soldByWeight": false,
+  "price": "0.00"
+}
+
+> {%
+    client.test("preco zero retorna 422 INVALID_MENU_ITEM_PRICING", function() {
+        client.assert(response.status === 422, "esperado 422, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_MENU_ITEM_PRICING", "code deveria ser INVALID_MENU_ITEM_PRICING");
+    });
+%}
+
+
+### 10. Nome em branco -> 400 VALIDATION_FAILED com a lista de campos
+POST {{host}}/api/restaurant/menu-items
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "categoryId": "{{categoryId}}",
+  "name": "   ",
+  "prepStation": "BAR",
+  "soldByWeight": false,
+  "price": "10.00"
+}
+
+> {%
+    client.test("nome em branco retorna 400 VALIDATION_FAILED", function() {
+        client.assert(response.status === 400, "esperado 400, recebido " + response.status);
+        client.assert(response.body.code === "VALIDATION_FAILED", "code deveria ser VALIDATION_FAILED");
+        client.assert(response.body.errors.length >= 1, "corpo deveria listar o campo invalido");
+        client.assert(response.body.errors[0].field === "name", "campo invalido deveria ser name");
+    });
+%}
+
+
+### 11. Categoria inexistente -> 404 MENU_CATEGORY_NOT_FOUND
+POST {{host}}/api/restaurant/menu-items
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "categoryId": "00000000-0000-0000-0000-0000000000ff",
+  "name": "Orfao {{suffix}}",
+  "prepStation": "BAR",
+  "soldByWeight": false,
+  "price": "10.00"
+}
+
+> {%
+    client.test("categoria inexistente retorna 404 MENU_CATEGORY_NOT_FOUND", function() {
+        client.assert(response.status === 404, "esperado 404, recebido " + response.status);
+        client.assert(response.body.code === "MENU_CATEGORY_NOT_FOUND", "code deveria ser MENU_CATEGORY_NOT_FOUND");
+    });
+%}
+
+
+### 12. Item inexistente -> 404 MENU_ITEM_NOT_FOUND
+GET {{host}}/api/restaurant/menu-items/00000000-0000-0000-0000-0000000000ff
+Authorization: Bearer {{accessToken}}
+
+> {%
+    client.test("item inexistente retorna 404 MENU_ITEM_NOT_FOUND", function() {
+        client.assert(response.status === 404, "esperado 404, recebido " + response.status);
+        client.assert(response.body.code === "MENU_ITEM_NOT_FOUND", "code deveria ser MENU_ITEM_NOT_FOUND");
+    });
+%}
+
+
+### 13. Cadastro sem token -> 401 AUTHENTICATION_REQUIRED
+# A leitura e publica, o cadastro nao e.
+POST {{host}}/api/restaurant/menu-items
+Content-Type: application/json
+
+{
+  "categoryId": "{{categoryId}}",
+  "name": "Sem token {{suffix}}",
+  "prepStation": "BAR",
+  "soldByWeight": false,
+  "price": "10.00"
+}
+
+> {%
+    client.test("cadastro sem token retorna 401", function() {
+        client.assert(response.status === 401, "esperado 401, recebido " + response.status);
+        client.assert(response.body.code === "AUTHENTICATION_REQUIRED", "code deveria ser AUTHENTICATION_REQUIRED");
+    });
+%}
+
+
+### 14. Login do garcom, para o cenario 15
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{
+  "username": "{{waiterUsername}}",
+  "password": "{{password}}"
+}
+
+> {%
+    client.global.set("waiterToken", response.body.accessToken);
+%}
+
+
+### 15. Garcom tentando cadastrar -> 403 ACCESS_DENIED
+POST {{host}}/api/restaurant/menu-items
+Authorization: Bearer {{waiterToken}}
+Content-Type: application/json
+
+{
+  "categoryId": "{{categoryId}}",
+  "name": "Do garcom {{suffix}}",
+  "prepStation": "BAR",
+  "soldByWeight": false,
+  "price": "10.00"
+}
+
+> {%
+    client.test("garcom nao cadastra item: 403 ACCESS_DENIED", function() {
+        client.assert(response.status === 403, "esperado 403, recebido " + response.status);
+        client.assert(response.body.code === "ACCESS_DENIED", "code deveria ser ACCESS_DENIED");
+    });
+%}
