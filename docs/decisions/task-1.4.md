@@ -77,6 +77,3 @@ Nenhum: portas internas, sem rota.
 
 | # | Pergunta | Desde a rodada |
 |---|---|---|
-
-| # | Pergunta | Desde a rodada |
-|---|---|---|
