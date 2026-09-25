@@ -81,6 +81,8 @@ aqui, **pergunte antes de nomear**.
 | Consumo do restaurante | `TabCharge` |
 | Ajuste / desconto | `AdjustmentCharge` |
 | Pagamento | `Payment` |
+| Estorno de lançamento | `reverse` (lançamento oposto, `reversalOf`) |
+| Estorno de pagamento | `refund` (`PaymentStatus.REFUNDED`) |
 | Saldo | `balance()` |
 | Caixa | `CashDrawer` |
 | Turno de caixa | `CashDrawerSession` |
@@ -115,6 +117,7 @@ TabItemStatus      PENDING · IN_PREPARATION · READY · DELIVERED · CANCELLED
 PrepStation        KITCHEN · PIZZA · BAR
 FolioType          STAY · TAB
 FolioStatus        OPEN · CLOSED
+PaymentStatus      PENDING · CONFIRMED · FAILED · REFUNDED
 PaymentMethod      CASH · PIX · CREDIT_CARD · DEBIT_CARD · ROOM_ACCOUNT
 CashMovementType   OPENING_FLOAT · CASH_DROP · CASH_SUPPLY · CLOSING_COUNT
 Role               ADMIN · FRONT_DESK · WAITER · KITCHEN
