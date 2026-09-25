@@ -138,6 +138,7 @@ cash_drawer_session 1──N payment
 | V8 | `V8__cash.sql` | 2.4 | `cash_drawer_session`, `cash_movement` + FK em `payment` |
 | V9 | `V9__hotel_inventory.sql` | 1.1 | `room_type`, `room`, `rate_plan` |
 | V10 | `V10__reservation.sql` | 2.1 | `guest`, `daily_inventory`, `reservation`, `reservation_child`, `room_night` |
+| V11 | `V11__tab_closing.sql` | 3.2 | altera `tab` (`folio_id`, fechamento, destino, taxa de serviço, `guest_count`) e `tab_item` (`split_group`) |
 
 Renumerada em 2026-09-24 (decisão #5 da task 1.2): o restaurante é construído
 antes do hotel, e a versão segue a ordem de execução. Com o hotel no meio, o

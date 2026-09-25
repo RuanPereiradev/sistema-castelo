@@ -66,6 +66,8 @@ aqui, **pergunte antes de nomear**.
 | Adicional | `Modifier` |
 | Adicional oferecido no item | `MenuItemModifier` (`maxQuantity`) |
 | Observação do pedido | `specialInstructions` |
+| Pedido de um item na comanda | `TabItemOrder` |
+| Adicional escolhido no pedido | `ModifierChoice` (com `quantity`) |
 | Setor de preparo | `PrepStation` |
 | Janela de horário | `AvailabilityWindow` |
 | Taxa de serviço | `serviceCharge` |
