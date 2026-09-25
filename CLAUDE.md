@@ -64,6 +64,7 @@ aqui, **pergunte antes de nomear**.
 | Categoria | `MenuCategory` |
 | Variação (P/M/G) | `MenuItemVariant` |
 | Adicional | `Modifier` |
+| Adicional oferecido no item | `MenuItemModifier` (`maxQuantity`) |
 | Observação do pedido | `specialInstructions` |
 | Setor de preparo | `PrepStation` |
 | Janela de horário | `AvailabilityWindow` |

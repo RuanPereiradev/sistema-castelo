@@ -1,2 +1,6 @@
 - [BigDecimal untrusted input probes](review_bigdecimal_untrusted_input.md) — jshell probes for exponent DoS, guard-proving inputs; testing check identity/order is accepted as out of scope
 - [Spec location, approved decisions, stack state](project_spec_and_stack_state.md) — docs/task-*.md specs, shared-kernel approved limits, closed 0.2 items, no schema.dbml
+- [Task 1.2 review (menu variants/modifiers)](project_task_1_2_menu_variants.md) — round-1 gaps to recheck: decision log sections, #16 untested rules, element-collection re-offer
+- [ArchUnit suite pattern](archunit_suite_pattern.md) — 0.5a rule/proof 1:1 structure, entity-scan gotcha for test fixtures
+- [Task 0.4 identity findings](identity_auth_task_0_4_findings.md) — decisions in task-0.4.md, accepted limits, empty-password timing oracle
+- [Boot 4 / Security 7 runtime gotchas](spring_security_review_gotchas.md) — error dispatch, XFF, log leaks, probe recipe

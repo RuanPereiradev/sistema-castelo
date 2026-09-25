@@ -7,7 +7,9 @@ import br.com.castel.sharedkernel.AuditedEntity;
 import br.com.castel.sharedkernel.Money;
 import jakarta.persistence.AttributeOverride;
 import jakarta.persistence.CascadeType;
+import jakarta.persistence.CollectionTable;
 import jakarta.persistence.Column;
+import jakarta.persistence.ElementCollection;
 import jakarta.persistence.EmbeddedId;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -15,6 +17,7 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.OneToMany;
+import jakarta.persistence.OrderBy;
 import jakarta.persistence.Table;
 import java.time.DayOfWeek;
 import java.time.Instant;
@@ -23,9 +26,12 @@ import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
+import org.hibernate.annotations.Fetch;
+import org.hibernate.annotations.FetchMode;
 
 /**
  * Something the restaurant sells: a dish, a drink, a plate charged by weight.
@@ -39,6 +45,15 @@ import java.util.UUID;
  * kitchen ran out, and it wins over everything. The {@link AvailabilityWindow}s are the schedule:
  * an item with no window is served at any hour, and an item with windows is served only inside one
  * of them.
+ *
+ * <p>An item sold by unit may have {@link MenuItemVariant}s — small, medium, large — each with a
+ * price that replaces the price of the item (decision #1). While at least one variant is active the
+ * item {@linkplain #requiresVariant() requires} one on the order, is available only when one of them
+ * is, and is shown from its {@linkplain #startingPrice() cheapest active variant}. An item sold by
+ * weight takes neither variants nor modifiers (decision #3).
+ *
+ * <p>The {@link MenuItemModifier}s link the item to the {@link Modifier}s it offers. The item keeps
+ * only the id of each modifier: a modifier is an aggregate of its own.
  */
 @Entity
 @Table(name = "menu_item")
@@ -91,6 +106,21 @@ public class MenuItem extends AuditedEntity {
     @OneToMany(cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.EAGER)
     @JoinColumn(name = "menu_item_id", nullable = false)
     private List<AvailabilityWindow> availabilityWindows = new ArrayList<>();
+
+    /*
+     * Fetched by subselect: Hibernate refuses to join-fetch more than one list in the same query,
+     * and the availability windows already take that place.
+     */
+    @OneToMany(cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.EAGER)
+    @JoinColumn(name = "menu_item_id", nullable = false)
+    @OrderBy("displayOrder")
+    @Fetch(FetchMode.SUBSELECT)
+    private List<MenuItemVariant> variants = new ArrayList<>();
+
+    @ElementCollection(fetch = FetchType.EAGER)
+    @CollectionTable(name = "menu_item_modifier", joinColumns = @JoinColumn(name = "menu_item_id"))
+    @Fetch(FetchMode.SUBSELECT)
+    private List<MenuItemModifier> modifiers = new ArrayList<>();
 
     protected MenuItem() {
         // for JPA
@@ -171,6 +201,9 @@ public class MenuItem extends AuditedEntity {
         if (!available || !active) {
             return false;
         }
+        if (requiresVariant() && variants.stream().noneMatch(MenuItemVariant::isOrderable)) {
+            return false;
+        }
         if (availabilityWindows.isEmpty()) {
             return true;
         }
@@ -178,6 +211,37 @@ public class MenuItem extends AuditedEntity {
         DayOfWeek day = local.getDayOfWeek();
         LocalTime time = local.toLocalTime();
         return availabilityWindows.stream().anyMatch(window -> window.covers(day, time));
+    }
+
+    /**
+     * Whether the item is served at the given moment <em>and</em> the variant is active and has not
+     * run out.
+     *
+     * @throws MenuItemVariantNotFoundException if the item has no such variant
+     */
+    public boolean isVariantAvailableAt(MenuItemVariantId variantId, Instant moment, ZoneId propertyZone) {
+        MenuItemVariant variant = variant(variantId);
+        return isAvailableAt(moment, propertyZone) && variant.isOrderable();
+    }
+
+    /**
+     * Whether an order of this item has to name a variant: true while at least one variant is active
+     * (decision #2). Deactivating every variant brings the item back to its own price.
+     */
+    public boolean requiresVariant() {
+        return variants.stream().anyMatch(MenuItemVariant::isActive);
+    }
+
+    /**
+     * The price the menu shows as "from": the cheapest active variant, or the price of the item when
+     * it has none. Calculated on every read, never stored, so it cannot drift from the variants.
+     */
+    public Money startingPrice() {
+        return variants.stream()
+                .filter(MenuItemVariant::isActive)
+                .map(MenuItemVariant::unitPrice)
+                .min(Comparator.comparing(Money::amount))
+                .orElseGet(this::price);
     }
 
     /** The kitchen ran out. Overrides the schedule until someone puts it back. */
@@ -249,6 +313,113 @@ public class MenuItem extends AuditedEntity {
         availabilityWindows.clear();
     }
 
+    // ------------------------------------------------------------------ variants
+
+    /**
+     * Adds a variant, active and available, shown after the ones the item already has.
+     *
+     * @throws SoldByWeightRejectsVariantException if the item is sold by weight
+     * @throws InvalidMenuItemVariantNameException if the name is blank or too long for the column
+     * @throws InvalidMenuItemPricingException if the price is missing or not positive
+     * @throws DuplicateMenuItemVariantNameException if another variant of the item has this name
+     */
+    public MenuItemVariant addVariant(String name, Money unitPrice) {
+        if (soldByWeight) {
+            throw new SoldByWeightRejectsVariantException("An item sold by weight takes no variant");
+        }
+        String validName = requireValidVariantName(name);
+        Money validPrice = requirePositivePrice(unitPrice, "variant price");
+        rejectDuplicateVariantName(validName, null);
+        MenuItemVariant variant = MenuItemVariant.of(validName, validPrice, variants.size());
+        variants.add(variant);
+        return variant;
+    }
+
+    /**
+     * @throws MenuItemVariantNotFoundException if the item has no such variant
+     * @throws InvalidMenuItemVariantNameException if the name is blank or too long for the column
+     * @throws DuplicateMenuItemVariantNameException if another variant of the item has this name
+     */
+    public void renameVariant(MenuItemVariantId variantId, String newName) {
+        MenuItemVariant variant = variant(variantId);
+        String validName = requireValidVariantName(newName);
+        rejectDuplicateVariantName(validName, variant);
+        variant.rename(validName);
+    }
+
+    /**
+     * @throws MenuItemVariantNotFoundException if the item has no such variant
+     * @throws InvalidMenuItemPricingException if the price is missing or not positive
+     */
+    public void changeVariantPriceTo(MenuItemVariantId variantId, Money newPrice) {
+        MenuItemVariant variant = variant(variantId);
+        variant.changePriceTo(requirePositivePrice(newPrice, "variant price"));
+    }
+
+    /** This variant ran out; the others keep being served (decision #4). */
+    public void markVariantUnavailable(MenuItemVariantId variantId) {
+        variant(variantId).markUnavailable();
+    }
+
+    public void markVariantAvailable(MenuItemVariantId variantId) {
+        variant(variantId).markAvailable();
+    }
+
+    /** Off the menu. A variant is never removed: a tab item refers to it. */
+    public void deactivateVariant(MenuItemVariantId variantId) {
+        variant(variantId).deactivate();
+    }
+
+    public void activateVariant(MenuItemVariantId variantId) {
+        variant(variantId).activate();
+    }
+
+    /**
+     * @throws MenuItemVariantNotFoundException if the item has no such variant
+     */
+    public MenuItemVariant variant(MenuItemVariantId variantId) {
+        Objects.requireNonNull(variantId, "variantId");
+        return variants.stream()
+                .filter(variant -> variant.id().equals(variantId))
+                .findFirst()
+                .orElseThrow(() -> new MenuItemVariantNotFoundException(
+                        "Menu item " + id.value() + " has no variant " + variantId.value()));
+    }
+
+    // ------------------------------------------------------------------ modifiers
+
+    /**
+     * Offers a modifier on this item, up to {@code maxQuantity} per unit. Offering one already
+     * offered replaces its maximum quantity instead of linking it twice.
+     *
+     * @throws SoldByWeightRejectsModifierException if the item is sold by weight
+     * @throws InactiveModifierException if the modifier is deactivated
+     * @throws InvalidModifierMaxQuantityException if the quantity is outside 1 to 99
+     */
+    public void offerModifier(Modifier modifier, int maxQuantity) {
+        Objects.requireNonNull(modifier, "modifier");
+        if (soldByWeight) {
+            throw new SoldByWeightRejectsModifierException("An item sold by weight takes no modifier");
+        }
+        if (!modifier.isActive()) {
+            throw new InactiveModifierException("Modifier " + modifier.id().value() + " is deactivated");
+        }
+        MenuItemModifier link = MenuItemModifier.of(modifier.id(), maxQuantity);
+        modifiers.removeIf(existing -> existing.refersTo(modifier.id()));
+        modifiers.add(link);
+    }
+
+    /**
+     * @throws ModifierNotFoundException if the item does not offer this modifier
+     */
+    public void withdrawModifier(ModifierId modifierId) {
+        Objects.requireNonNull(modifierId, "modifierId");
+        if (!modifiers.removeIf(existing -> existing.refersTo(modifierId))) {
+            throw new ModifierNotFoundException(
+                    "Menu item " + id.value() + " does not offer modifier " + modifierId.value());
+        }
+    }
+
     // ------------------------------------------------------------------ guards
 
     private static void requireCommonFields(UUID propertyId, MenuCategoryId categoryId, PrepStation prepStation) {
@@ -267,6 +438,32 @@ public class MenuItem extends AuditedEntity {
                     "A menu item name takes at most " + MAXIMUM_NAME_LENGTH + " characters");
         }
         return trimmed;
+    }
+
+    private static String requireValidVariantName(String name) {
+        if (name == null || name.isBlank()) {
+            throw new InvalidMenuItemVariantNameException("A variant needs a name");
+        }
+        String trimmed = name.trim();
+        if (trimmed.length() > MenuItemVariant.MAXIMUM_NAME_LENGTH) {
+            throw new InvalidMenuItemVariantNameException(
+                    "A variant name takes at most " + MenuItemVariant.MAXIMUM_NAME_LENGTH + " characters");
+        }
+        return trimmed;
+    }
+
+    /**
+     * Unique within the item, ignoring letter case, among active and inactive variants alike: an
+     * inactive variant still holds its row, and {@code uk_variant_name} counts it. The variant being
+     * renamed does not compete with itself.
+     */
+    private void rejectDuplicateVariantName(String name, MenuItemVariant renamed) {
+        boolean taken = variants.stream()
+                .filter(variant -> variant != renamed)
+                .anyMatch(variant -> variant.name().equalsIgnoreCase(name));
+        if (taken) {
+            throw new DuplicateMenuItemVariantNameException("A variant named '" + name + "' already exists");
+        }
     }
 
     private static Money requirePositivePrice(Money price, String what) {
@@ -332,5 +529,15 @@ public class MenuItem extends AuditedEntity {
 
     public List<AvailabilityWindow> availabilityWindows() {
         return Collections.unmodifiableList(availabilityWindows);
+    }
+
+    /** Every variant, active or not, in display order. */
+    public List<MenuItemVariant> variants() {
+        return variants.stream().sorted(Comparator.comparingInt(MenuItemVariant::displayOrder)).toList();
+    }
+
+    /** The modifiers this item offers, whether or not they are active in the catalog. */
+    public List<MenuItemModifier> modifiers() {
+        return Collections.unmodifiableList(modifiers);
     }
 }

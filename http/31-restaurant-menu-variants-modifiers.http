@@ -1,0 +1,660 @@
+### Task 1.2 - cardapio completo: variacoes (P/M/G) e adicionais
+### Ambiente: selecione "dev" no IntelliJ HTTP Client, com http-client.env.json
+### + http-client.private.env.json (copie o .example). Ver http/README.md.
+###
+### Pre-requisito: aplicacao rodando no perfil "dev" com o seed habilitado.
+### Rode o arquivo inteiro, em ordem: os cenarios do caminho feliz salvam os ids
+### que os cenarios negativos usam.
+###
+### Nomes levam um sufixo aleatorio porque nome de categoria, de item e de
+### adicional e unico por propriedade: sem isso, a segunda execucao bateria em 409.
+
+
+### 0. Login do admin
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{
+  "username": "{{adminUsername}}",
+  "password": "{{password}}"
+}
+
+> {%
+    client.test("login do admin retorna 200", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+    });
+    client.global.set("accessToken", response.body.accessToken);
+    client.global.set("suffix", Math.random().toString(36).substring(2, 8));
+%}
+
+
+### 1. Cria a categoria
+POST {{host}}/api/restaurant/menu-categories
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "name": "Pizzas e grelhados {{suffix}}",
+  "displayOrder": 1
+}
+
+> {%
+    client.test("categoria criada retorna 201", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+    });
+    client.global.set("categoryId", response.body.id);
+%}
+
+
+### 2. Cria a pizza, com preco proprio de referencia
+POST {{host}}/api/restaurant/menu-items
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "categoryId": "{{categoryId}}",
+  "name": "Pizza Calabresa {{suffix}}",
+  "prepStation": "PIZZA",
+  "soldByWeight": false,
+  "price": "50.00"
+}
+
+> {%
+    client.test("pizza criada retorna 201 sem variacoes nem adicionais", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+        client.assert(response.body.variants.length === 0, "item nasce sem variacao");
+        client.assert(response.body.modifiers.length === 0, "item nasce sem adicional");
+    });
+    client.global.set("pizzaId", response.body.id);
+%}
+
+
+### 3. Variacao P
+POST {{host}}/api/restaurant/menu-items/{{pizzaId}}/variants
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "name": "P",
+  "price": "45.00"
+}
+
+> {%
+    client.test("variacao P criada retorna 201, ativa e disponivel", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+        client.assert(response.body.variants.length === 1, "item deveria ter uma variacao");
+        client.assert(response.body.variants[0].price === "45.00", "preco da P deveria ser 45.00");
+        client.assert(response.body.variants[0].isActive === true, "variacao nasce ativa");
+        client.assert(response.body.variants[0].isAvailable === true, "variacao nasce disponivel");
+    });
+    client.global.set("smallVariantId", response.body.variants[0].id);
+%}
+
+
+### 4. Variacao M
+POST {{host}}/api/restaurant/menu-items/{{pizzaId}}/variants
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "name": "M",
+  "price": "55.00"
+}
+
+> {%
+    client.test("variacao M criada retorna 201", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+        client.assert(response.body.variants.length === 2, "item deveria ter duas variacoes");
+    });
+%}
+
+
+### 5. Variacao G
+POST {{host}}/api/restaurant/menu-items/{{pizzaId}}/variants
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "name": "G",
+  "price": "70.00"
+}
+
+> {%
+    client.test("variacao G criada retorna 201", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+        client.assert(response.body.variants.length === 3, "item deveria ter tres variacoes");
+    });
+    client.global.set("largeVariantId", response.body.variants[2].id);
+%}
+
+
+### 6. Troca o preco da G
+PATCH {{host}}/api/restaurant/menu-items/{{pizzaId}}/variants/{{largeVariantId}}
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "price": "72.00"
+}
+
+> {%
+    client.test("preco da G alterado, nome mantido", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        client.assert(response.body.variants[2].price === "72.00", "preco da G deveria ser 72.00");
+        client.assert(response.body.variants[2].name === "G", "nome da G nao deveria mudar");
+    });
+%}
+
+
+### 7. Cadastra o adicional "borda recheada"
+POST {{host}}/api/restaurant/modifiers
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "name": "Borda recheada {{suffix}}",
+  "price": "12.00"
+}
+
+> {%
+    client.test("adicional criado retorna 201 e nasce ativo", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+        client.assert(response.body.price === "12.00", "preco deveria ser 12.00");
+        client.assert(response.body.isActive === true, "adicional nasce ativo");
+    });
+    client.global.set("stuffedCrustId", response.body.id);
+%}
+
+
+### 8. Oferece a borda na pizza, ate 1 por pizza
+PUT {{host}}/api/restaurant/menu-items/{{pizzaId}}/modifiers/{{stuffedCrustId}}
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "maxQuantity": 1
+}
+
+> {%
+    client.test("borda oferecida na pizza", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        client.assert(response.body.modifiers.length === 1, "pizza deveria oferecer um adicional");
+        client.assert(response.body.modifiers[0].maxQuantity === 1, "maxQuantity deveria ser 1");
+    });
+%}
+
+
+### 9. Oferece de novo: atualiza o maxQuantity, nao duplica
+PUT {{host}}/api/restaurant/menu-items/{{pizzaId}}/modifiers/{{stuffedCrustId}}
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "maxQuantity": 2
+}
+
+> {%
+    client.test("oferecer de novo atualiza o limite", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        client.assert(response.body.modifiers.length === 1, "nao deveria duplicar o vinculo");
+        client.assert(response.body.modifiers[0].maxQuantity === 2, "maxQuantity deveria ser 2");
+    });
+%}
+
+
+### 10. Cria a picanha, para o adicional sem custo
+POST {{host}}/api/restaurant/menu-items
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "categoryId": "{{categoryId}}",
+  "name": "Picanha na chapa {{suffix}}",
+  "prepStation": "KITCHEN",
+  "soldByWeight": false,
+  "price": "89.00"
+}
+
+> {%
+    client.test("picanha criada retorna 201", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+    });
+    client.global.set("steakId", response.body.id);
+%}
+
+
+### 11. Cadastra o adicional "ponto da carne" a preco zero
+POST {{host}}/api/restaurant/modifiers
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "name": "Ponto da carne {{suffix}}",
+  "price": "0.00"
+}
+
+> {%
+    client.test("adicional de preco zero e aceito", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+        client.assert(response.body.price === "0.00", "preco zero deveria sair 0.00");
+    });
+    client.global.set("doneLevelId", response.body.id);
+%}
+
+
+### 12. Oferece o ponto da carne na picanha
+PUT {{host}}/api/restaurant/menu-items/{{steakId}}/modifiers/{{doneLevelId}}
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "maxQuantity": 1
+}
+
+> {%
+    client.test("ponto da carne oferecido na picanha", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        client.assert(response.body.modifiers.length === 1, "picanha deveria oferecer um adicional");
+    });
+%}
+
+
+### 13. Acabou a G: esgota so ela
+POST {{host}}/api/restaurant/menu-items/{{pizzaId}}/variants/{{largeVariantId}}/unavailable
+Authorization: Bearer {{accessToken}}
+
+> {%
+    client.test("G esgotada, continua ativa", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        client.assert(response.body.variants[2].isAvailable === false, "G deveria estar esgotada");
+        client.assert(response.body.variants[2].isActive === true, "esgotar nao desativa");
+        client.assert(response.body.isAvailable === true, "o item continua disponivel");
+    });
+%}
+
+
+### 14. Leitura publica do cardapio, SEM token
+GET {{host}}/public/menu
+
+> {%
+    function findItem(name) {
+        for (var c = 0; c < response.body.categories.length; c++) {
+            var items = response.body.categories[c].items;
+            for (var i = 0; i < items.length; i++) {
+                if (items[i].name === name) return items[i];
+            }
+        }
+        return null;
+    }
+    var suffix = client.global.get("suffix");
+    var pizza = findItem("Pizza Calabresa " + suffix);
+    var steak = findItem("Picanha na chapa " + suffix);
+
+    client.test("cardapio publico responde 200 sem autenticacao", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+    });
+    client.test("pizza aparece com o preco 'a partir de' da menor variacao", function() {
+        client.assert(pizza !== null, "pizza deveria estar no cardapio");
+        client.assert(pizza.price === "45.00", "preco da vitrine deveria ser o da P, 45.00");
+        client.assert(pizza.availableNow === true, "pizza continua disponivel com P e M");
+        client.assert(pizza.variants.length === 3, "tres variacoes ativas");
+    });
+    client.test("G esgotada aparece indisponivel, P disponivel", function() {
+        client.assert(pizza.variants[2].name === "G", "G e a terceira");
+        client.assert(pizza.variants[2].availableNow === false, "G deveria estar indisponivel");
+        client.assert(pizza.variants[0].availableNow === true, "P deveria estar disponivel");
+    });
+    client.test("adicionais com preco em string decimal, zero sai 0.00", function() {
+        client.assert(pizza.modifiers[0].price === "12.00", "borda deveria custar 12.00");
+        client.assert(pizza.modifiers[0].maxQuantity === 2, "borda ate 2");
+        client.assert(steak.modifiers[0].price === "0.00", "ponto da carne deveria sair 0.00");
+        client.assert(steak.price === "89.00", "sem variacao, vale o preco do item");
+    });
+%}
+
+
+### 15. Retira o ponto da carne da picanha
+DELETE {{host}}/api/restaurant/menu-items/{{steakId}}/modifiers/{{doneLevelId}}
+Authorization: Bearer {{accessToken}}
+
+> {%
+    client.test("adicional retirado do item", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        client.assert(response.body.modifiers.length === 0, "picanha nao deveria oferecer adicional");
+    });
+%}
+
+
+### 16. Lista o catalogo de adicionais
+GET {{host}}/api/restaurant/modifiers
+Authorization: Bearer {{accessToken}}
+
+> {%
+    client.test("catalogo lista os adicionais", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        client.assert(response.body.length >= 2, "catalogo deveria ter ao menos os dois criados aqui");
+    });
+%}
+
+
+### ------------------------------------------------------------------
+### Cenarios negativos: um por codigo de erro
+### ------------------------------------------------------------------
+
+
+### 17. Variacao inexistente -> 404 MENU_ITEM_VARIANT_NOT_FOUND
+PATCH {{host}}/api/restaurant/menu-items/{{pizzaId}}/variants/00000000-0000-0000-0000-0000000000ff
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "price": "10.00"
+}
+
+> {%
+    client.test("variacao inexistente retorna 404", function() {
+        client.assert(response.status === 404, "esperado 404, recebido " + response.status);
+        client.assert(response.body.code === "MENU_ITEM_VARIANT_NOT_FOUND", "code deveria ser MENU_ITEM_VARIANT_NOT_FOUND");
+    });
+%}
+
+
+### 18. Nome de variacao repetido, em outra caixa -> 409 MENU_ITEM_VARIANT_NAME_ALREADY_USED
+POST {{host}}/api/restaurant/menu-items/{{pizzaId}}/variants
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "name": "p",
+  "price": "40.00"
+}
+
+> {%
+    client.test("nome repetido ignorando maiusculas retorna 409", function() {
+        client.assert(response.status === 409, "esperado 409, recebido " + response.status);
+        client.assert(response.body.code === "MENU_ITEM_VARIANT_NAME_ALREADY_USED", "code deveria ser MENU_ITEM_VARIANT_NAME_ALREADY_USED");
+    });
+%}
+
+
+### 19. Nome de variacao em branco -> 422 INVALID_MENU_ITEM_VARIANT_NAME
+POST {{host}}/api/restaurant/menu-items/{{pizzaId}}/variants
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "name": "   ",
+  "price": "40.00"
+}
+
+> {%
+    client.test("nome em branco retorna 422", function() {
+        client.assert(response.status === 422, "esperado 422, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_MENU_ITEM_VARIANT_NAME", "code deveria ser INVALID_MENU_ITEM_VARIANT_NAME");
+    });
+%}
+
+
+### 20. Variacao com preco zero -> 422 INVALID_MENU_ITEM_PRICING
+POST {{host}}/api/restaurant/menu-items/{{pizzaId}}/variants
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "name": "Brotinho",
+  "price": "0.00"
+}
+
+> {%
+    client.test("preco zero na variacao retorna 422", function() {
+        client.assert(response.status === 422, "esperado 422, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_MENU_ITEM_PRICING", "code deveria ser INVALID_MENU_ITEM_PRICING");
+    });
+%}
+
+
+### 21. Cria um item vendido por peso, para os cenarios 22 e 23
+POST {{host}}/api/restaurant/menu-items
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "categoryId": "{{categoryId}}",
+  "name": "Buffet por quilo {{suffix}}",
+  "prepStation": "KITCHEN",
+  "soldByWeight": true,
+  "price": "89.90"
+}
+
+> {%
+    client.test("item por peso criado", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+    });
+    client.global.set("buffetId", response.body.id);
+%}
+
+
+### 22. Variacao em item vendido por peso -> 422 SOLD_BY_WEIGHT_REJECTS_VARIANT
+POST {{host}}/api/restaurant/menu-items/{{buffetId}}/variants
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "name": "Prato grande",
+  "price": "40.00"
+}
+
+> {%
+    client.test("item por peso recusa variacao", function() {
+        client.assert(response.status === 422, "esperado 422, recebido " + response.status);
+        client.assert(response.body.code === "SOLD_BY_WEIGHT_REJECTS_VARIANT", "code deveria ser SOLD_BY_WEIGHT_REJECTS_VARIANT");
+    });
+%}
+
+
+### 23. Adicional em item vendido por peso -> 422 SOLD_BY_WEIGHT_REJECTS_MODIFIER
+PUT {{host}}/api/restaurant/menu-items/{{buffetId}}/modifiers/{{stuffedCrustId}}
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "maxQuantity": 1
+}
+
+> {%
+    client.test("item por peso recusa adicional", function() {
+        client.assert(response.status === 422, "esperado 422, recebido " + response.status);
+        client.assert(response.body.code === "SOLD_BY_WEIGHT_REJECTS_MODIFIER", "code deveria ser SOLD_BY_WEIGHT_REJECTS_MODIFIER");
+    });
+%}
+
+
+### 24. Adicional inexistente -> 404 MODIFIER_NOT_FOUND
+PUT {{host}}/api/restaurant/menu-items/{{pizzaId}}/modifiers/00000000-0000-0000-0000-0000000000ff
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "maxQuantity": 1
+}
+
+> {%
+    client.test("adicional inexistente retorna 404", function() {
+        client.assert(response.status === 404, "esperado 404, recebido " + response.status);
+        client.assert(response.body.code === "MODIFIER_NOT_FOUND", "code deveria ser MODIFIER_NOT_FOUND");
+    });
+%}
+
+
+### 25. Retirar adicional que o item nao oferece -> 404 MODIFIER_NOT_FOUND
+# O ponto da carne foi retirado da picanha no cenario 15.
+DELETE {{host}}/api/restaurant/menu-items/{{steakId}}/modifiers/{{doneLevelId}}
+Authorization: Bearer {{accessToken}}
+
+> {%
+    client.test("retirar adicional nao oferecido retorna 404", function() {
+        client.assert(response.status === 404, "esperado 404, recebido " + response.status);
+        client.assert(response.body.code === "MODIFIER_NOT_FOUND", "code deveria ser MODIFIER_NOT_FOUND");
+    });
+%}
+
+
+### 26. Nome de adicional repetido -> 409 MODIFIER_NAME_ALREADY_USED
+POST {{host}}/api/restaurant/modifiers
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "name": "Borda recheada {{suffix}}",
+  "price": "15.00"
+}
+
+> {%
+    client.test("nome de adicional repetido retorna 409", function() {
+        client.assert(response.status === 409, "esperado 409, recebido " + response.status);
+        client.assert(response.body.code === "MODIFIER_NAME_ALREADY_USED", "code deveria ser MODIFIER_NAME_ALREADY_USED");
+    });
+%}
+
+
+### 27. Nome de adicional em branco -> 422 INVALID_MODIFIER_NAME
+POST {{host}}/api/restaurant/modifiers
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "name": "",
+  "price": "5.00"
+}
+
+> {%
+    client.test("nome de adicional em branco retorna 422", function() {
+        client.assert(response.status === 422, "esperado 422, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_MODIFIER_NAME", "code deveria ser INVALID_MODIFIER_NAME");
+    });
+%}
+
+
+### 28. Adicional com preco negativo -> 422 INVALID_MODIFIER_PRICE
+POST {{host}}/api/restaurant/modifiers
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "name": "Desconto disfarcado {{suffix}}",
+  "price": "-1.00"
+}
+
+> {%
+    client.test("preco negativo retorna 422", function() {
+        client.assert(response.status === 422, "esperado 422, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_MODIFIER_PRICE", "code deveria ser INVALID_MODIFIER_PRICE");
+    });
+%}
+
+
+### 29. maxQuantity fora de 1 a 99 -> 422 INVALID_MODIFIER_MAX_QUANTITY
+PUT {{host}}/api/restaurant/menu-items/{{pizzaId}}/modifiers/{{stuffedCrustId}}
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "maxQuantity": 100
+}
+
+> {%
+    client.test("maxQuantity 100 retorna 422", function() {
+        client.assert(response.status === 422, "esperado 422, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_MODIFIER_MAX_QUANTITY", "code deveria ser INVALID_MODIFIER_MAX_QUANTITY");
+    });
+%}
+
+
+### 30. Cria e desativa um adicional, para o cenario 32
+POST {{host}}/api/restaurant/modifiers
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "name": "Catupiry {{suffix}}",
+  "price": "9.00"
+}
+
+> {%
+    client.test("adicional criado", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+    });
+    client.global.set("inactiveModifierId", response.body.id);
+%}
+
+
+### 31. Desativa o adicional
+POST {{host}}/api/restaurant/modifiers/{{inactiveModifierId}}/deactivate
+Authorization: Bearer {{accessToken}}
+
+> {%
+    client.test("adicional desativado", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        client.assert(response.body.isActive === false, "adicional deveria estar inativo");
+    });
+%}
+
+
+### 32. Oferecer adicional desativado -> 422 INACTIVE_MODIFIER
+PUT {{host}}/api/restaurant/menu-items/{{pizzaId}}/modifiers/{{inactiveModifierId}}
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "maxQuantity": 1
+}
+
+> {%
+    client.test("adicional inativo nao pode ser oferecido", function() {
+        client.assert(response.status === 422, "esperado 422, recebido " + response.status);
+        client.assert(response.body.code === "INACTIVE_MODIFIER", "code deveria ser INACTIVE_MODIFIER");
+    });
+%}
+
+
+### 33. Cadastro de adicional sem token -> 401 AUTHENTICATION_REQUIRED
+POST {{host}}/api/restaurant/modifiers
+Content-Type: application/json
+
+{
+  "name": "Sem token {{suffix}}",
+  "price": "1.00"
+}
+
+> {%
+    client.test("cadastro sem token retorna 401", function() {
+        client.assert(response.status === 401, "esperado 401, recebido " + response.status);
+        client.assert(response.body.code === "AUTHENTICATION_REQUIRED", "code deveria ser AUTHENTICATION_REQUIRED");
+    });
+%}
+
+
+### 34. Login do garcom, para o cenario 35
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{
+  "username": "{{waiterUsername}}",
+  "password": "{{password}}"
+}
+
+> {%
+    client.global.set("waiterToken", response.body.accessToken);
+%}
+
+
+### 35. Garcom tentando esgotar uma variacao -> 403 ACCESS_DENIED
+POST {{host}}/api/restaurant/menu-items/{{pizzaId}}/variants/{{smallVariantId}}/unavailable
+Authorization: Bearer {{waiterToken}}
+
+> {%
+    client.test("garcom nao mexe no cadastro: 403 ACCESS_DENIED", function() {
+        client.assert(response.status === 403, "esperado 403, recebido " + response.status);
+        client.assert(response.body.code === "ACCESS_DENIED", "code deveria ser ACCESS_DENIED");
+    });
+%}
