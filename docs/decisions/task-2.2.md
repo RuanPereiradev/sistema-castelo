@@ -20,7 +20,7 @@ cartão), limitação da 1.5 (desativar mesa com comanda aberta), 1.2 #2
 | | |
 |---|---|
 | Branch | `task/2.2-tab` |
-| Rodada atual | 1 — DEV e TEST juntos, review mecânico em andamento |
+| Rodada atual | 1 — review mecânico aplicado; aguarda revisão do Ruan e execução do `.http`. Entra na `main` **depois da 1.3** |
 | Build | `./mvnw clean verify` **verde** — 1262 testes, 0 falhas |
 | Testes | ~140 de unidade (restaurant) + integração com 3 cenários de concorrência. Orçamento: 1.989 linhas de teste para 2.407 de produção (0,83:1) |
 
@@ -51,6 +51,7 @@ cartão), limitação da 1.5 (desativar mesa com comanda aberta), 1.2 #2
 | 19 | 1 | Adicional repetido é checado na **lista inteira primeiro**; depois, escolha por escolha: oferecido → ativo → quantidade. Corrige a leitura "escolha por escolha" da #17, que deixava um adicional repetido e não oferecido responder `MODIFIER_NOT_OFFERED` | implementado |
 | 20 | 1 | Decisões do DEV: `TabOrigin.requireOpeningFields` recusa com `INVALID_TAB_OPENING` e o service escolhe a factory por `switch` na origem; `TabStatus.acceptsCancellation()` (só `OPEN`) para cancelar a comanda; `FOR KEY SHARE` por consulta nativa seguida do `findById`; tradução do índice lendo o nome da constraint da `ConstraintViolationException`; `delivered_at` é a única coluna do KDS já mapeada (#9); `diningTableLabel` preenchido no controller; `AddTabItemCommand.ChosenModifier` só transporta o pedido na camada de aplicação | implementado (DEV, aguarda Ruan) |
 | 21 | 1 | Adicional sem `quantity` no corpo vira 0 e é recusado com `INVALID_TAB_ITEM_MODIFIER_QUANTITY` — o front sempre envia a quantidade. Adicional sem `modifierId` = 400. 404 de item do cardápio ou adicional inexistente responde antes de `TAB_NOT_OPEN`, porque o service carrega antes de chamar o agregado | implementado (DEV, aguarda Ruan) |
+| 22 | 1 | Review mecânico: **cancelar item trava a linha do item `FOR UPDATE`** (depois do `FOR KEY SHARE` da comanda). Sem isso, dois cancelamentos simultâneos do mesmo item respondiam 200 e o segundo sobrescrevia autor e motivo (invariante 18). Provado com 5 cancelamentos simultâneos: um 200 e quatro `TAB_ITEM_ALREADY_CANCELLED`; sem a trava, os cinco davam 200. Não cria conflito entre garçons lançando itens novos. Também: adicionais do item ordenados por nome; `.http` lista as comandas sem filtro; cartão sorteado no teste de concorrência | implementado |
 
 Valores de status: `pendente` · `implementado` · `revertida pela #n`
 
