@@ -21,6 +21,10 @@ interface SpringDataTabRepository extends JpaRepository<Tab, TabId> {
     @Query(value = "select cast(id as varchar) from tab where id = :id for key share", nativeQuery = true)
     Optional<String> lockForKeyShare(@Param("id") UUID id);
 
+    /** Locks the row of the tab {@code FOR UPDATE}, which conflicts with {@code FOR KEY SHARE}. */
+    @Query(value = "select cast(id as varchar) from tab where id = :id for update", nativeQuery = true)
+    Optional<String> lockForUpdate(@Param("id") UUID id);
+
     @Query("select t from Tab t where t.propertyId = :propertyId "
             + "and t.status in (br.com.castel.restaurant.domain.TabStatus.OPEN, "
             + "br.com.castel.restaurant.domain.TabStatus.CLOSING) "

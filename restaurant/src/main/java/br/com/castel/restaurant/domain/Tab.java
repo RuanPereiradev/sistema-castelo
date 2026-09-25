@@ -256,16 +256,22 @@ public class Tab extends AuditedEntity {
         return variant;
     }
 
-    /** Choice by choice, in the order of the list: repeated, offered, active, quantity. */
+    /**
+     * A repeated modifier first, over the whole list; then choice by choice, in the order of the list:
+     * offered, active, quantity (decision #19).
+     */
     private static List<TabItemModifier> freezeModifiers(MenuItem menuItem, List<ModifierChoice> choices) {
         Set<ModifierId> seen = new HashSet<>();
-        List<TabItemModifier> frozen = new ArrayList<>();
         for (ModifierChoice choice : choices) {
             Modifier modifier = Objects.requireNonNull(choice.modifier(), "modifier");
             if (!seen.add(modifier.id())) {
                 throw new DuplicateTabItemModifierException(
                         "Modifier " + modifier.id().value() + " came twice in one order");
             }
+        }
+        List<TabItemModifier> frozen = new ArrayList<>();
+        for (ModifierChoice choice : choices) {
+            Modifier modifier = choice.modifier();
             MenuItemModifier link = menuItem.offeredModifier(modifier.id())
                     .orElseThrow(() -> new ModifierNotOfferedException(
                             "Menu item " + menuItem.id().value() + " does not offer modifier " + modifier.id().value()));

@@ -48,6 +48,11 @@ class JpaTabRepository implements TabRepository {
     }
 
     @Override
+    public Optional<Tab> findByIdForStatusChange(TabId id) {
+        return springData.lockForUpdate(id.value()).flatMap(locked -> springData.findById(id));
+    }
+
+    @Override
     public Tab add(Tab tab) {
         try {
             return springData.saveAndFlush(tab);

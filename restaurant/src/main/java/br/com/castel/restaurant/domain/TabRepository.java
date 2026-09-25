@@ -18,6 +18,13 @@ public interface TabRepository {
     Optional<Tab> findByIdForItemEntry(TabId id);
 
     /**
+     * The tab, with its row locked {@code FOR UPDATE} until the transaction ends, for a change of the
+     * tab's own status. It waits for every ordering in progress and they wait for it, so a tab is
+     * never cancelled while an item is being added to it (decision #18).
+     */
+    Optional<Tab> findByIdForStatusChange(TabId id);
+
+    /**
      * Inserts a new tab and flushes, so the partial unique indexes answer now (decision #14).
      *
      * @throws TabAlreadyOpenForDiningTableException if the table already has an active tab

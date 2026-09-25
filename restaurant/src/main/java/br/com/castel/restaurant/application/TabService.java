@@ -31,8 +31,10 @@ import org.springframework.transaction.annotation.Transactional;
  * moment comes from the {@link Clock} and the availability windows are read in the zone of the
  * property.
  *
- * <p>Ordering and cancelling load the tab {@code FOR KEY SHARE} (decision #15): two waiters on the
- * same tab do not wait for each other, and the closing of task 3.2 will wait for both.
+ * <p>Ordering and cancelling an item load the tab {@code FOR KEY SHARE} (decision #15): two waiters
+ * on the same tab do not wait for each other, and the closing of task 3.2 will wait for both.
+ * Cancelling the whole tab changes its status, so it loads it {@code FOR UPDATE} and waits for every
+ * ordering in progress (decision #18).
  */
 @Service
 public class TabService {
@@ -119,7 +121,7 @@ public class TabService {
     /** @throws TabNotFoundException if the tab does not exist */
     @Transactional
     public Tab cancel(TabId tabId, String reason) {
-        Tab tab = loadForItemEntry(tabId);
+        Tab tab = tabs.findByIdForStatusChange(tabId).orElseThrow(() -> notFound(tabId));
         tab.cancel(reason, auditorAware.currentAuditorId(), clock.instant());
         return tabs.save(tab);
     }
