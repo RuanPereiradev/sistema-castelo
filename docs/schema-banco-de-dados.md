@@ -717,86 +717,99 @@ CREATE INDEX idx_reservation_expiring
 
 ## 11. V7 — comandas
 
+Escrita pela task 2.2 (`docs/task-2.2-tab.md`, decisões #1, #2, #9, #10, #12).
+Fechamento, destino, taxa de serviço, `folio_id`, `guest_count` e `split_group`
+**não** estão na V7: chegam com a `V11__tab_closing.sql` da task 3.2 (seção 11.1).
+As colunas do KDS (3.5) e de transferência e junção (3.6) já nascem aqui, sem
+mapeamento até a task delas, para evitar `ALTER` concorrente na Onda 3. A exceção
+é `delivered_at`: o item vendido por peso nasce `DELIVERED` (#9) e a 2.2 já o grava.
+
 ```sql
+-- Task 2.2 - tabs: opening, items and cancellation.
+-- Closing, service charge, destination, folio_id and split_group arrive with
+-- task 3.2 (V11). KDS timestamps (3.5) and transfer and merge columns (3.6) are
+-- created here, unmapped until their task, except delivered_at: an item sold
+-- by weight is born DELIVERED (decision #9), so task 2.2 already writes it.
+
 CREATE TABLE tab (
-    id                      UUID PRIMARY KEY,
-    property_id             UUID         NOT NULL REFERENCES property(id),
-    origin                  VARCHAR(20)  NOT NULL
-                            CHECK (origin IN ('TABLE_SERVICE','SELF_SERVICE')),
-    dining_table_id         UUID         REFERENCES dining_table(id),
-    card_number             INTEGER,
-    status                  VARCHAR(20)  NOT NULL DEFAULT 'OPEN'
-                            CHECK (status IN ('OPEN','CLOSING','CLOSED',
-                                              'CANCELLED','MERGED')),
-    public_token            UUID         NOT NULL,
-    folio_id                UUID         REFERENCES folio(id),
-    merged_into_tab_id      UUID         REFERENCES tab(id),
-    merged_at               TIMESTAMPTZ,
-    merged_by               UUID,
-    destination             VARCHAR(20)
-                            CHECK (destination IN ('DIRECT_PAYMENT','ROOM_ACCOUNT')),
-    service_charge_applied  BOOLEAN      NOT NULL DEFAULT TRUE,
-    service_charge_rate     NUMERIC(5,4) NOT NULL DEFAULT 0.1000,
-    guest_count             SMALLINT     CHECK (guest_count > 0),
-    opened_by               UUID         NOT NULL,
-    opened_at               TIMESTAMPTZ  NOT NULL DEFAULT now(),
-    closing_started_at      TIMESTAMPTZ,
-    closed_at               TIMESTAMPTZ,
-    closed_by               UUID,
-    created_at              TIMESTAMPTZ  NOT NULL DEFAULT now(),
-    created_by              UUID,
-    updated_at              TIMESTAMPTZ,
-    updated_by              UUID,
+    id                  UUID PRIMARY KEY,
+    property_id         UUID        NOT NULL REFERENCES property(id),
+    origin              VARCHAR(20) NOT NULL
+                        CHECK (origin IN ('TABLE_SERVICE','SELF_SERVICE')),
+    dining_table_id     UUID        REFERENCES dining_table(id),
+    card_number         INTEGER     CHECK (card_number BETWEEN 1 AND 999),
+    status              VARCHAR(20) NOT NULL DEFAULT 'OPEN'
+                        CHECK (status IN ('OPEN','CLOSING','CLOSED','CANCELLED','MERGED')),
+    public_token        UUID        NOT NULL,
+    opened_by           UUID        NOT NULL,
+    opened_at           TIMESTAMPTZ NOT NULL,
+    merged_into_tab_id  UUID        REFERENCES tab(id),
+    merged_at           TIMESTAMPTZ,
+    merged_by           UUID,
+    cancelled_at        TIMESTAMPTZ,
+    cancelled_by        UUID,
+    cancellation_reason TEXT,
+    created_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
+    created_by          UUID,
+    updated_at          TIMESTAMPTZ,
+    updated_by          UUID,
     CONSTRAINT uk_tab_public_token UNIQUE (public_token),
     CONSTRAINT ck_tab_origin CHECK (
         (origin = 'TABLE_SERVICE' AND dining_table_id IS NOT NULL AND card_number IS NULL)
      OR (origin = 'SELF_SERVICE'  AND card_number     IS NOT NULL AND dining_table_id IS NULL)
     ),
-    CONSTRAINT ck_tab_closed CHECK (
-        status <> 'CLOSED'
-        OR (closed_at IS NOT NULL AND closed_by IS NOT NULL AND folio_id IS NOT NULL)
-    ),
     CONSTRAINT ck_tab_merged CHECK (
         status <> 'MERGED'
-        OR (merged_into_tab_id IS NOT NULL AND merged_at IS NOT NULL
-            AND merged_by IS NOT NULL)
+        OR (merged_into_tab_id IS NOT NULL AND merged_at IS NOT NULL AND merged_by IS NOT NULL)
     ),
-    CONSTRAINT ck_tab_no_self_merge CHECK (merged_into_tab_id <> id)
+    CONSTRAINT ck_tab_no_self_merge CHECK (merged_into_tab_id <> id),
+    CONSTRAINT ck_tab_cancelled CHECK (
+        status <> 'CANCELLED'
+        OR (cancelled_at IS NOT NULL AND cancelled_by IS NOT NULL AND cancellation_reason IS NOT NULL)
+    )
 );
 
 CREATE TABLE tab_item (
     id                      UUID PRIMARY KEY,
-    tab_id                  UUID          NOT NULL REFERENCES tab(id) ON DELETE CASCADE,
+    tab_id                  UUID          NOT NULL REFERENCES tab(id),
     menu_item_id            UUID          NOT NULL REFERENCES menu_item(id),
     menu_item_variant_id    UUID          REFERENCES menu_item_variant(id),
     item_name               VARCHAR(200)  NOT NULL,
-    quantity                SMALLINT      NOT NULL DEFAULT 1 CHECK (quantity > 0),
-    weight_grams            INTEGER       CHECK (weight_grams > 0),
-    unit_price              NUMERIC(12,2),
-    price_per_kilo          NUMERIC(12,2),
+    variant_name            VARCHAR(50),
+    quantity                SMALLINT      NOT NULL DEFAULT 1 CHECK (quantity BETWEEN 1 AND 999),
+    weight_grams            INTEGER       CHECK (weight_grams BETWEEN 1 AND 50000),
+    unit_price              NUMERIC(12,2) CHECK (unit_price > 0),
+    price_per_kilo          NUMERIC(12,2) CHECK (price_per_kilo > 0),
     line_total              NUMERIC(12,2) NOT NULL CHECK (line_total >= 0),
     service_chargeable      BOOLEAN       NOT NULL,
     special_instructions    TEXT,
-    split_group             SMALLINT      NOT NULL DEFAULT 1 CHECK (split_group > 0),
-    transferred_from_tab_id UUID          REFERENCES tab(id),
-    transferred_at          TIMESTAMPTZ,
-    transferred_by          UUID,
     prep_station            VARCHAR(20)   NOT NULL
                             CHECK (prep_station IN ('KITCHEN','PIZZA','BAR')),
     status                  VARCHAR(20)   NOT NULL DEFAULT 'PENDING'
                             CHECK (status IN ('PENDING','IN_PREPARATION','READY',
                                               'DELIVERED','CANCELLED')),
     ordered_by              UUID          NOT NULL,
-    ordered_at              TIMESTAMPTZ   NOT NULL DEFAULT now(),
+    ordered_at              TIMESTAMPTZ   NOT NULL,
     preparation_started_at  TIMESTAMPTZ,
     ready_at                TIMESTAMPTZ,
     delivered_at            TIMESTAMPTZ,
     cancelled_at            TIMESTAMPTZ,
     cancelled_by            UUID,
     cancellation_reason     TEXT,
+    transferred_from_tab_id UUID          REFERENCES tab(id),
+    transferred_at          TIMESTAMPTZ,
+    transferred_by          UUID,
+    created_at              TIMESTAMPTZ   NOT NULL DEFAULT now(),
+    created_by              UUID,
+    updated_at              TIMESTAMPTZ,
+    updated_by              UUID,
     CONSTRAINT ck_tab_item_pricing CHECK (
-        (weight_grams IS NOT NULL AND price_per_kilo IS NOT NULL AND unit_price IS NULL)
-     OR (weight_grams IS NULL     AND unit_price     IS NOT NULL)
+        (weight_grams IS NOT NULL AND price_per_kilo IS NOT NULL AND unit_price IS NULL
+            AND quantity = 1 AND menu_item_variant_id IS NULL)
+     OR (weight_grams IS NULL AND price_per_kilo IS NULL AND unit_price IS NOT NULL)
+    ),
+    CONSTRAINT ck_tab_item_variant_name CHECK (
+        (menu_item_variant_id IS NULL) = (variant_name IS NULL)
     ),
     CONSTRAINT ck_tab_item_cancelled CHECK (
         status <> 'CANCELLED'
@@ -810,26 +823,24 @@ CREATE TABLE tab_item (
 );
 
 CREATE TABLE tab_item_modifier (
-    id              UUID PRIMARY KEY,
     tab_item_id     UUID          NOT NULL REFERENCES tab_item(id) ON DELETE CASCADE,
     modifier_id     UUID          NOT NULL REFERENCES modifier(id),
     modifier_name   VARCHAR(100)  NOT NULL,
     price           NUMERIC(12,2) NOT NULL CHECK (price >= 0),
-    quantity        SMALLINT      NOT NULL DEFAULT 1 CHECK (quantity > 0)
+    quantity        SMALLINT      NOT NULL CHECK (quantity BETWEEN 1 AND 99),
+    PRIMARY KEY (tab_item_id, modifier_id)
 );
 
--- uma única comanda ativa por mesa
 CREATE UNIQUE INDEX idx_tab_open_by_table
     ON tab (dining_table_id)
     WHERE status IN ('OPEN','CLOSING') AND dining_table_id IS NOT NULL;
 
--- um único cartão de self-service ativo por vez
 CREATE UNIQUE INDEX idx_tab_open_by_card
     ON tab (property_id, card_number)
     WHERE status IN ('OPEN','CLOSING') AND card_number IS NOT NULL;
 
-CREATE INDEX idx_tab_item_by_tab   ON tab_item (tab_id);
-CREATE INDEX idx_tab_merged_into   ON tab (merged_into_tab_id)
+CREATE INDEX idx_tab_item_by_tab ON tab_item (tab_id);
+CREATE INDEX idx_tab_merged_into ON tab (merged_into_tab_id)
     WHERE merged_into_tab_id IS NOT NULL;
 CREATE INDEX idx_kds_queue
     ON tab_item (prep_station, status, ordered_at)
@@ -839,11 +850,23 @@ CREATE INDEX idx_kds_queue
 **Notas**
 
 - Os dois índices únicos parciais são a defesa real contra abrir duas comandas na
-  mesma mesa ou reutilizar um cartão em uso. Constraint normal não resolve,
-  porque a mesa pode ter várias comandas fechadas no histórico.
-- `item_name`, `unit_price`, `price_per_kilo` e `prep_station` são snapshots.
+  mesma mesa ou reutilizar um cartão em uso (#1). Constraint normal não resolve,
+  porque a mesa pode ter várias comandas fechadas no histórico. A aplicação não
+  consulta antes de abrir: grava, e traduz a violação de `idx_tab_open_by_table`
+  e `idx_tab_open_by_card` em 409. Comanda `CANCELLED` libera a mesa e o cartão.
+- `item_name`, `variant_name`, `unit_price`, `price_per_kilo`, `prep_station` e,
+  em `tab_item_modifier`, `modifier_name` e `price` são snapshots.
+- `line_total` é calculado uma vez no lançamento e nunca muda: por unidade,
+  `(unit_price + Σ price × quantity dos adicionais) × quantity`; por peso,
+  `weight_grams / 1000 × price_per_kilo`, centavo arredondado meio para cima.
+- `ck_tab_item_pricing`: item por peso tem quantidade 1, sem variação e sem
+  `unit_price`; item por unidade não tem `weight_grams` nem `price_per_kilo`.
 - `service_chargeable` é resolvido na inclusão do item, combinando `tab.origin`
   com `menu_item.service_charge_eligible`.
+- `tab_item_modifier` tem PK composta `(tab_item_id, modifier_id)`, no padrão da
+  `menu_item_modifier`: o mesmo adicional não se repete no item.
+- `tab_item.tab_id` não tem `ON DELETE CASCADE`: comanda nunca é apagada, só
+  cancelada (`cancelled_*`, #10). Item cancelado também fica para sempre.
 - `idx_kds_queue` é o índice que sustenta as três telas de KDS.
 
 **Transferência de item.** Mover um item entre comandas troca `tab_id` e grava
@@ -855,6 +878,31 @@ explicar por que a mesa 4 fechou com menos do que foi lançado nela.
 `transferred_from_tab_id` preenchido. A comanda absorvida nunca é apagada — ela
 some do salão porque o índice único parcial só considera `OPEN` e `CLOSING`, mas
 o histórico permanece.
+
+### 11.1 V11 — fechamento da comanda (task 3.2)
+
+O que saiu da V7 e entra na `V11__tab_closing.sql`, desenho original a revisar
+na spec da 3.2:
+
+```sql
+ALTER TABLE tab
+    ADD COLUMN folio_id               UUID         REFERENCES folio(id),
+    ADD COLUMN destination            VARCHAR(20)
+                                      CHECK (destination IN ('DIRECT_PAYMENT','ROOM_ACCOUNT')),
+    ADD COLUMN service_charge_applied BOOLEAN      NOT NULL DEFAULT TRUE,
+    ADD COLUMN service_charge_rate    NUMERIC(5,4) NOT NULL DEFAULT 0.1000,
+    ADD COLUMN guest_count            SMALLINT     CHECK (guest_count > 0),
+    ADD COLUMN closing_started_at     TIMESTAMPTZ,
+    ADD COLUMN closed_at              TIMESTAMPTZ,
+    ADD COLUMN closed_by              UUID,
+    ADD CONSTRAINT ck_tab_closed CHECK (
+        status <> 'CLOSED'
+        OR (closed_at IS NOT NULL AND closed_by IS NOT NULL AND folio_id IS NOT NULL)
+    );
+
+ALTER TABLE tab_item
+    ADD COLUMN split_group SMALLINT NOT NULL DEFAULT 1 CHECK (split_group > 0);
+```
 
 **Divisão de conta por item.** `split_group` agrupa os itens por pagante: todos
 em 1 por padrão, e no fechamento o operador redistribui. Cada grupo distinto

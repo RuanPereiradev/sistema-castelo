@@ -1,10 +1,12 @@
 package br.com.castel.restaurant.application;
 
 import br.com.castel.restaurant.domain.DiningTable;
+import br.com.castel.restaurant.domain.DiningTableHasOpenTabException;
 import br.com.castel.restaurant.domain.DiningTableId;
 import br.com.castel.restaurant.domain.DiningTableLabelAlreadyUsedException;
 import br.com.castel.restaurant.domain.DiningTableNotFoundException;
 import br.com.castel.restaurant.domain.DiningTableRepository;
+import br.com.castel.restaurant.domain.TabRepository;
 import br.com.castel.sharedkernel.CurrentProperty;
 import java.util.List;
 import org.springframework.stereotype.Service;
@@ -15,10 +17,13 @@ import org.springframework.transaction.annotation.Transactional;
 public class DiningTableService {
 
     private final DiningTableRepository diningTables;
+    private final TabRepository tabs;
     private final CurrentProperty currentProperty;
 
-    public DiningTableService(DiningTableRepository diningTables, CurrentProperty currentProperty) {
+    public DiningTableService(
+            DiningTableRepository diningTables, TabRepository tabs, CurrentProperty currentProperty) {
         this.diningTables = diningTables;
+        this.tabs = tabs;
         this.currentProperty = currentProperty;
     }
 
@@ -49,9 +54,22 @@ public class DiningTableService {
         return diningTables.save(diningTable);
     }
 
+    /**
+     * Takes the table off the floor.
+     *
+     * <p>A table with an {@code OPEN} or {@code CLOSING} tab is refused (decision #8 of task 2.2).
+     * Whether a table has an active tab is a rule about the set of tabs, not about the table, so it
+     * is checked here and not by the aggregate.
+     *
+     * @throws DiningTableNotFoundException if the table does not exist
+     * @throws DiningTableHasOpenTabException if the table has an active tab
+     */
     @Transactional
     public DiningTable deactivate(DiningTableId id) {
         DiningTable diningTable = load(id);
+        if (tabs.existsActiveOnDiningTable(id)) {
+            throw new DiningTableHasOpenTabException("Dining table " + id.value() + " has an open tab");
+        }
         diningTable.deactivate();
         return diningTables.save(diningTable);
     }
