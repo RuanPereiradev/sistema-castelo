@@ -362,6 +362,7 @@ CREATE TABLE folio (
     id              UUID PRIMARY KEY,
     property_id     UUID         NOT NULL REFERENCES property(id),
     folio_type      VARCHAR(10)  NOT NULL CHECK (folio_type IN ('STAY','TAB')),
+    owner_id        UUID         NOT NULL,
     status          VARCHAR(10)  NOT NULL DEFAULT 'OPEN'
                     CHECK (status IN ('OPEN','CLOSED')),
     reference_code  VARCHAR(20),
@@ -373,30 +374,42 @@ CREATE TABLE folio (
     created_by      UUID,
     updated_at      TIMESTAMPTZ,
     updated_by      UUID,
+    CONSTRAINT uk_folio_owner UNIQUE (folio_type, owner_id),
     CONSTRAINT ck_folio_closed CHECK (
         status <> 'CLOSED' OR (closed_at IS NOT NULL AND closed_by IS NOT NULL)
+    ),
+    CONSTRAINT ck_folio_stay_reference CHECK (
+        folio_type <> 'STAY'
+        OR (reference_code IS NOT NULL AND reference_label IS NOT NULL)
     )
 );
 
 CREATE TABLE charge (
-    id              UUID PRIMARY KEY,
-    folio_id        UUID          NOT NULL REFERENCES folio(id),
-    charge_type     VARCHAR(20)   NOT NULL
-                    CHECK (charge_type IN ('ROOM_NIGHT','TAB','ADJUSTMENT')),
-    amount          NUMERIC(12,2) NOT NULL,
-    description     VARCHAR(255)  NOT NULL,
-    source_id       UUID,
-    reference_date  DATE,
-    authorized_by   UUID,
-    reason          TEXT,
-    posted_at       TIMESTAMPTZ   NOT NULL DEFAULT now(),
-    posted_by       UUID          NOT NULL,
+    id                     UUID PRIMARY KEY,
+    folio_id               UUID          NOT NULL REFERENCES folio(id),
+    charge_type            VARCHAR(20)   NOT NULL
+                           CHECK (charge_type IN ('ROOM_NIGHT','TAB','ADJUSTMENT')),
+    amount                 NUMERIC(12,2) NOT NULL CHECK (amount <> 0),
+    description            VARCHAR(255)  NOT NULL,
+    source_id              UUID,
+    reference_date         DATE,
+    authorized_by          UUID,
+    reason                 TEXT,
+    reversal_of_charge_id  UUID          REFERENCES charge(id),
+    created_at             TIMESTAMPTZ   NOT NULL DEFAULT now(),
+    created_by             UUID,
+    updated_at             TIMESTAMPTZ,
+    updated_by             UUID,
+    CONSTRAINT uk_charge_reversal UNIQUE (reversal_of_charge_id),
     CONSTRAINT ck_charge_adjustment CHECK (
         charge_type <> 'ADJUSTMENT'
         OR (authorized_by IS NOT NULL AND reason IS NOT NULL)
     ),
     CONSTRAINT ck_charge_source CHECK (
         charge_type = 'ADJUSTMENT' OR source_id IS NOT NULL
+    ),
+    CONSTRAINT ck_charge_reversal_reason CHECK (
+        reversal_of_charge_id IS NULL OR reason IS NOT NULL
     )
 );
 
@@ -412,13 +425,24 @@ CREATE TABLE payment (
     idempotency_key         VARCHAR(100)  NOT NULL,
     external_reference      VARCHAR(255),
     payment_intent_id       UUID,
-    cash_drawer_session_id  UUID,
+    cash_drawer_session_id  UUID,          -- FK na V8 (task 2.4)
     paid_at                 TIMESTAMPTZ   NOT NULL DEFAULT now(),
     received_by             UUID,
+    refunded_at             TIMESTAMPTZ,
+    refunded_by             UUID,
+    refund_reason           TEXT,
+    created_at              TIMESTAMPTZ   NOT NULL DEFAULT now(),
+    created_by              UUID,
+    updated_at              TIMESTAMPTZ,
+    updated_by              UUID,
     CONSTRAINT uk_payment_idempotency UNIQUE (idempotency_key),
     CONSTRAINT uk_payment_intent      UNIQUE (payment_intent_id),
     CONSTRAINT ck_payment_operator CHECK (
         received_by IS NOT NULL OR payment_intent_id IS NOT NULL
+    ),
+    CONSTRAINT ck_payment_refunded CHECK (
+        status <> 'REFUNDED'
+        OR (refunded_at IS NOT NULL AND refunded_by IS NOT NULL AND refund_reason IS NOT NULL)
     )
 );
 
@@ -456,7 +480,7 @@ ALTER TABLE payment
 
 CREATE INDEX idx_charge_folio   ON charge (folio_id);
 CREATE INDEX idx_payment_folio  ON payment (folio_id);
-CREATE INDEX idx_folio_open_ref ON folio (property_id, reference_code)
+CREATE UNIQUE INDEX idx_folio_open_ref ON folio (property_id, reference_code)
     WHERE status = 'OPEN' AND folio_type = 'STAY';
 CREATE INDEX idx_intent_expiring
     ON payment_intent (expires_at) WHERE status IN ('CREATED','AWAITING_PAYMENT');
@@ -468,12 +492,27 @@ CREATE INDEX idx_intent_folio ON payment_intent (folio_id);
 - `charge` usa herança `SINGLE_TABLE` com `charge_type` como discriminador,
   mapeando `RoomNightCharge`, `TabCharge` e `AdjustmentCharge`.
 - `amount` **não** tem `CHECK > 0`: `AdjustmentCharge` pode ser negativo
-  (desconto ou estorno).
+  (desconto) e o estorno é o lançamento oposto, negativo. Tem `CHECK <> 0`:
+  lançamento de valor zero não existe.
 - `source_id` sem FK é intencional (ver seção 1.1).
+- `folio.owner_id` é o `FolioOwner` do `billing/api` (#1 da 0.6), sem FK pelo
+  mesmo motivo: `STAY` aponta para a reserva, `TAB` para a comanda.
+  `uk_folio_owner` garante um folio por dono (task 1.3).
+- `ck_folio_stay_reference`: folio `STAY` sempre tem `FolioReference`; folio
+  `TAB` não tem.
+- `charge` não tem `posted_at`/`posted_by`: o autor do lançamento é
+  `created_by` (#9 da 0.6), e o momento, `created_at`.
+- `reversal_of_charge_id` aponta o lançamento que o estorno desfaz. Único: um
+  lançamento se estorna uma vez só. O estorno exige `reason`.
+- `payment.refunded_*` registram o estorno de pagamento (`REFUNDED`), que
+  deixa de abater o saldo (task 1.3).
+- `payment.cash_drawer_session_id` nasce nulo e sem FK; a V8 (task 2.4) cria a
+  FK. `payment.payment_intent_id` fica sempre nulo até a v1.1.
 - `idempotency_key` único é o que impede o duplo clique do caixa gerar dois
   pagamentos.
 - `idx_folio_open_ref` é o índice que o `restaurant` usa para achar o folio pelo
-  número do quarto.
+  número do quarto. É **único**: dois folios `STAY` abertos com o mesmo código
+  deixariam a busca ambígua (#17 da 1.3).
 
 **Sobre `payment_intent`:** é o registro intermediário do pagamento online, tanto
 do QR code da comanda quanto do sinal da reserva. Três pontos de desenho:
