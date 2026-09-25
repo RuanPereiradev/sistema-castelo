@@ -1,6 +1,7 @@
 package br.com.castel.app.billing;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import br.com.castel.app.support.AbstractIntegrationTest;
 import br.com.castel.billing.api.ChargeId;
@@ -16,6 +17,7 @@ import br.com.castel.identity.api.Role;
 import br.com.castel.identity.domain.User;
 import br.com.castel.identity.domain.UserRepository;
 import br.com.castel.identity.infra.JwtTokenIssuer;
+import br.com.castel.sharedkernel.DomainException;
 import br.com.castel.sharedkernel.Money;
 import java.io.IOException;
 import java.net.URI;
@@ -25,6 +27,7 @@ import java.net.http.HttpResponse;
 import java.time.Clock;
 import java.util.Set;
 import java.util.UUID;
+import org.assertj.core.api.ThrowableAssert.ThrowingCallable;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -182,6 +185,74 @@ class FolioHttpIntegrationTest extends AbstractIntegrationTest {
         assertThat(folioFacade.findById(nextGuest).reference()).map(FolioReference::code).contains(oldCode);
     }
 
+    @Test
+    void shouldRefuseASecondFolioForTheSameOwner() {
+        FolioOwner reservation = FolioOwner.reservation(UUID.randomUUID());
+        FolioOwner tab = FolioOwner.tab(UUID.randomUUID());
+        folioFacade.openStayFolio(reservation, new FolioReference(uniqueCode(), "Room"));
+        folioFacade.openTabFolio(tab);
+
+        assertRefusedWith(
+                () -> folioFacade.openStayFolio(reservation, new FolioReference(uniqueCode(), "Room")),
+                "FOLIO_ALREADY_OPENED_FOR_OWNER");
+        assertRefusedWith(() -> folioFacade.openTabFolio(tab), "FOLIO_ALREADY_OPENED_FOR_OWNER");
+    }
+
+    @Test
+    void shouldRefuseAReferenceCodeHeldByAnotherOpenStayUntilThatStayCloses() {
+        String code = uniqueCode();
+        FolioId holder = folioFacade.openStayFolio(
+                FolioOwner.reservation(UUID.randomUUID()), new FolioReference(code, "Room " + code));
+        FolioId other = folioFacade.openStayFolio(
+                FolioOwner.reservation(UUID.randomUUID()), new FolioReference(uniqueCode(), "Room"));
+
+        assertThatThrownBy(() -> folioFacade.openStayFolio(
+                        FolioOwner.reservation(UUID.randomUUID()), new FolioReference(code, "Room " + code)))
+                .isInstanceOfSatisfying(DomainException.class, refused ->
+                        assertThat(refused.code()).isEqualTo("FOLIO_REFERENCE_ALREADY_IN_USE"))
+                .hasMessageNotContaining(code);
+        assertRefusedWith(
+                () -> folioFacade.changeReference(other, new FolioReference(code, "Room " + code)),
+                "FOLIO_REFERENCE_ALREADY_IN_USE");
+
+        folioFacade.close(holder);
+        FolioId nextGuest = folioFacade.openStayFolio(
+                FolioOwner.reservation(UUID.randomUUID()), new FolioReference(code, "Room " + code));
+
+        assertThat(folioFacade.findOpenStayFolioByCode(code)).map(FolioView::folioId).contains(nextGuest);
+    }
+
+    @Test
+    void shouldRefuseReversingTheSameChargeAgainOnALaterRequest() {
+        String frontDeskToken = accessTokenFor(createUser(Role.FRONT_DESK));
+        FolioId folioId = folioFacade.openTabFolio(FolioOwner.tab(UUID.randomUUID()));
+        ChargeId charge = folioFacade.post(folioId, new ChargeRequest(
+                Money.of("30.00"), "Restaurant - tab 9", ChargeSource.tab(UUID.randomUUID())));
+        String reversalPath = FOLIOS + "/" + folioId.value() + "/charges/" + charge.value() + "/reversal";
+        String reason = "{\"reason\":\"Posted twice\"}";
+        send(post(reversalPath, frontDeskToken, reason), 201);
+
+        assertThat(send(post(reversalPath, frontDeskToken, reason), 409).get("code").asString())
+                .isEqualTo("CHARGE_ALREADY_REVERSED");
+        assertThat(folioFacade.findById(folioId).charges()).hasSize(2);
+    }
+
+    @Test
+    void shouldRollBackAnAdjustmentThatTakesTheTotalOutOfRangeAndKeepTheFolioReadable() {
+        String adminToken = accessTokenFor(createUser(Role.ADMIN));
+        FolioId folioId = folioFacade.openTabFolio(FolioOwner.tab(UUID.randomUUID()));
+        String folioPath = FOLIOS + "/" + folioId.value();
+        send(post(folioPath + "/adjustments", adminToken, adjustment("9999999999.99")), 201);
+
+        assertThat(send(post(folioPath + "/adjustments", adminToken, adjustment("9999999999.99")), 422)
+                        .get("code").asString())
+                .isEqualTo("MONEY_OUT_OF_RANGE");
+
+        JsonNode folio = send(get(folioPath, adminToken), 200);
+        assertThat(folio.get("charges")).hasSize(1);
+        assertThat(folio.get("totalCharges").asString()).isEqualTo("9999999999.99");
+    }
+
     // ------------------------------------------------------------- fixtures
 
     private static JsonNode chargeWithId(JsonNode folio, String chargeId) {
@@ -191,6 +262,11 @@ class FolioHttpIntegrationTest extends AbstractIntegrationTest {
             }
         }
         throw new AssertionError("No charge " + chargeId + " in " + folio);
+    }
+
+    private static void assertRefusedWith(ThrowingCallable call, String code) {
+        assertThatThrownBy(call).isInstanceOfSatisfying(DomainException.class, refused ->
+                assertThat(refused.code()).isEqualTo(code));
     }
 
     private int paymentsUnder(String key) {

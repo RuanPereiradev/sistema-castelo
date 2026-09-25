@@ -206,6 +206,31 @@ class FolioPaymentTest {
         }
 
         @Test
+        void shouldReplayAPaymentAlreadyRefunded() {
+            Folio folio = stayFolio();
+            Payment original = folio.receive(PaymentMethod.PIX, money("50.00"), KEY, OPERATOR, LATER);
+            folio.refund(original.id(), "Pix devolvido", ADMIN, LATER);
+
+            Payment replay = folio.receive(PaymentMethod.PIX, money("50.00"), KEY, OPERATOR, LATER);
+
+            assertThat(replay).isSameAs(original);
+            assertThat(replay.status()).isEqualTo(PaymentStatus.REFUNDED);
+            assertThat(folio.payments()).hasSize(1);
+        }
+
+        @Test
+        void shouldRejectTheSameKeyWithDifferentDataAsReusedEvenOnAClosedFolio() {
+            Folio folio = tabFolio();
+            folio.post(consumption("50.00"));
+            folio.receive(PaymentMethod.CASH, money("50.00"), KEY, OPERATOR, LATER);
+            folio.close(OPERATOR, LATER);
+
+            assertRejectedWith(
+                    () -> folio.receive(PaymentMethod.CASH, money("40.00"), KEY, OPERATOR, LATER),
+                    IDEMPOTENCY_KEY_REUSED);
+        }
+
+        @Test
         void shouldRejectTheSameKeyWithADifferentAmount() {
             Folio folio = stayFolio();
             folio.receive(PaymentMethod.PIX, money("50.00"), KEY, OPERATOR, LATER);

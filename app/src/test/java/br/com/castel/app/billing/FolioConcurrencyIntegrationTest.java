@@ -1,6 +1,7 @@
 package br.com.castel.app.billing;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import br.com.castel.app.support.AbstractIntegrationTest;
 import br.com.castel.billing.api.ChargeRequest;
@@ -40,6 +41,8 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -80,6 +83,9 @@ class FolioConcurrencyIntegrationTest extends AbstractIntegrationTest {
     @Autowired
     private Clock clock;
 
+    @Autowired
+    private PlatformTransactionManager transactionManager;
+
     @Value("${app.security.jwt.secret}")
     private String jwtSecret;
 
@@ -108,6 +114,32 @@ class FolioConcurrencyIntegrationTest extends AbstractIntegrationTest {
         }
     }
 
+    /**
+     * The lock on each folio does not serialize two folios: the unique key on the payment decides,
+     * and the loser must answer the rule's code, never a 500.
+     */
+    @Test
+    void shouldAcceptTheKeyOnOneFolioAndRefuseItOnTheOtherWhenTwoFoliosRaceForIt() throws Exception {
+        String token = frontDeskToken();
+        for (int round = 0; round < ROUNDS; round++) {
+            FolioId first = tabFolioOwing("100.00");
+            FolioId second = tabFolioOwing("100.00");
+            String key = "key-" + UUID.randomUUID();
+
+            List<HttpResponse<String>> responses = runTogether(() -> pay(token, first, key), () -> pay(token, second, key));
+
+            assertThat(responses).extracting(HttpResponse::statusCode).containsExactlyInAnyOrder(201, 409);
+            HttpResponse<String> refused = responses.stream()
+                    .filter(response -> response.statusCode() == 409)
+                    .findFirst()
+                    .orElseThrow();
+            assertThat(jsonMapper.readTree(refused.body()).get("code").asString()).isEqualTo("IDEMPOTENCY_KEY_REUSED");
+            assertThat(jdbcTemplate.queryForObject(
+                            "select count(*) from payment where idempotency_key = ?", Integer.class, key))
+                    .isEqualTo(1);
+        }
+    }
+
     @Test
     void shouldNeverLeaveAClosedFolioWithABalanceWhenAChargeRacesTheClosing() throws Exception {
         for (int round = 0; round < ROUNDS; round++) {
@@ -130,7 +162,39 @@ class FolioConcurrencyIntegrationTest extends AbstractIntegrationTest {
         }
     }
 
+    /**
+     * The lock must read the folio as it stands once locked, even when the caller's transaction had
+     * read it before: otherwise the charge committed in between is invisible and the folio closes
+     * with a balance.
+     */
+    @Test
+    void shouldRefuseClosingWhenAChargeWasCommittedAfterTheSameTransactionReadTheFolio() {
+        FolioId folioId = tabFolioOwing("100.00");
+        folioService.receivePayment(folioId, PaymentMethod.CASH, Money.of("100.00"), "key-" + UUID.randomUUID());
+
+        assertThatThrownBy(() -> new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
+                    assertThat(folioFacade.balanceOf(folioId)).isEqualTo(Money.ZERO);
+                    postFromAnotherThread(folioId, "30.00");
+                    folioFacade.close(folioId);
+                }))
+                .isInstanceOfSatisfying(DomainException.class, refused ->
+                        assertThat(refused.code()).isEqualTo("FOLIO_BALANCE_NOT_ZERO"));
+
+        FolioView folio = folioFacade.findById(folioId);
+        assertThat(folio.status()).isEqualTo(FolioStatus.OPEN);
+        assertThat(folio.balance()).isEqualTo(Money.of("30.00"));
+    }
+
     // ------------------------------------------------------------- racing
+
+    /** Posts and commits in a transaction of its own, while the caller's one stays open. */
+    private void postFromAnotherThread(FolioId folioId, String amount) {
+        try {
+            executor.submit(() -> folioFacade.post(folioId, tabCharge(amount))).get(30, TimeUnit.SECONDS);
+        } catch (Exception failure) {
+            throw new IllegalStateException(failure);
+        }
+    }
 
     /** Starts both tasks and releases them at the same instant. */
     private <T> List<T> runTogether(Callable<T> first, Callable<T> second) throws Exception {

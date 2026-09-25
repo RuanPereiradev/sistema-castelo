@@ -18,7 +18,9 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Supplier;
+import org.hibernate.engine.spi.SessionImplementor;
 import org.hibernate.exception.ConstraintViolationException;
+import org.hibernate.persister.entity.EntityPersister;
 import org.springframework.stereotype.Repository;
 
 /**
@@ -36,7 +38,7 @@ class JpaFolioRepository implements FolioRepository {
             "uk_folio_owner",
             () -> new FolioAlreadyOpenedForOwnerException("The owner already has a folio"),
             "idx_folio_open_ref",
-            () -> new FolioReferenceAlreadyInUseException("Another open stay folio uses this reference code"),
+            () -> new FolioReferenceAlreadyInUseException(),
             "uk_payment_idempotency",
             () -> new IdempotencyKeyReusedException("The idempotency key was used by another payment"),
             "uk_charge_reversal",
@@ -55,9 +57,27 @@ class JpaFolioRepository implements FolioRepository {
         return springData.findById(id.value());
     }
 
+    /**
+     * Evicts the folio from the persistence context before locking it. A query that finds its row
+     * already in the context locks the row but hands back that instance, with the charges and
+     * payments read before the lock, so a charge committed in between would stay invisible and the
+     * folio could close with a balance. The eviction cascades to the charges and payments.
+     *
+     * <p>{@code refresh} with a lock would do the same in one step, but Hibernate 7 fails on it for
+     * the eager, subselect-fetched collections of the folio.
+     */
     @Override
     public Optional<Folio> findByIdForUpdate(FolioId id) {
+        loadedInstanceOf(id).ifPresent(entityManager::detach);
         return springData.findByIdForUpdate(id.value());
+    }
+
+    /** The folio already loaded in the current persistence context, without loading it. */
+    private Optional<Object> loadedInstanceOf(FolioId id) {
+        SessionImplementor session = entityManager.unwrap(SessionImplementor.class);
+        EntityPersister persister = session.getFactory().getMappingMetamodel().getEntityDescriptor(Folio.class);
+        return Optional.ofNullable(session.getPersistenceContextInternal()
+                .getEntity(session.generateEntityKey(id.value(), persister)));
     }
 
     @Override

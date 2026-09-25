@@ -98,7 +98,7 @@ public class FolioService implements FolioFacade {
     public ChargeId post(FolioId folioId, ChargeRequest charge) {
         Folio folio = loadForUpdate(folioId);
         Charge posted = folio.post(charge);
-        folios.save(folio);
+        saveReadable(folio);
         return posted.id();
     }
 
@@ -107,7 +107,7 @@ public class FolioService implements FolioFacade {
     public ChargeId reverse(FolioId folioId, ChargeId chargeId, String reason) {
         Folio folio = loadForUpdate(folioId);
         Charge reversal = folio.reverse(chargeId, reason);
-        folios.save(folio);
+        saveReadable(folio);
         return reversal.id();
     }
 
@@ -165,7 +165,7 @@ public class FolioService implements FolioFacade {
     public Folio refundPayment(FolioId folioId, PaymentId paymentId, String reason) {
         Folio folio = loadForUpdate(folioId);
         folio.refund(paymentId, reason, auditorAware.currentAuditorId(), clock.instant());
-        return folios.save(folio);
+        return saveReadable(folio);
     }
 
     /** The authenticated user authorizes the adjustment; the route guarantees an {@code ADMIN}. */
@@ -173,21 +173,21 @@ public class FolioService implements FolioFacade {
     public Folio postAdjustment(FolioId folioId, Money amount, String description, String reason) {
         Folio folio = loadForUpdate(folioId);
         folio.postAdjustment(amount, description, reason, auditorAware.currentAuditorId());
-        return folios.save(folio);
+        return saveReadable(folio);
     }
 
     @Transactional
     public Folio reverseCharge(FolioId folioId, ChargeId chargeId, String reason) {
         Folio folio = loadForUpdate(folioId);
         folio.reverse(chargeId, reason);
-        return folios.save(folio);
+        return saveReadable(folio);
     }
 
     @Transactional
     public Folio closeFolio(FolioId folioId) {
         Folio folio = loadForUpdate(folioId);
         folio.close(auditorAware.currentAuditorId(), clock.instant());
-        return folios.save(folio);
+        return saveReadable(folio);
     }
 
     // ------------------------------------------------------------------ internals
@@ -198,6 +198,17 @@ public class FolioService implements FolioFacade {
 
     private Folio loadForUpdate(FolioId folioId) {
         return folios.findByIdForUpdate(folioId).orElseThrow(() -> notFound(folioId));
+    }
+
+    /**
+     * Reads the totals before saving, inside the transaction. A write that takes a total or the
+     * balance out of the range of {@link Money} fails here with {@code MONEY_OUT_OF_RANGE} and rolls
+     * back, instead of committing a folio that no read could answer any more. The answer built from
+     * the returned folio after the commit reads the same totals.
+     */
+    private Folio saveReadable(Folio folio) {
+        folio.balance();
+        return folios.save(folio);
     }
 
     private Optional<Folio> findOpenStay(String referenceCode) {
@@ -219,7 +230,7 @@ public class FolioService implements FolioFacade {
         String code = folio.reference().orElseThrow().code();
         Optional<Folio> holder = folios.findOpenStayByReferenceCode(folio.propertyId(), code);
         if (holder.filter(other -> !other.id().equals(folio.id())).isPresent()) {
-            throw new FolioReferenceAlreadyInUseException("Another open stay folio uses reference code " + code);
+            throw new FolioReferenceAlreadyInUseException();
         }
     }
 
