@@ -83,6 +83,9 @@ a URL, o privado com a senha.
 | `01-auth-rate-limit.http` | 0.4 | Limite de falhas por par (IP, username) |
 | `02-auth-rate-limit-ip.http` | 0.4 | Limite de falhas por IP, somando os usernames |
 | `03-errors.http` | 0.5b | Corpos de erro RFC 7807: 404, 405, 400, 413, 401, 403 |
+| `30-restaurant-menu.http` | 0.8 | Categorias e itens do cardápio, preço, esgotar, janela de horário, `/public/menu` |
+| `31-restaurant-menu-variants-modifiers.http` | 1.2 | Variações, adicionais, esgotar variação, cardápio público com "a partir de" |
+| `32-restaurant-dining-tables.http` | 1.5 | Cadastro de mesas, ordem natural da lista, leitura pelo garçom, inativas |
 
 Numeração em ordem de execução sugerida. Cada task nova acrescenta o próximo
 número — a 0.8 traz o `30-restaurant-menu.http`.

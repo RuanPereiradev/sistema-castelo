@@ -4,3 +4,4 @@
 - [ArchUnit suite pattern](archunit_suite_pattern.md) — 0.5a rule/proof 1:1 structure, entity-scan gotcha for test fixtures
 - [Task 0.4 identity findings](identity_auth_task_0_4_findings.md) — decisions in task-0.4.md, accepted limits, empty-password timing oracle
 - [Boot 4 / Security 7 runtime gotchas](spring_security_review_gotchas.md) — error dispatch, XFF, log leaks, probe recipe
+- [Task 1.5 review (dining tables)](project_task_1_5_dining_table.md) — comparator probe recipe, area case tie-break divergence from #11, stale decision log
