@@ -1,0 +1,466 @@
+### Task 1.5 - mesas do restaurante
+### Ambiente: selecione "dev" no IntelliJ HTTP Client, com http-client.env.json
+### + http-client.private.env.json (copie o .example). Ver http/README.md.
+###
+### Pre-requisito: aplicacao rodando no perfil "dev" com o seed habilitado.
+### Rode o arquivo inteiro, em ordem: os cenarios do caminho feliz salvam os ids
+### que os cenarios negativos usam.
+###
+### A identificacao da mesa leva um sufixo aleatorio porque e unica por
+### propriedade, ignorando maiusculas: sem isso, a segunda execucao bateria em
+### 409. As listas sao filtradas pelo sufixo, para ignorar mesas de execucoes
+### anteriores.
+
+
+### 0. Login do admin
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{
+  "username": "{{adminUsername}}",
+  "password": "{{password}}"
+}
+
+> {%
+    client.test("login do admin retorna 200", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+    });
+    client.global.set("accessToken", response.body.accessToken);
+    client.global.set("suffix", Math.random().toString(36).substring(2, 8));
+%}
+
+
+### 1. Cria a Mesa 10 no Salao
+POST {{host}}/api/restaurant/dining-tables
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "label": "Mesa 10 {{suffix}}",
+  "seats": 4,
+  "area": "Salao"
+}
+
+> {%
+    client.test("mesa criada retorna 201, ativa", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+        client.assert(response.body.seats === 4, "seats deveria ser 4");
+        client.assert(response.body.area === "Salao", "area deveria ser Salao");
+        client.assert(response.body.isActive === true, "mesa nasce ativa");
+    });
+    client.global.set("table10Id", response.body.id);
+%}
+
+
+### 2. Cria a Mesa 2 no Salao, com espacos a aparar
+POST {{host}}/api/restaurant/dining-tables
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "label": "  Mesa 2 {{suffix}}  ",
+  "seats": 2,
+  "area": "  Salao  "
+}
+
+> {%
+    client.test("mesa criada com identificacao e area aparadas", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+        client.assert(response.body.label === "Mesa 2 " + client.global.get("suffix"), "label deveria vir aparado");
+        client.assert(response.body.area === "Salao", "area deveria vir aparada");
+    });
+    client.global.set("table2Id", response.body.id);
+%}
+
+
+### 3. Cria a V1 na Varanda
+POST {{host}}/api/restaurant/dining-tables
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "label": "V1 {{suffix}}",
+  "seats": 6,
+  "area": "Varanda"
+}
+
+> {%
+    client.test("V1 criada retorna 201", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+    });
+    client.global.set("verandaTableId", response.body.id);
+%}
+
+
+### 4. Cria uma mesa sem lugares e com area em branco
+POST {{host}}/api/restaurant/dining-tables
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "label": "Balcao {{suffix}}",
+  "area": "   "
+}
+
+> {%
+    client.test("mesa sem area retorna 201 com seats e area nulos", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+        client.assert(response.body.seats === null, "seats deveria ser null");
+        client.assert(response.body.area === null, "area em branco deveria virar null");
+    });
+%}
+
+
+### 5. Lista: por area (sem area por ultimo), depois ordem natural
+GET {{host}}/api/restaurant/dining-tables
+Authorization: Bearer {{accessToken}}
+
+> {%
+    const suffix = client.global.get("suffix");
+    const labels = response.body.map(function(table) { return table.label; })
+        .filter(function(label) { return label.endsWith(" " + suffix); });
+    client.test("lista ordenada: Mesa 2, Mesa 10, V1, Balcao", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        client.assert(JSON.stringify(labels) === JSON.stringify(["Mesa 2 " + suffix, "Mesa 10 " + suffix, "V1 " + suffix, "Balcao " + suffix]), "ordem recebida: " + JSON.stringify(labels));
+    });
+%}
+
+
+### 6. Le uma mesa
+GET {{host}}/api/restaurant/dining-tables/{{table10Id}}
+Authorization: Bearer {{accessToken}}
+
+> {%
+    client.test("mesa lida retorna 200", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        client.assert(response.body.label === "Mesa 10 " + client.global.get("suffix"), "label deveria ser Mesa 10");
+    });
+%}
+
+
+### 7. Edita a V1: cadastro inteiro, sem seats limpa os lugares
+PUT {{host}}/api/restaurant/dining-tables/{{verandaTableId}}
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "label": "V1 {{suffix}}",
+  "area": "Varanda coberta"
+}
+
+> {%
+    client.test("edicao substitui o cadastro inteiro", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        client.assert(response.body.seats === null, "seats ausente deveria limpar os lugares");
+        client.assert(response.body.area === "Varanda coberta", "area deveria ser Varanda coberta");
+    });
+%}
+
+
+### 8. Edita mudando so a caixa da propria identificacao
+PUT {{host}}/api/restaurant/dining-tables/{{verandaTableId}}
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "label": "v1 {{suffix}}",
+  "area": "Varanda"
+}
+
+> {%
+    client.test("a mesa nao concorre com ela mesma", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        client.assert(response.body.label === "v1 " + client.global.get("suffix"), "label deveria ser guardado como digitado");
+    });
+%}
+
+
+### 9. Desativa a V1
+POST {{host}}/api/restaurant/dining-tables/{{verandaTableId}}/deactivate
+Authorization: Bearer {{accessToken}}
+
+> {%
+    client.test("mesa desativada", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        client.assert(response.body.isActive === false, "mesa deveria estar inativa");
+    });
+%}
+
+
+### 10. Desativa de novo: idempotente
+POST {{host}}/api/restaurant/dining-tables/{{verandaTableId}}/deactivate
+Authorization: Bearer {{accessToken}}
+
+> {%
+    client.test("desativar de novo e aceito", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        client.assert(response.body.isActive === false, "mesa continua inativa");
+    });
+%}
+
+
+### 11. Lista padrao: so as ativas
+GET {{host}}/api/restaurant/dining-tables
+Authorization: Bearer {{accessToken}}
+
+> {%
+    const suffix = client.global.get("suffix");
+    const labels = response.body.map(function(table) { return table.label; })
+        .filter(function(label) { return label.endsWith(" " + suffix); });
+    client.test("lista padrao sem a V1", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        client.assert(JSON.stringify(labels) === JSON.stringify(["Mesa 2 " + suffix, "Mesa 10 " + suffix, "Balcao " + suffix]), "ordem recebida: " + JSON.stringify(labels));
+    });
+%}
+
+
+### 12. Lista com as inativas
+GET {{host}}/api/restaurant/dining-tables?includeInactive=true
+Authorization: Bearer {{accessToken}}
+
+> {%
+    const suffix = client.global.get("suffix");
+    const labels = response.body.map(function(table) { return table.label; })
+        .filter(function(label) { return label.endsWith(" " + suffix); });
+    client.test("lista com inativas traz a V1 no lugar dela", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        client.assert(JSON.stringify(labels) === JSON.stringify(["Mesa 2 " + suffix, "Mesa 10 " + suffix, "v1 " + suffix, "Balcao " + suffix]), "ordem recebida: " + JSON.stringify(labels));
+    });
+%}
+
+
+### 13. Reativa a V1
+POST {{host}}/api/restaurant/dining-tables/{{verandaTableId}}/activate
+Authorization: Bearer {{accessToken}}
+
+> {%
+    client.test("mesa reativada", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        client.assert(response.body.isActive === true, "mesa deveria estar ativa");
+    });
+%}
+
+
+### ------------------------------------------------------------------
+### Cenarios negativos: um por codigo de erro
+### ------------------------------------------------------------------
+
+
+### 14. Mesa inexistente -> 404 DINING_TABLE_NOT_FOUND
+GET {{host}}/api/restaurant/dining-tables/00000000-0000-0000-0000-0000000000ff
+Authorization: Bearer {{accessToken}}
+
+> {%
+    client.test("mesa inexistente retorna 404", function() {
+        client.assert(response.status === 404, "esperado 404, recebido " + response.status);
+        client.assert(response.body.code === "DINING_TABLE_NOT_FOUND", "code deveria ser DINING_TABLE_NOT_FOUND");
+    });
+%}
+
+
+### 15. Identificacao repetida, em outra caixa -> 409 DINING_TABLE_LABEL_ALREADY_USED
+POST {{host}}/api/restaurant/dining-tables
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "label": "MESA 2 {{suffix}}"
+}
+
+> {%
+    client.test("identificacao repetida retorna 409", function() {
+        client.assert(response.status === 409, "esperado 409, recebido " + response.status);
+        client.assert(response.body.code === "DINING_TABLE_LABEL_ALREADY_USED", "code deveria ser DINING_TABLE_LABEL_ALREADY_USED");
+    });
+%}
+
+
+### 16. Edita a Mesa 10 com a identificacao da Mesa 2 -> 409 DINING_TABLE_LABEL_ALREADY_USED
+PUT {{host}}/api/restaurant/dining-tables/{{table10Id}}
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "label": "mesa 2 {{suffix}}"
+}
+
+> {%
+    client.test("edicao para identificacao de outra mesa retorna 409", function() {
+        client.assert(response.status === 409, "esperado 409, recebido " + response.status);
+        client.assert(response.body.code === "DINING_TABLE_LABEL_ALREADY_USED", "code deveria ser DINING_TABLE_LABEL_ALREADY_USED");
+    });
+%}
+
+
+### 17. Identificacao em branco -> 422 INVALID_DINING_TABLE_LABEL
+POST {{host}}/api/restaurant/dining-tables
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "label": "   ",
+  "seats": 4
+}
+
+> {%
+    client.test("identificacao em branco retorna 422", function() {
+        client.assert(response.status === 422, "esperado 422, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_DINING_TABLE_LABEL", "code deveria ser INVALID_DINING_TABLE_LABEL");
+    });
+%}
+
+
+### 18. Identificacao com 21 caracteres -> 422 INVALID_DINING_TABLE_LABEL
+POST {{host}}/api/restaurant/dining-tables
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "label": "Mesa do canto 1234567"
+}
+
+> {%
+    client.test("identificacao acima de 20 caracteres retorna 422", function() {
+        client.assert(response.status === 422, "esperado 422, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_DINING_TABLE_LABEL", "code deveria ser INVALID_DINING_TABLE_LABEL");
+    });
+%}
+
+
+### 19. Zero lugares -> 422 INVALID_DINING_TABLE_SEATS
+POST {{host}}/api/restaurant/dining-tables
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "label": "Mesa 0 {{suffix}}",
+  "seats": 0
+}
+
+> {%
+    client.test("zero lugares retorna 422", function() {
+        client.assert(response.status === 422, "esperado 422, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_DINING_TABLE_SEATS", "code deveria ser INVALID_DINING_TABLE_SEATS");
+    });
+%}
+
+
+### 20. Mil lugares -> 422 INVALID_DINING_TABLE_SEATS
+POST {{host}}/api/restaurant/dining-tables
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "label": "Mesa 0 {{suffix}}",
+  "seats": 1000
+}
+
+> {%
+    client.test("mil lugares retorna 422", function() {
+        client.assert(response.status === 422, "esperado 422, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_DINING_TABLE_SEATS", "code deveria ser INVALID_DINING_TABLE_SEATS");
+    });
+%}
+
+
+### 21. Area com 51 caracteres -> 422 INVALID_DINING_TABLE_AREA
+POST {{host}}/api/restaurant/dining-tables
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "label": "Mesa 0 {{suffix}}",
+  "area": "Area externa ao lado da piscina, perto do deque 123"
+}
+
+> {%
+    client.test("area acima de 50 caracteres retorna 422", function() {
+        client.assert(response.status === 422, "esperado 422, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_DINING_TABLE_AREA", "code deveria ser INVALID_DINING_TABLE_AREA");
+    });
+%}
+
+
+### 22. Cadastro sem token -> 401 AUTHENTICATION_REQUIRED
+POST {{host}}/api/restaurant/dining-tables
+Content-Type: application/json
+
+{
+  "label": "Sem token {{suffix}}"
+}
+
+> {%
+    client.test("cadastro sem token retorna 401", function() {
+        client.assert(response.status === 401, "esperado 401, recebido " + response.status);
+        client.assert(response.body.code === "AUTHENTICATION_REQUIRED", "code deveria ser AUTHENTICATION_REQUIRED");
+    });
+%}
+
+
+### 23. Login do garcom, para os cenarios 24 a 27
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{
+  "username": "{{waiterUsername}}",
+  "password": "{{password}}"
+}
+
+> {%
+    client.global.set("waiterToken", response.body.accessToken);
+%}
+
+
+### 24. Garcom le a lista de mesas ativas
+GET {{host}}/api/restaurant/dining-tables
+Authorization: Bearer {{waiterToken}}
+
+> {%
+    const suffix = client.global.get("suffix");
+    const labels = response.body.map(function(table) { return table.label; })
+        .filter(function(label) { return label.endsWith(" " + suffix); });
+    client.test("garcom le a lista na mesma ordem", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        client.assert(JSON.stringify(labels) === JSON.stringify(["Mesa 2 " + suffix, "Mesa 10 " + suffix, "v1 " + suffix, "Balcao " + suffix]), "ordem recebida: " + JSON.stringify(labels));
+    });
+%}
+
+
+### 25. Garcom le uma mesa
+GET {{host}}/api/restaurant/dining-tables/{{table2Id}}
+Authorization: Bearer {{waiterToken}}
+
+> {%
+    client.test("garcom le uma mesa: 200", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+    });
+%}
+
+
+### 26. Garcom tentando cadastrar mesa -> 403 ACCESS_DENIED
+POST {{host}}/api/restaurant/dining-tables
+Authorization: Bearer {{waiterToken}}
+Content-Type: application/json
+
+{
+  "label": "Garcom {{suffix}}"
+}
+
+> {%
+    client.test("garcom nao cadastra mesa: 403 ACCESS_DENIED", function() {
+        client.assert(response.status === 403, "esperado 403, recebido " + response.status);
+        client.assert(response.body.code === "ACCESS_DENIED", "code deveria ser ACCESS_DENIED");
+    });
+%}
+
+
+### 27. Garcom pedindo as inativas -> 403 ACCESS_DENIED
+GET {{host}}/api/restaurant/dining-tables?includeInactive=true
+Authorization: Bearer {{waiterToken}}
+
+> {%
+    client.test("garcom nao ve as inativas: 403 ACCESS_DENIED", function() {
+        client.assert(response.status === 403, "esperado 403, recebido " + response.status);
+        client.assert(response.body.code === "ACCESS_DENIED", "code deveria ser ACCESS_DENIED");
+    });
+%}
