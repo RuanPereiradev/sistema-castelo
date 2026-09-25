@@ -630,12 +630,26 @@ Authorization: Bearer {{waiterToken}}
 %}
 
 
+### 34. Lista todas as comandas ativas, sem filtro: a da mesa esta la
+GET {{host}}/api/restaurant/tabs
+Authorization: Bearer {{waiterToken}}
+
+> {%
+    client.test("lista sem filtro", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        var tableTabId = client.global.get("tableTabId");
+        client.assert(response.body.some(function(tab) { return tab.id === tableTabId; }),
+            "a comanda da mesa deveria estar na lista");
+    });
+%}
+
+
 ### ------------------------------------------------------------------
 ### Cenarios negativos: um por codigo de erro
 ### ------------------------------------------------------------------
 
 
-### 34. Comanda inexistente -> 404 TAB_NOT_FOUND
+### 35. Comanda inexistente -> 404 TAB_NOT_FOUND
 GET {{host}}/api/restaurant/tabs/00000000-0000-0000-0000-0000000000ff
 Authorization: Bearer {{waiterToken}}
 
@@ -647,7 +661,7 @@ Authorization: Bearer {{waiterToken}}
 %}
 
 
-### 35. Item inexistente na comanda -> 404 TAB_ITEM_NOT_FOUND
+### 36. Item inexistente na comanda -> 404 TAB_ITEM_NOT_FOUND
 POST {{host}}/api/restaurant/tabs/{{tableTabId}}/items/00000000-0000-0000-0000-0000000000ff/cancel
 Authorization: Bearer {{waiterToken}}
 Content-Type: application/json
@@ -664,7 +678,7 @@ Content-Type: application/json
 %}
 
 
-### 36. Lanca em comanda cancelada -> 409 TAB_NOT_OPEN
+### 37. Lanca em comanda cancelada -> 409 TAB_NOT_OPEN
 POST {{host}}/api/restaurant/tabs/{{cardTabId}}/items
 Authorization: Bearer {{waiterToken}}
 Content-Type: application/json
@@ -682,7 +696,7 @@ Content-Type: application/json
 %}
 
 
-### 37. Segunda comanda na mesma mesa -> 409 TAB_ALREADY_OPEN_FOR_DINING_TABLE
+### 38. Segunda comanda na mesma mesa -> 409 TAB_ALREADY_OPEN_FOR_DINING_TABLE
 POST {{host}}/api/restaurant/tabs
 Authorization: Bearer {{waiterToken}}
 Content-Type: application/json
@@ -700,7 +714,7 @@ Content-Type: application/json
 %}
 
 
-### 38. Reabre o cartao sorteado: a comanda cancelada o liberou
+### 39. Reabre o cartao sorteado: a comanda cancelada o liberou
 POST {{host}}/api/restaurant/tabs
 Authorization: Bearer {{waiterToken}}
 Content-Type: application/json
@@ -718,7 +732,7 @@ Content-Type: application/json
 %}
 
 
-### 39. Segunda comanda no mesmo cartao -> 409 TAB_ALREADY_OPEN_FOR_CARD
+### 40. Segunda comanda no mesmo cartao -> 409 TAB_ALREADY_OPEN_FOR_CARD
 POST {{host}}/api/restaurant/tabs
 Authorization: Bearer {{waiterToken}}
 Content-Type: application/json
@@ -736,7 +750,7 @@ Content-Type: application/json
 %}
 
 
-### 40. Lanca uma pizza P no cartao reaberto, para cancelar duas vezes
+### 41. Lanca uma pizza P no cartao reaberto, para cancelar duas vezes
 POST {{host}}/api/restaurant/tabs/{{secondCardTabId}}/items
 Authorization: Bearer {{waiterToken}}
 Content-Type: application/json
@@ -755,7 +769,7 @@ Content-Type: application/json
 %}
 
 
-### 41. Cancela a pizza P
+### 42. Cancela a pizza P
 POST {{host}}/api/restaurant/tabs/{{secondCardTabId}}/items/{{smallPizzaItemId}}/cancel
 Authorization: Bearer {{waiterToken}}
 Content-Type: application/json
@@ -771,7 +785,7 @@ Content-Type: application/json
 %}
 
 
-### 42. Cancela de novo a pizza P -> 409 TAB_ITEM_ALREADY_CANCELLED
+### 43. Cancela de novo a pizza P -> 409 TAB_ITEM_ALREADY_CANCELLED
 POST {{host}}/api/restaurant/tabs/{{secondCardTabId}}/items/{{smallPizzaItemId}}/cancel
 Authorization: Bearer {{waiterToken}}
 Content-Type: application/json
@@ -788,7 +802,7 @@ Content-Type: application/json
 %}
 
 
-### 43. Cancela a comanda da mesa com a pizza ativa -> 409 TAB_HAS_ACTIVE_ITEMS
+### 44. Cancela a comanda da mesa com a pizza ativa -> 409 TAB_HAS_ACTIVE_ITEMS
 POST {{host}}/api/restaurant/tabs/{{tableTabId}}/cancel
 Authorization: Bearer {{waiterToken}}
 Content-Type: application/json
@@ -805,7 +819,7 @@ Content-Type: application/json
 %}
 
 
-### 44. Admin desativa a mesa com comanda aberta -> 409 DINING_TABLE_HAS_OPEN_TAB
+### 45. Admin desativa a mesa com comanda aberta -> 409 DINING_TABLE_HAS_OPEN_TAB
 POST {{host}}/api/restaurant/dining-tables/{{diningTableId}}/deactivate
 Authorization: Bearer {{adminToken}}
 
@@ -817,7 +831,7 @@ Authorization: Bearer {{adminToken}}
 %}
 
 
-### 45. TABLE_SERVICE com cartao e sem mesa -> 422 INVALID_TAB_OPENING
+### 46. TABLE_SERVICE com cartao e sem mesa -> 422 INVALID_TAB_OPENING
 POST {{host}}/api/restaurant/tabs
 Authorization: Bearer {{waiterToken}}
 Content-Type: application/json
@@ -835,7 +849,7 @@ Content-Type: application/json
 %}
 
 
-### 46. Cartao 1000 -> 422 INVALID_CARD_NUMBER
+### 47. Cartao 1000 -> 422 INVALID_CARD_NUMBER
 POST {{host}}/api/restaurant/tabs
 Authorization: Bearer {{waiterToken}}
 Content-Type: application/json
@@ -853,7 +867,7 @@ Content-Type: application/json
 %}
 
 
-### 47. Abre na mesa desativada -> 422 INACTIVE_DINING_TABLE
+### 48. Abre na mesa desativada -> 422 INACTIVE_DINING_TABLE
 POST {{host}}/api/restaurant/tabs
 Authorization: Bearer {{waiterToken}}
 Content-Type: application/json
@@ -871,7 +885,7 @@ Content-Type: application/json
 %}
 
 
-### 48. Mesa inexistente -> 404 DINING_TABLE_NOT_FOUND
+### 49. Mesa inexistente -> 404 DINING_TABLE_NOT_FOUND
 POST {{host}}/api/restaurant/tabs
 Authorization: Bearer {{waiterToken}}
 Content-Type: application/json
@@ -889,7 +903,7 @@ Content-Type: application/json
 %}
 
 
-### 49. Item esgotado -> 422 MENU_ITEM_UNAVAILABLE
+### 50. Item esgotado -> 422 MENU_ITEM_UNAVAILABLE
 POST {{host}}/api/restaurant/tabs/{{tableTabId}}/items
 Authorization: Bearer {{waiterToken}}
 Content-Type: application/json
@@ -906,7 +920,7 @@ Content-Type: application/json
 %}
 
 
-### 50. Item fora da janela de horario -> 422 MENU_ITEM_OUTSIDE_AVAILABILITY_WINDOW
+### 51. Item fora da janela de horario -> 422 MENU_ITEM_OUTSIDE_AVAILABILITY_WINDOW
 POST {{host}}/api/restaurant/tabs/{{tableTabId}}/items
 Authorization: Bearer {{waiterToken}}
 Content-Type: application/json
@@ -923,7 +937,7 @@ Content-Type: application/json
 %}
 
 
-### 51. Pizza sem variacao -> 422 MENU_ITEM_VARIANT_REQUIRED
+### 52. Pizza sem variacao -> 422 MENU_ITEM_VARIANT_REQUIRED
 POST {{host}}/api/restaurant/tabs/{{tableTabId}}/items
 Authorization: Bearer {{waiterToken}}
 Content-Type: application/json
@@ -940,7 +954,7 @@ Content-Type: application/json
 %}
 
 
-### 52. Variacao que nao e da pizza -> 404 MENU_ITEM_VARIANT_NOT_FOUND
+### 53. Variacao que nao e da pizza -> 404 MENU_ITEM_VARIANT_NOT_FOUND
 POST {{host}}/api/restaurant/tabs/{{tableTabId}}/items
 Authorization: Bearer {{waiterToken}}
 Content-Type: application/json
@@ -958,7 +972,7 @@ Content-Type: application/json
 %}
 
 
-### 53. Esgota a variacao P
+### 54. Esgota a variacao P
 POST {{host}}/api/restaurant/menu-items/{{pizzaId}}/variants/{{smallVariantId}}/unavailable
 Authorization: Bearer {{adminToken}}
 
@@ -969,7 +983,7 @@ Authorization: Bearer {{adminToken}}
 %}
 
 
-### 54. Pizza P esgotada -> 422 MENU_ITEM_VARIANT_UNAVAILABLE
+### 55. Pizza P esgotada -> 422 MENU_ITEM_VARIANT_UNAVAILABLE
 POST {{host}}/api/restaurant/tabs/{{tableTabId}}/items
 Authorization: Bearer {{waiterToken}}
 Content-Type: application/json
@@ -987,7 +1001,7 @@ Content-Type: application/json
 %}
 
 
-### 55. Devolve a variacao P
+### 56. Devolve a variacao P
 POST {{host}}/api/restaurant/menu-items/{{pizzaId}}/variants/{{smallVariantId}}/available
 Authorization: Bearer {{adminToken}}
 
@@ -998,7 +1012,7 @@ Authorization: Bearer {{adminToken}}
 %}
 
 
-### 56. Buffet sem peso -> 422 SOLD_BY_WEIGHT_REQUIRES_WEIGHT
+### 57. Buffet sem peso -> 422 SOLD_BY_WEIGHT_REQUIRES_WEIGHT
 POST {{host}}/api/restaurant/tabs/{{tableTabId}}/items
 Authorization: Bearer {{waiterToken}}
 Content-Type: application/json
@@ -1015,7 +1029,7 @@ Content-Type: application/json
 %}
 
 
-### 57. Buffet com quantidade 2 -> 422 SOLD_BY_WEIGHT_REJECTS_QUANTITY
+### 58. Buffet com quantidade 2 -> 422 SOLD_BY_WEIGHT_REJECTS_QUANTITY
 POST {{host}}/api/restaurant/tabs/{{tableTabId}}/items
 Authorization: Bearer {{waiterToken}}
 Content-Type: application/json
@@ -1034,7 +1048,7 @@ Content-Type: application/json
 %}
 
 
-### 58. Buffet com variacao -> 422 SOLD_BY_WEIGHT_REJECTS_VARIANT
+### 59. Buffet com variacao -> 422 SOLD_BY_WEIGHT_REJECTS_VARIANT
 POST {{host}}/api/restaurant/tabs/{{tableTabId}}/items
 Authorization: Bearer {{waiterToken}}
 Content-Type: application/json
@@ -1053,7 +1067,7 @@ Content-Type: application/json
 %}
 
 
-### 59. Buffet com adicional -> 422 SOLD_BY_WEIGHT_REJECTS_MODIFIER
+### 60. Buffet com adicional -> 422 SOLD_BY_WEIGHT_REJECTS_MODIFIER
 POST {{host}}/api/restaurant/tabs/{{tableTabId}}/items
 Authorization: Bearer {{waiterToken}}
 Content-Type: application/json
@@ -1072,7 +1086,7 @@ Content-Type: application/json
 %}
 
 
-### 60. Buffet acima de 50 kg -> 422 INVALID_WEIGHT
+### 61. Buffet acima de 50 kg -> 422 INVALID_WEIGHT
 POST {{host}}/api/restaurant/tabs/{{tableTabId}}/items
 Authorization: Bearer {{waiterToken}}
 Content-Type: application/json
@@ -1090,7 +1104,7 @@ Content-Type: application/json
 %}
 
 
-### 61. Pizza com peso -> 422 SOLD_BY_UNIT_REJECTS_WEIGHT
+### 62. Pizza com peso -> 422 SOLD_BY_UNIT_REJECTS_WEIGHT
 POST {{host}}/api/restaurant/tabs/{{tableTabId}}/items
 Authorization: Bearer {{waiterToken}}
 Content-Type: application/json
@@ -1109,7 +1123,7 @@ Content-Type: application/json
 %}
 
 
-### 62. Pizza com quantidade 1000 -> 422 INVALID_QUANTITY
+### 63. Pizza com quantidade 1000 -> 422 INVALID_QUANTITY
 POST {{host}}/api/restaurant/tabs/{{tableTabId}}/items
 Authorization: Bearer {{waiterToken}}
 Content-Type: application/json
@@ -1128,7 +1142,7 @@ Content-Type: application/json
 %}
 
 
-### 63. Adicional que a pizza nao oferece -> 422 MODIFIER_NOT_OFFERED
+### 64. Adicional que a pizza nao oferece -> 422 MODIFIER_NOT_OFFERED
 POST {{host}}/api/restaurant/tabs/{{tableTabId}}/items
 Authorization: Bearer {{waiterToken}}
 Content-Type: application/json
@@ -1147,7 +1161,7 @@ Content-Type: application/json
 %}
 
 
-### 64. Adicional desativado -> 422 INACTIVE_MODIFIER
+### 65. Adicional desativado -> 422 INACTIVE_MODIFIER
 POST {{host}}/api/restaurant/tabs/{{tableTabId}}/items
 Authorization: Bearer {{waiterToken}}
 Content-Type: application/json
@@ -1166,7 +1180,7 @@ Content-Type: application/json
 %}
 
 
-### 65. Tres bordas, acima do maximo de 2 -> 422 INVALID_TAB_ITEM_MODIFIER_QUANTITY
+### 66. Tres bordas, acima do maximo de 2 -> 422 INVALID_TAB_ITEM_MODIFIER_QUANTITY
 POST {{host}}/api/restaurant/tabs/{{tableTabId}}/items
 Authorization: Bearer {{waiterToken}}
 Content-Type: application/json
@@ -1185,7 +1199,7 @@ Content-Type: application/json
 %}
 
 
-### 66. A mesma borda duas vezes -> 422 DUPLICATE_TAB_ITEM_MODIFIER
+### 67. A mesma borda duas vezes -> 422 DUPLICATE_TAB_ITEM_MODIFIER
 POST {{host}}/api/restaurant/tabs/{{tableTabId}}/items
 Authorization: Bearer {{waiterToken}}
 Content-Type: application/json
@@ -1207,7 +1221,7 @@ Content-Type: application/json
 %}
 
 
-### 67. Adicional inexistente -> 404 MODIFIER_NOT_FOUND
+### 68. Adicional inexistente -> 404 MODIFIER_NOT_FOUND
 POST {{host}}/api/restaurant/tabs/{{tableTabId}}/items
 Authorization: Bearer {{waiterToken}}
 Content-Type: application/json
@@ -1226,7 +1240,7 @@ Content-Type: application/json
 %}
 
 
-### 68. Item do cardapio inexistente -> 404 MENU_ITEM_NOT_FOUND
+### 69. Item do cardapio inexistente -> 404 MENU_ITEM_NOT_FOUND
 POST {{host}}/api/restaurant/tabs/{{tableTabId}}/items
 Authorization: Bearer {{waiterToken}}
 Content-Type: application/json
@@ -1243,7 +1257,7 @@ Content-Type: application/json
 %}
 
 
-### 69. Observacao com 201 caracteres -> 422 INVALID_SPECIAL_INSTRUCTIONS
+### 70. Observacao com 201 caracteres -> 422 INVALID_SPECIAL_INSTRUCTIONS
 POST {{host}}/api/restaurant/tabs/{{tableTabId}}/items
 Authorization: Bearer {{waiterToken}}
 Content-Type: application/json
@@ -1262,7 +1276,7 @@ Content-Type: application/json
 %}
 
 
-### 70. Cancela item com motivo em branco -> 422 INVALID_CANCELLATION_REASON
+### 71. Cancela item com motivo em branco -> 422 INVALID_CANCELLATION_REASON
 POST {{host}}/api/restaurant/tabs/{{tableTabId}}/items/{{pizzaItemId}}/cancel
 Authorization: Bearer {{waiterToken}}
 Content-Type: application/json
@@ -1279,7 +1293,7 @@ Content-Type: application/json
 %}
 
 
-### 71. Abertura sem origin -> 400 VALIDATION_FAILED
+### 72. Abertura sem origin -> 400 VALIDATION_FAILED
 POST {{host}}/api/restaurant/tabs
 Authorization: Bearer {{waiterToken}}
 Content-Type: application/json
@@ -1296,7 +1310,7 @@ Content-Type: application/json
 %}
 
 
-### 72. Abertura com origin desconhecida -> 400 MALFORMED_REQUEST
+### 73. Abertura com origin desconhecida -> 400 MALFORMED_REQUEST
 POST {{host}}/api/restaurant/tabs
 Authorization: Bearer {{waiterToken}}
 Content-Type: application/json
@@ -1314,7 +1328,7 @@ Content-Type: application/json
 %}
 
 
-### 73. Lancamento sem menuItemId -> 400 VALIDATION_FAILED
+### 74. Lancamento sem menuItemId -> 400 VALIDATION_FAILED
 POST {{host}}/api/restaurant/tabs/{{tableTabId}}/items
 Authorization: Bearer {{waiterToken}}
 Content-Type: application/json
@@ -1331,7 +1345,7 @@ Content-Type: application/json
 %}
 
 
-### 74. Lista sem token -> 401 AUTHENTICATION_REQUIRED
+### 75. Lista sem token -> 401 AUTHENTICATION_REQUIRED
 GET {{host}}/api/restaurant/tabs
 
 > {%
@@ -1342,7 +1356,7 @@ GET {{host}}/api/restaurant/tabs
 %}
 
 
-### 75. Cozinha lista as comandas -> 403 ACCESS_DENIED
+### 76. Cozinha lista as comandas -> 403 ACCESS_DENIED
 GET {{host}}/api/restaurant/tabs
 Authorization: Bearer {{kitchenToken}}
 
@@ -1359,7 +1373,7 @@ Authorization: Bearer {{kitchenToken}}
 ### ------------------------------------------------------------------
 
 
-### 76. Cancela a pizza da mesa
+### 77. Cancela a pizza da mesa
 POST {{host}}/api/restaurant/tabs/{{tableTabId}}/items/{{pizzaItemId}}/cancel
 Authorization: Bearer {{waiterToken}}
 Content-Type: application/json
@@ -1375,7 +1389,7 @@ Content-Type: application/json
 %}
 
 
-### 77. Cancela a comanda da mesa
+### 78. Cancela a comanda da mesa
 POST {{host}}/api/restaurant/tabs/{{tableTabId}}/cancel
 Authorization: Bearer {{waiterToken}}
 Content-Type: application/json
@@ -1392,7 +1406,7 @@ Content-Type: application/json
 %}
 
 
-### 78. Cancela a comanda do cartao reaberto
+### 79. Cancela a comanda do cartao reaberto
 POST {{host}}/api/restaurant/tabs/{{secondCardTabId}}/cancel
 Authorization: Bearer {{waiterToken}}
 Content-Type: application/json
@@ -1409,7 +1423,7 @@ Content-Type: application/json
 %}
 
 
-### 79. A mesa ficou livre
+### 80. A mesa ficou livre
 GET {{host}}/api/restaurant/tabs?diningTableId={{diningTableId}}
 Authorization: Bearer {{waiterToken}}
 

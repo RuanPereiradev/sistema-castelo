@@ -15,6 +15,7 @@ import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.JoinColumn;
+import jakarta.persistence.OrderBy;
 import jakarta.persistence.Table;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -110,11 +111,13 @@ public class TabItem extends AuditedEntity {
 
     /*
      * Fetched by subselect: the items of the tab are a list already, and Hibernate refuses to
-     * join-fetch two lists in one query.
+     * join-fetch two lists in one query. Ordered by name, so the response lists them the same way
+     * every time.
      */
     @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(name = "tab_item_modifier", joinColumns = @JoinColumn(name = "tab_item_id"))
     @Fetch(FetchMode.SUBSELECT)
+    @OrderBy("modifierName")
     private List<TabItemModifier> modifiers = new ArrayList<>();
 
     protected TabItem() {

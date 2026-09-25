@@ -41,6 +41,17 @@ class TabStatusTest {
             assertThat(status.acceptsItemCancellation()).isFalse();
         }
 
+        @Test
+        void shouldAcceptCancellationOfTheTabWhenOpen() {
+            assertThat(TabStatus.OPEN.acceptsCancellation()).isTrue();
+        }
+
+        @ParameterizedTest(name = "{0}")
+        @EnumSource(value = TabStatus.class, names = "OPEN", mode = EXCLUDE)
+        void shouldRefuseCancellationOfTheTabInAnyOtherStatus(TabStatus status) {
+            assertThat(status.acceptsCancellation()).isFalse();
+        }
+
         @ParameterizedTest(name = "{0}")
         @EnumSource(value = TabStatus.class, names = {"OPEN", "CLOSING"})
         void shouldHoldTheTableOrCardWhileOpenOrClosing(TabStatus status) {

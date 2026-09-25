@@ -25,6 +25,14 @@ interface SpringDataTabRepository extends JpaRepository<Tab, TabId> {
     @Query(value = "select cast(id as varchar) from tab where id = :id for update", nativeQuery = true)
     Optional<String> lockForUpdate(@Param("id") UUID id);
 
+    /**
+     * Locks the row of one item of the tab {@code FOR UPDATE}, so two cancellations of the same item
+     * run one after the other. Answers nothing when the item is not on that tab.
+     */
+    @Query(value = "select cast(id as varchar) from tab_item where id = :itemId and tab_id = :tabId for update",
+            nativeQuery = true)
+    Optional<String> lockItemForUpdate(@Param("tabId") UUID tabId, @Param("itemId") UUID itemId);
+
     @Query("select t from Tab t where t.propertyId = :propertyId "
             + "and t.status in (br.com.castel.restaurant.domain.TabStatus.OPEN, "
             + "br.com.castel.restaurant.domain.TabStatus.CLOSING) "

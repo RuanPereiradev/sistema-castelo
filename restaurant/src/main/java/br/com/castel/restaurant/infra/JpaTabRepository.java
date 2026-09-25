@@ -5,6 +5,7 @@ import br.com.castel.restaurant.domain.Tab;
 import br.com.castel.restaurant.domain.TabAlreadyOpenForCardException;
 import br.com.castel.restaurant.domain.TabAlreadyOpenForDiningTableException;
 import br.com.castel.restaurant.domain.TabId;
+import br.com.castel.restaurant.domain.TabItemId;
 import br.com.castel.restaurant.domain.TabRepository;
 import java.util.List;
 import java.util.Optional;
@@ -45,6 +46,15 @@ class JpaTabRepository implements TabRepository {
     @Override
     public Optional<Tab> findByIdForItemEntry(TabId id) {
         return springData.lockForKeyShare(id.value()).flatMap(locked -> springData.findById(id));
+    }
+
+    /** The tab first, then the item: the same order as ordering and closing take them. */
+    @Override
+    public Optional<Tab> findByIdForItemCancellation(TabId id, TabItemId itemId) {
+        return springData.lockForKeyShare(id.value()).flatMap(locked -> {
+            springData.lockItemForUpdate(id.value(), itemId.value());
+            return springData.findById(id);
+        });
     }
 
     @Override

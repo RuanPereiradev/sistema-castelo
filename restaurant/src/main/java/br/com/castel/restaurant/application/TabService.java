@@ -33,6 +33,8 @@ import org.springframework.transaction.annotation.Transactional;
  *
  * <p>Ordering and cancelling an item load the tab {@code FOR KEY SHARE} (decision #15): two waiters
  * on the same tab do not wait for each other, and the closing of task 3.2 will wait for both.
+ * Cancelling an item also locks that item's row {@code FOR UPDATE}, so two cancellations of the same
+ * item run one after the other and the second finds it already cancelled.
  * Cancelling the whole tab changes its status, so it loads it {@code FOR UPDATE} and waits for every
  * ordering in progress (decision #18).
  */
@@ -113,7 +115,7 @@ public class TabService {
     /** @throws TabNotFoundException if the tab does not exist */
     @Transactional
     public Tab cancelItem(TabId tabId, TabItemId itemId, String reason) {
-        Tab tab = loadForItemEntry(tabId);
+        Tab tab = tabs.findByIdForItemCancellation(tabId, itemId).orElseThrow(() -> notFound(tabId));
         tab.cancelItem(itemId, reason, auditorAware.currentAuditorId(), clock.instant());
         return tabs.save(tab);
     }

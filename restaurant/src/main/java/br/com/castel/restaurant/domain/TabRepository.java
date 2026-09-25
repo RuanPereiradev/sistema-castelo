@@ -18,6 +18,15 @@ public interface TabRepository {
     Optional<Tab> findByIdForItemEntry(TabId id);
 
     /**
+     * The tab, locked {@code FOR KEY SHARE} like {@link #findByIdForItemEntry}, and the row of the
+     * item being cancelled locked {@code FOR UPDATE} before the aggregate is loaded. Two cancellations
+     * of the same item queue on that row, so the second one sees the item already cancelled and never
+     * overwrites the author or the reason of the first. Orderings on the tab do not touch that row and
+     * do not wait. An item that does not exist locks nothing; the aggregate answers for it.
+     */
+    Optional<Tab> findByIdForItemCancellation(TabId id, TabItemId itemId);
+
+    /**
      * The tab, with its row locked {@code FOR UPDATE} until the transaction ends, for a change of the
      * tab's own status. It waits for every ordering in progress and they wait for it, so a tab is
      * never cancelled while an item is being added to it (decision #18).

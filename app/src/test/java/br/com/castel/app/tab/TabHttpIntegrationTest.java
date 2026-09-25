@@ -22,6 +22,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.StreamSupport;
 import org.junit.jupiter.api.BeforeEach;
@@ -40,9 +41,10 @@ import tools.jackson.databind.json.JsonMapper;
  *
  * <p>The rules of the aggregate — prices, the order of the checks, what each status accepts — are
  * covered without a database in the unit tests of {@code restaurant}. What this proves is the wiring,
- * the roles, and the two places where the database is the rule: the partial unique indexes that keep
- * one active tab per table and per card, and the {@code FOR KEY SHARE} that lets two waiters order on
- * the same tab at once. Those run with real concurrent requests.
+ * the roles, and the places where the database decides under concurrency, each with real concurrent
+ * requests: the partial unique indexes keep one active tab per table and per card; two waiters
+ * ordering on the same tab at once get no false conflict and both items are recorded; and five
+ * cancellations of the same item at once end with exactly one of them recorded.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 class TabHttpIntegrationTest extends AbstractIntegrationTest {
@@ -189,6 +191,39 @@ class TabHttpIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
+    void shouldRecordOnlyOneCancellationWhenFiveRequestsCancelTheSameItemAtOnce() throws Exception {
+        String sodaId = createItem(createCategory(), "Suco " + suffix, "BAR", false, "7.00")
+                .get("id").asString();
+        String tabId = openOnTable(createDiningTable("Cancela " + suffix), waiterToken).get("id").asString();
+        String itemId = send(post(TABS + "/" + tabId + "/items", waiterToken,
+                        "{\"menuItemId\":\"%s\"}".formatted(sodaId)), 201)
+                .get("items").get(0).get("id").asString();
+        List<Callable<HttpResponse<String>>> cancellations = new ArrayList<>();
+        for (int attempt = 0; attempt < CONCURRENT_OPENINGS; attempt++) {
+            String body = "{\"reason\":\"motivo %d\"}".formatted(attempt);
+            cancellations.add(() -> exchange(post(TABS + "/" + tabId + "/items/" + itemId + "/cancel", waiterToken, body)));
+        }
+
+        List<HttpResponse<String>> responses = concurrently(cancellations);
+
+        List<HttpResponse<String>> accepted =
+                responses.stream().filter(response -> response.statusCode() == 200).toList();
+        assertThat(accepted).hasSize(1);
+        for (HttpResponse<String> response : responses) {
+            if (response.statusCode() != 200) {
+                assertThat(response.statusCode()).as(response.body()).isEqualTo(409);
+                assertThat(jsonMapper.readTree(response.body()).get("code").asString())
+                        .isEqualTo("TAB_ITEM_ALREADY_CANCELLED");
+            }
+        }
+        String acceptedReason = jsonMapper.readTree(accepted.get(0).body())
+                .get("items").get(0).get("cancellationReason").asString();
+        JsonNode stored = send(get(TABS + "/" + tabId, waiterToken), 200).get("items").get(0);
+        assertThat(stored.get("status").asString()).isEqualTo("CANCELLED");
+        assertThat(stored.get("cancellationReason").asString()).isEqualTo(acceptedReason);
+    }
+
+    @Test
     void shouldOpenOnlyOneTabWhenFiveRequestsOpenTheSameTableAtOnce() throws Exception {
         String diningTableId = createDiningTable("Corrida " + suffix);
         String body = "{\"origin\":\"TABLE_SERVICE\",\"diningTableId\":\"%s\"}".formatted(diningTableId);
@@ -201,7 +236,7 @@ class TabHttpIntegrationTest extends AbstractIntegrationTest {
 
     @Test
     void shouldOpenOnlyOneTabWhenFiveRequestsOpenTheSameCardAtOnce() throws Exception {
-        int cardNumber = 777;
+        int cardNumber = ThreadLocalRandom.current().nextInt(1, 1000);
         String body = "{\"origin\":\"SELF_SERVICE\",\"cardNumber\":%d}".formatted(cardNumber);
 
         List<HttpResponse<String>> responses = openConcurrently(body);
