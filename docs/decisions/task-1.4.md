@@ -16,9 +16,9 @@ em tasks sem conflito). Não toca `billing` nem migration.
 | | |
 |---|---|
 | Branch | `task/1.4-fake-ports` |
-| Rodada atual | 1 — DEV entregue (com testes de unidade, sem agente de teste separado), aguarda review |
+| Rodada atual | 1 — review mecânico aplicado, aguarda revisão do Ruan |
 | Build | `./mvnw clean verify` verde, ArchUnit incluído |
-| Testes | `FakePaymentProcessorTest` (5), `FakeTaxInvoiceIssuerTest` (3), `FakePortsCompositionTest` (1) |
+| Testes | `FakePaymentProcessorTest` (6), `FakeTaxInvoiceIssuerTest` (3), `FakePortsCompositionTest` (1) |
 
 ---
 
@@ -34,6 +34,7 @@ em tasks sem conflito). Não toca `billing` nem migration.
 | 6 | 1 | Os centavos `,01` da #2 são lidos do valor absoluto: `-10.01` também dá `FAILED`. O `PaymentRequest` não proíbe negativo, e o fake não é o lugar de inventar essa regra | implementado (DEV, aguarda Ruan) |
 | 7 | 1 | Argumento nulo em `createPayment`, `statusOf`, `issue` e `cancel` é `NullPointerException` (`Objects.requireNonNull`), mesmo critério dos records do `api/` | implementado (DEV, aguarda Ruan) |
 | 8 | 1 | O teste de composição (`app/src/test/.../ports`) importa as classes de `infra/` para conferir o tipo do bean; o ArchUnit só varre `main` | implementado (DEV, aguarda Ruan) |
+| 9 | 1 | Review mecânico: nenhum bloqueio. Entrou o teste do valor negativo (#6). O `BigDecimal` solto no fake só separa os centavos para decidir o desfecho, não representa dinheiro — aceito. O `.gitignore` passa a ignorar `.claude/worktrees/`, as cópias temporárias dos agentes em paralelo | implementado |
 
 Valores de status: `pendente` · `implementado` · `revertida pela #n`
 

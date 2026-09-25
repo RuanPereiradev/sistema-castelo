@@ -42,6 +42,13 @@ class FakePaymentProcessorTest {
     }
 
     @Test
+    void shouldReadTheCentsOfANegativeAmountToo() {
+        PaymentIntent negative = processor.createPayment(requestOf("-10.01"));
+
+        assertThat(processor.statusOf(negative.intentId())).isEqualTo(PaymentStatus.FAILED);
+    }
+
+    @Test
     void shouldCreateDistinctIntentsForIdenticalRequests() {
         PaymentIntent first = processor.createPayment(requestOf("50.00"));
         PaymentIntent second = processor.createPayment(requestOf("50.00"));
