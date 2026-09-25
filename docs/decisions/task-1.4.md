@@ -30,7 +30,10 @@ em tasks sem conflito). Não toca `billing` nem migration.
 | 2 | 0 | O fake de pagamento cria o intent `PENDING`; `statusOf` responde `PAID`, ou `FAILED` quando os centavos do valor são `,01` | implementado |
 | 3 | 0 | **Exceção à regra do `.http`**: portas internas, sem rota. A task que consumir a porta a exercita pelo seu `.http`. Precedentes: 0.2 e 0.6 | implementado |
 | 4 | 0 | `AccessKey` fake = `FAKE-` + UUID, para nunca parecer chave de nota fiscal de verdade | implementado |
-| 5 | 0 | Fake em `infra/` de cada módulo, `@Component` + `@ConditionalOnProperty` sem `matchIfMissing`; poms ganham `spring-boot-starter`; exceções de id/chave desconhecidos no `infra/`, estendendo `NotFoundException`; estado em memória; `cancel` repetido idempotente; URL do pagador em domínio `.invalid` | implementado (aguarda Ruan) |
+| 5 | 0 | Fake em `infra/` de cada módulo, `@Component` + `@ConditionalOnProperty` sem `matchIfMissing`; poms ganham `spring-boot-starter`; exceções de id/chave desconhecidos no `infra/`, estendendo `NotFoundException`; estado em memória; `cancel` repetido idempotente; URL do pagador em domínio `.invalid` | implementado (DEV, aguarda Ruan) |
+| 6 | 1 | Os centavos `,01` da #2 são lidos do valor absoluto: `-10.01` também dá `FAILED`. O `PaymentRequest` não proíbe negativo, e o fake não é o lugar de inventar essa regra | implementado (DEV, aguarda Ruan) |
+| 7 | 1 | Argumento nulo em `createPayment`, `statusOf`, `issue` e `cancel` é `NullPointerException` (`Objects.requireNonNull`), mesmo critério dos records do `api/` | implementado (DEV, aguarda Ruan) |
+| 8 | 1 | O teste de composição (`app/src/test/.../ports`) importa as classes de `infra/` para conferir o tipo do bean; o ArchUnit só varre `main` | implementado (DEV, aguarda Ruan) |
 
 Valores de status: `pendente` · `implementado` · `revertida pela #n`
 
@@ -74,6 +77,6 @@ Nenhum: portas internas, sem rota.
 
 | # | Pergunta | Desde a rodada |
 |---|---|---|
-| A | Decisão de DEV fora da spec, aguarda Ruan: os centavos `,01` da #2 são lidos do valor absoluto, então `-10.01` também dá `FAILED`. A spec não fala de valor negativo, e o contrato `PaymentRequest` não o proíbe | 1 |
-| B | Decisão de DEV fora da spec, aguarda Ruan: `createPayment`, `statusOf`, `issue` e `cancel` recusam argumento nulo com `NullPointerException` (`Objects.requireNonNull`), no mesmo critério dos records do `api/`; não há código de erro para isso | 1 |
-| C | Nota: os dois fakes ficam no `infra/` e o teste de composição do `app` (`app/src/test/.../ports`) importa as classes `infra` para conferir o tipo; o ArchUnit só varre `main` | 1 |
+
+| # | Pergunta | Desde a rodada |
+|---|---|---|
