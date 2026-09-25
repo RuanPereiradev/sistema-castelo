@@ -173,7 +173,7 @@ Mapeamento:
 
 1. Pertence a uma propriedade. Nasce `OPEN`, com `openedAt`
 2. `STAY` tem dono `RESERVATION` e `FolioReference` obrigatório. `TAB` tem dono
-   `TAB` e nenhuma referência. Dono do tipo errado é `IllegalArgumentException`
+   `TAB` e nenhuma referência. Dono do tipo errado é `IllegalStateException`
    (erro de programação entre módulos, não código de negócio)
 3. Um folio por dono. Um segundo para o mesmo dono dá
    `FOLIO_ALREADY_OPENED_FOR_OWNER`, checado no caso de uso e garantido por `uk_folio_owner`
@@ -185,7 +185,7 @@ Mapeamento:
 7. `close()` só com `balance()` exatamente zero (`FOLIO_BALANCE_NOT_ZERO`), #4.
    Grava `closedAt` e `closedBy`. Folio sem lançamento, saldo zero, fecha.
    O saldo diferente de zero se resolve com um `AdjustmentCharge` do `ADMIN` antes
-8. `changeReference` só em folio `STAY`; em `TAB` é `IllegalArgumentException`.
+8. `changeReference` só em folio `STAY`; em `TAB` é `IllegalStateException`.
    O novo código não pode estar em uso por outro `STAY` aberto
    (`FOLIO_REFERENCE_ALREADY_IN_USE`, #17)
 9. `charges()` e `payments()` imutáveis para fora, em ordem de criação (UUIDv7)

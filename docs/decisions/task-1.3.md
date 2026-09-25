@@ -16,8 +16,8 @@ Base para a comanda fechar e receber (3.2). Roda em paralelo com a 1.4 e a 2.2.
 | | |
 |---|---|
 | Branch | `task/1.3-billing-folio` |
-| Rodada atual | 1 — DEV e TEST juntos, review mecânico em andamento |
-| Build | `./mvnw clean verify` **verde** — 1229 testes, 0 falhas |
+| Rodada atual | 1 — review mecânico aplicado; aguarda revisão do Ruan e execução do `.http`. Entra na `main` **antes da 2.2** |
+| Build | `./mvnw clean verify` **verde** (o `LoginRateLimit` intermitente, pré-existente na `main`, é corrigido em branch própria) |
 | Testes | 106 de unidade (billing) + 5 de integração, 2 deles de concorrência. Orçamento: 1.737 linhas de teste para 2.642 de produção (0,66:1) |
 
 ---
@@ -51,6 +51,8 @@ Base para a comanda fechar e receber (3.2). Roda em paralelo com a 1.4 e a 2.2.
 | 23 | 1 | **Revê a #18**: dono do tipo errado e `changeReference` em folio `TAB` lançam `IllegalStateException`, não `IllegalArgumentException` — a regra C5 do ArchUnit proíbe `IllegalArgumentException` no domínio. Continua sendo erro de programação entre módulos, sem código de negócio | implementado (DEV, aguarda Ruan) |
 | 24 | 1 | Decisões do DEV: ids guardados como `@Id UUID` e expostos como `FolioId`/`ChargeId`/`PaymentId` (os ids do `api/` não são `@Embeddable`); `save` com `persist`+`flush` para traduzir `uk_folio_owner`, `idx_folio_open_ref`, `uk_payment_idempotency` e `uk_charge_reversal` em código de domínio; consultas de conjunto com `flushMode=COMMIT`; lançamentos ordenados por `createdAt, id`; "já estornado" sem coluna nova (campo `@Transient reversedBy` preenchido pelo agregado); lock sai como `FOR NO KEY UPDATE` | implementado (DEV, aguarda Ruan) |
 | 25 | 1 | Ordem das checagens: `reverse` = folio fechado → lançamento existe → já estornado → não estornável → motivo; `refund` = folio fechado → pagamento existe → já estornado → motivo; `receive` = chave válida → replay/chave reusada → folio fechado → método → valor → saldo. `method` ausente = 400; `amount` ausente = `INVALID_MONEY`; `GET /folios` sem `referenceCode` = 404 | implementado (DEV, aguarda Ruan) |
+| 26 | 1 | Review mecânico — **trava contornada pelo contexto de persistência**: se o chamador já leu o folio na mesma transação (ex.: a 3.2 lê o saldo e depois fecha), o `FOR UPDATE` travava a linha mas devolvia a instância velha, e o folio fechava com saldo pendente. `findByIdForUpdate` agora tira do contexto (`detach`) a instância já carregada antes da consulta com trava. Provado com o roteiro "lê saldo → outra transação lança 30,00 → fecha": sem a correção fechava, com ela recusa `FOLIO_BALANCE_NOT_ZERO`. Condição: nenhum módulo guarda alteração pendente no agregado de outro — todos só veem `FolioView` | implementado |
+| 27 | 1 | Os totais são calculados **dentro da transação** de toda escrita (`balance()` antes de salvar, inclusive nos `post` e `reverse` da fachada): um lançamento que estoura `Money` derruba a transação em vez de gravar e deixar o folio ilegível. Sem tipo novo de resposta. Também: testes das regras de conjunto (a mesma chave em dois folios ao mesmo tempo → um 201 e um 409; segundo folio para o mesmo dono; código de referência em uso; estorno repetido em outra requisição) e mensagem de `FOLIO_REFERENCE_ALREADY_IN_USE` sem ecoar o código digitado | implementado |
 
 Valores de status: `pendente` · `implementado` · `revertida pela #n`
 
@@ -87,7 +89,9 @@ Especificado em `docs/task-1.3-billing-folio.md`, seções 5 e 6.
 
 | Limitação | Por que foi aceita | Mitigação futura |
 |---|---|---|
-| `FOLIO_ALREADY_OPENED_FOR_OWNER` não tem cenário no `.http` | A rota de dev gera um dono novo a cada chamada; o código é coberto pelo serviço e pela tradução no infra | Coberto pelo `.http` da 3.2, que abre folio pela comanda |
+| `ChargeView.reversalOf` segue componente nulo no `api/` | Vem da 0.6; fora dos acréscimos #9–#11 desta task | Quando o hotel ou a 3.2 consumirem o `ChargeView` |
+| Folio `STAY` com crédito (saldo negativo, #1) só fecha depois de ajuste negativo do `ADMIN` ou estorno de pagamento | Fechar exige zero (#4) | Desenhar a devolução de crédito no check-out (3.4) |
+| `FOLIO_ALREADY_OPENED_FOR_OWNER` não tem cenário no `.http` | A rota de dev gera um dono novo a cada chamada; o código é coberto pelo teste de integração da fachada (#27) | `.http` da 3.2, que abre folio pela comanda |
 | Na primeira subida em banco vazio, `SinglePropertyId` lê `property` antes do `DevUserSeeder` criar a linha e responde 500; na segunda subida funciona | Já acontecia antes desta task, fora do escopo | Ordenar o seed antes da leitura (task própria) |
 | Busca de folio por id não filtra por propriedade | Propriedade única; mesmo padrão do restaurante | Multipropriedade |
 
