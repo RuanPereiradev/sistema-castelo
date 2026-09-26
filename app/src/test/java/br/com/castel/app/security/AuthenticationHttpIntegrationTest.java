@@ -110,6 +110,9 @@ class AuthenticationHttpIntegrationTest extends AbstractIntegrationTest {
     @Autowired
     private TransactionTemplate transactionTemplate;
 
+    @Autowired
+    private LoginRateLimitProperties loginRateLimitProperties;
+
     @Value("${app.security.jwt.secret}")
     private String jwtSecret;
 
@@ -592,12 +595,17 @@ class AuthenticationHttpIntegrationTest extends AbstractIntegrationTest {
         }
     }
 
-    /** Wrong-password logins of distinct unknown usernames, ten at a time, all from the test's IP. */
+    /**
+     * Wrong-password logins of distinct unknown usernames, all from the test's IP, as many at a time
+     * as the IP has password check slots. More would only queue for a slot, with no gain in
+     * throughput, and on a loaded machine the queued ones exceed the slot timeout and get a 429
+     * that has nothing to do with the failure limit under test (decision #75).
+     */
     private List<Integer> sprayFailedLoginsOnDistinctUsernames(int count) {
         return runConcurrently(IntStream.range(0, count)
                 .mapToObj(attempt -> uniqueUsername())
                 .<java.util.concurrent.Callable<Integer>>map(username -> () -> login(username, WRONG_PASSWORD).status())
-                .toList(), 10);
+                .toList(), loginRateLimitProperties.maxConcurrentPasswordChecksPerIp());
     }
 
     private static List<Integer> runConcurrently(List<java.util.concurrent.Callable<Integer>> calls, int threads) {
@@ -632,9 +640,6 @@ class AuthenticationHttpIntegrationTest extends AbstractIntegrationTest {
         private static final int WARM_UP_MATCHES = 3;
         private static final int MEASURED_MATCHES = 5;
         private static final double SAFETY_MARGIN = 1.5;
-
-        @Autowired
-        private LoginRateLimitProperties loginRateLimitProperties;
 
         private Duration slowestPasswordCheckWithMargin() {
             String hash = passwordEncoder.encode(PASSWORD);
@@ -1249,9 +1254,6 @@ class AuthenticationHttpIntegrationTest extends AbstractIntegrationTest {
     /** Decisions #64 and #68: defaults bound from application.yml. */
     @Nested
     class LoginRateLimitDefaults {
-
-        @Autowired
-        private LoginRateLimitProperties loginRateLimitProperties;
 
         @Test
         void shouldWaitAtMostTwoSecondsForPasswordCheckSlotByDefault() {
