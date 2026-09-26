@@ -5,4 +5,4 @@
 - [Task 0.4 identity findings](identity_auth_task_0_4_findings.md) — decisions in task-0.4.md, accepted limits, empty-password timing oracle
 - [Boot 4 / Security 7 runtime gotchas](spring_security_review_gotchas.md) — error dispatch, XFF, log leaks, probe recipe
 - [Task 1.5 review (dining tables)](project_task_1_5_dining_table.md) — comparator probe recipe, area case tie-break divergence from #11, stale decision log
-- [Task 1.3 review (billing folio)](project_task_1_3_billing_folio.md) — stale-PC lock bypass proven, git-archive probe recipe, untested set-rule translations, identity flake on main
+- [Task 2.2 review (tab)](project_task_2_2_tab.md) — same-item double cancel race under FOR KEY SHARE, unfiltered list untested, V7/doc diff recipe

@@ -302,6 +302,8 @@ Este glossário é a **linguagem ubíqua do projeto**. Todo subagente recebe est
 | Variação (P/M/G) | `MenuItemVariant` | |
 | Adicional | `Modifier` | |
 | Adicional oferecido no item | `MenuItemModifier` | Vínculo item ↔ adicional, com `maxQuantity` |
+| Pedido de um item na comanda | `TabItemOrder` | O que o garçom pede: item, variação, quantidade ou peso, adicionais, observação |
+| Adicional escolhido no pedido | `ModifierChoice` | Adicional com a quantidade pedida |
 | Observação do pedido | `specialInstructions` | |
 | Setor de preparo | `PrepStation` | `KITCHEN`, `PIZZA`, `BAR` |
 | Janela de horário | `AvailabilityWindow` | |

@@ -29,6 +29,7 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
 import org.hibernate.annotations.Fetch;
 import org.hibernate.annotations.FetchMode;
@@ -198,12 +199,31 @@ public class MenuItem extends AuditedEntity {
     public boolean isAvailableAt(Instant moment, ZoneId propertyZone) {
         Objects.requireNonNull(moment, "moment");
         Objects.requireNonNull(propertyZone, "propertyZone");
-        if (!available || !active) {
-            return false;
-        }
-        if (requiresVariant() && variants.stream().noneMatch(MenuItemVariant::isOrderable)) {
-            return false;
-        }
+        return isOrderable() && isWithinAvailabilityWindowAt(moment, propertyZone);
+    }
+
+    /**
+     * Active, not run out and, when it requires a variant, with at least one variant that has not
+     * run out either: what a tab can take, the schedule aside.
+     */
+    boolean isOrderable() {
+        return available && active && (!requiresVariant() || variants.stream().anyMatch(MenuItemVariant::isOrderable));
+    }
+
+    /** The link to the modifier, when this item offers it. */
+    Optional<MenuItemModifier> offeredModifier(ModifierId modifierId) {
+        return modifiers.stream().filter(link -> link.refersTo(modifierId)).findFirst();
+    }
+
+    /**
+     * Whether the schedule alone serves the item at the given moment, read in the time zone of the
+     * property: true when the item has no window, or when one of them covers the moment. Says nothing
+     * about the item having run out or left the menu, which is what lets a tab tell "out of stock"
+     * from "outside the hours" (decision #5 of task 2.2).
+     */
+    public boolean isWithinAvailabilityWindowAt(Instant moment, ZoneId propertyZone) {
+        Objects.requireNonNull(moment, "moment");
+        Objects.requireNonNull(propertyZone, "propertyZone");
         if (availabilityWindows.isEmpty()) {
             return true;
         }

@@ -1,0 +1,1435 @@
+### Task 2.2 - comanda: abertura, lancamento e cancelamento
+### Ambiente: selecione "dev" no IntelliJ HTTP Client, com http-client.env.json
+### + http-client.private.env.json (copie o .example). Ver http/README.md.
+###
+### Pre-requisito: aplicacao rodando no perfil "dev" com o seed habilitado
+### (usuarios admin, garcom e cozinha). Rode o arquivo inteiro, em ordem: a
+### preparacao e o caminho feliz salvam os ids que os cenarios negativos usam.
+###
+### Nomes e mesas levam um sufixo aleatorio (sao unicos por propriedade), e o
+### cartao do self-service e sorteado na faixa de 1 a 999. No fim, as comandas
+### abertas sao canceladas: a mesa e o cartao ficam livres e o arquivo roda de novo.
+
+
+### ------------------------------------------------------------------
+### Preparacao: logins, cardapio e mesas
+### ------------------------------------------------------------------
+
+
+### 0. Login do admin
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{
+  "username": "{{adminUsername}}",
+  "password": "{{password}}"
+}
+
+> {%
+    client.test("login do admin retorna 200", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+    });
+    client.global.set("adminToken", response.body.accessToken);
+    client.global.set("suffix", Math.random().toString(36).substring(2, 8));
+    client.global.set("cardNumber", String(Math.floor(Math.random() * 999) + 1));
+    const days = ["SUNDAY", "MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY"];
+    client.global.set("otherDay", days[(new Date().getDay() + 3) % 7]);
+%}
+
+
+### 1. Login do garcom
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{
+  "username": "{{waiterUsername}}",
+  "password": "{{password}}"
+}
+
+> {%
+    client.test("login do garcom retorna 200", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+    });
+    client.global.set("waiterToken", response.body.accessToken);
+%}
+
+
+### 2. Login da cozinha (usuario cozinha do seed de dev)
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{
+  "username": "cozinha",
+  "password": "{{password}}"
+}
+
+> {%
+    client.test("login da cozinha retorna 200", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+    });
+    client.global.set("kitchenToken", response.body.accessToken);
+%}
+
+
+### 3. Cria a categoria
+POST {{host}}/api/restaurant/menu-categories
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "name": "Comandas {{suffix}}",
+  "displayOrder": 1
+}
+
+> {%
+    client.test("categoria criada", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+    });
+    client.global.set("categoryId", response.body.id);
+%}
+
+
+### 4. Cria a pizza
+POST {{host}}/api/restaurant/menu-items
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "categoryId": "{{categoryId}}",
+  "name": "Pizza {{suffix}}",
+  "prepStation": "PIZZA",
+  "soldByWeight": false,
+  "price": "40.00"
+}
+
+> {%
+    client.test("pizza criada", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+    });
+    client.global.set("pizzaId", response.body.id);
+%}
+
+
+### 5. Variacao P da pizza
+POST {{host}}/api/restaurant/menu-items/{{pizzaId}}/variants
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "name": "P",
+  "price": "35.00"
+}
+
+> {%
+    client.test("variacao P criada", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+    });
+    client.global.set("smallVariantId", response.body.variants[0].id);
+%}
+
+
+### 6. Variacao G da pizza
+POST {{host}}/api/restaurant/menu-items/{{pizzaId}}/variants
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "name": "G",
+  "price": "45.00"
+}
+
+> {%
+    client.test("variacao G criada", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+    });
+    client.global.set("largeVariantId", response.body.variants[1].id);
+%}
+
+
+### 7. Adicional borda recheada
+POST {{host}}/api/restaurant/modifiers
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "name": "Borda recheada {{suffix}}",
+  "price": "8.50"
+}
+
+> {%
+    client.test("borda criada", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+    });
+    client.global.set("stuffedCrustId", response.body.id);
+%}
+
+
+### 8. Oferece a borda na pizza, ate 2 por pizza
+PUT {{host}}/api/restaurant/menu-items/{{pizzaId}}/modifiers/{{stuffedCrustId}}
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "maxQuantity": 2
+}
+
+> {%
+    client.test("borda oferecida", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+    });
+%}
+
+
+### 9. Adicional ponto da carne, a preco zero
+POST {{host}}/api/restaurant/modifiers
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "name": "Ponto da carne {{suffix}}",
+  "price": "0.00"
+}
+
+> {%
+    client.test("ponto da carne criado", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+    });
+    client.global.set("doneLevelId", response.body.id);
+%}
+
+
+### 10. Oferece o ponto da carne na pizza
+PUT {{host}}/api/restaurant/menu-items/{{pizzaId}}/modifiers/{{doneLevelId}}
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "maxQuantity": 1
+}
+
+> {%
+    client.test("ponto da carne oferecido", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+    });
+%}
+
+
+### 11. Adicional catupiry, que vai ser desativado
+POST {{host}}/api/restaurant/modifiers
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "name": "Catupiry {{suffix}}",
+  "price": "9.00"
+}
+
+> {%
+    client.test("catupiry criado", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+    });
+    client.global.set("inactiveModifierId", response.body.id);
+%}
+
+
+### 12. Oferece o catupiry na pizza
+PUT {{host}}/api/restaurant/menu-items/{{pizzaId}}/modifiers/{{inactiveModifierId}}
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "maxQuantity": 1
+}
+
+> {%
+    client.test("catupiry oferecido", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+    });
+%}
+
+
+### 13. Desativa o catupiry
+POST {{host}}/api/restaurant/modifiers/{{inactiveModifierId}}/deactivate
+Authorization: Bearer {{adminToken}}
+
+> {%
+    client.test("catupiry desativado", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+    });
+%}
+
+
+### 14. Adicional bacon, que a pizza nao oferece
+POST {{host}}/api/restaurant/modifiers
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "name": "Bacon {{suffix}}",
+  "price": "7.00"
+}
+
+> {%
+    client.test("bacon criado", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+    });
+    client.global.set("notOfferedModifierId", response.body.id);
+%}
+
+
+### 15. Cria o buffet a 59,90 o quilo
+POST {{host}}/api/restaurant/menu-items
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "categoryId": "{{categoryId}}",
+  "name": "Buffet {{suffix}}",
+  "prepStation": "KITCHEN",
+  "soldByWeight": true,
+  "price": "59.90"
+}
+
+> {%
+    client.test("buffet criado", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+    });
+    client.global.set("buffetId", response.body.id);
+%}
+
+
+### 16. Cria a feijoada, servida so em outro dia da semana
+POST {{host}}/api/restaurant/menu-items
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "categoryId": "{{categoryId}}",
+  "name": "Feijoada {{suffix}}",
+  "prepStation": "KITCHEN",
+  "soldByWeight": false,
+  "price": "55.00"
+}
+
+> {%
+    client.test("feijoada criada", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+    });
+    client.global.set("scheduledItemId", response.body.id);
+%}
+
+
+### 17. Janela da feijoada: o dia inteiro, tres dias depois de hoje
+POST {{host}}/api/restaurant/menu-items/{{scheduledItemId}}/availability-windows
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "dayOfWeek": "{{otherDay}}",
+  "startTime": "00:00",
+  "endTime": "23:59"
+}
+
+> {%
+    client.test("janela criada", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+    });
+%}
+
+
+### 18. Cria o suco, que vai esgotar
+POST {{host}}/api/restaurant/menu-items
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "categoryId": "{{categoryId}}",
+  "name": "Suco {{suffix}}",
+  "prepStation": "BAR",
+  "soldByWeight": false,
+  "price": "9.00"
+}
+
+> {%
+    client.test("suco criado", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+    });
+    client.global.set("soldOutItemId", response.body.id);
+%}
+
+
+### 19. Esgota o suco
+POST {{host}}/api/restaurant/menu-items/{{soldOutItemId}}/unavailable
+Authorization: Bearer {{adminToken}}
+
+> {%
+    client.test("suco esgotado", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+    });
+%}
+
+
+### 20. Cria a mesa
+POST {{host}}/api/restaurant/dining-tables
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "label": "Mesa {{suffix}}"
+}
+
+> {%
+    client.test("mesa criada", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+    });
+    client.global.set("diningTableId", response.body.id);
+%}
+
+
+### 21. Cria uma segunda mesa, que vai ser desativada
+POST {{host}}/api/restaurant/dining-tables
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "label": "Fechada {{suffix}}"
+}
+
+> {%
+    client.test("segunda mesa criada", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+    });
+    client.global.set("inactiveDiningTableId", response.body.id);
+%}
+
+
+### 22. Desativa a segunda mesa
+POST {{host}}/api/restaurant/dining-tables/{{inactiveDiningTableId}}/deactivate
+Authorization: Bearer {{adminToken}}
+
+> {%
+    client.test("segunda mesa desativada", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+    });
+%}
+
+
+### ------------------------------------------------------------------
+### Caminho feliz
+### ------------------------------------------------------------------
+
+
+### 23. Garcom abre comanda na mesa
+POST {{host}}/api/restaurant/tabs
+Authorization: Bearer {{waiterToken}}
+Content-Type: application/json
+
+{
+  "origin": "TABLE_SERVICE",
+  "diningTableId": "{{diningTableId}}"
+}
+
+> {%
+    client.test("comanda da mesa aberta", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+        client.assert(response.body.status === "OPEN", "comanda nasce OPEN");
+        client.assert(response.body.diningTableLabel === "Mesa " + client.global.get("suffix"), "label da mesa");
+        client.assert(response.body.cardNumber === null, "comanda de mesa sem cartao");
+        client.assert(response.body.subtotal === "0.00", "subtotal inicial 0.00");
+        client.assert(response.body.items.length === 0, "comanda nasce sem itens");
+        client.assert(response.body.publicToken === undefined, "publicToken nao sai na API");
+    });
+    client.global.set("tableTabId", response.body.id);
+%}
+
+
+### 24. Lanca 3 pizzas G com 2 bordas, ponto da carne e observacao: (45,00 + 2 x 8,50 + 0,00) x 3 = 186,00
+POST {{host}}/api/restaurant/tabs/{{tableTabId}}/items
+Authorization: Bearer {{waiterToken}}
+Content-Type: application/json
+
+{
+  "menuItemId": "{{pizzaId}}",
+  "variantId": "{{largeVariantId}}",
+  "quantity": 3,
+  "modifiers": [
+    { "modifierId": "{{stuffedCrustId}}", "quantity": 2 },
+    { "modifierId": "{{doneLevelId}}", "quantity": 1 }
+  ],
+  "specialInstructions": "  sem cebola  "
+}
+
+> {%
+    client.test("pizza lancada com preco congelado", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+        const item = response.body.items[0];
+        client.assert(item.variantName === "G", "variacao G");
+        client.assert(item.unitPrice === "45.00", "preco da variacao substitui o do item");
+        client.assert(item.lineTotal === "186.00", "lineTotal deveria ser 186.00, recebido " + item.lineTotal);
+        client.assert(item.modifiers.length === 2, "dois adicionais");
+        client.assert(item.serviceChargeable === true, "mesa cobra taxa");
+        client.assert(item.specialInstructions === "sem cebola", "observacao aparada");
+        client.assert(item.status === "PENDING", "item nasce PENDING");
+        client.assert(item.prepStation === "PIZZA", "setor congelado");
+        client.assert(response.body.subtotal === "186.00", "subtotal 186.00");
+    });
+    client.global.set("pizzaItemId", response.body.items[0].id);
+%}
+
+
+### 25. Troca o preco da G no cardapio
+PATCH {{host}}/api/restaurant/menu-items/{{pizzaId}}/variants/{{largeVariantId}}
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "price": "99.00"
+}
+
+> {%
+    client.test("preco da G trocado", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+    });
+%}
+
+
+### 26. Le a comanda da mesa: o preco congelado nao muda
+GET {{host}}/api/restaurant/tabs/{{tableTabId}}
+Authorization: Bearer {{waiterToken}}
+
+> {%
+    client.test("comanda lida com preco congelado", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        client.assert(response.body.items[0].unitPrice === "45.00", "preco continua 45.00");
+        client.assert(response.body.subtotal === "186.00", "subtotal continua 186.00");
+    });
+%}
+
+
+### 27. Abre comanda no cartao sorteado
+POST {{host}}/api/restaurant/tabs
+Authorization: Bearer {{waiterToken}}
+Content-Type: application/json
+
+{
+  "origin": "SELF_SERVICE",
+  "cardNumber": {{cardNumber}}
+}
+
+> {%
+    client.test("comanda do cartao aberta", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+        client.assert(response.body.cardNumber === Number(client.global.get("cardNumber")), "cartao gravado");
+        client.assert(response.body.diningTableId === null, "comanda de cartao sem mesa");
+    });
+    client.global.set("cardTabId", response.body.id);
+%}
+
+
+### 28. Pesa um prato de 437 g no buffet: 437 g x 59,90 = 26,18
+POST {{host}}/api/restaurant/tabs/{{cardTabId}}/items
+Authorization: Bearer {{waiterToken}}
+Content-Type: application/json
+
+{
+  "menuItemId": "{{buffetId}}",
+  "weightGrams": 437
+}
+
+> {%
+    client.test("prato por peso lancado", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+        const item = response.body.items[0];
+        client.assert(item.weightGrams === 437, "peso em gramas");
+        client.assert(item.pricePerKilo === "59.90", "preco por quilo congelado");
+        client.assert(item.unitPrice === null, "sem preco unitario");
+        client.assert(item.lineTotal === "26.18", "lineTotal deveria ser 26.18, recebido " + item.lineTotal);
+        client.assert(item.status === "DELIVERED", "prato por peso nasce DELIVERED");
+        client.assert(item.serviceChargeable === false, "self-service nao cobra taxa");
+    });
+    client.global.set("plateItemId", response.body.items[0].id);
+%}
+
+
+### 29. Cancela o prato, com motivo
+POST {{host}}/api/restaurant/tabs/{{cardTabId}}/items/{{plateItemId}}/cancel
+Authorization: Bearer {{waiterToken}}
+Content-Type: application/json
+
+{
+  "reason": "  pesado no cartao errado  "
+}
+
+> {%
+    client.test("prato cancelado, fica na comanda", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        const item = response.body.items[0];
+        client.assert(item.status === "CANCELLED", "item CANCELLED");
+        client.assert(item.cancellationReason === "pesado no cartao errado", "motivo aparado");
+        client.assert(item.cancelledBy !== null && item.cancelledAt !== null, "autor e horario gravados");
+        client.assert(response.body.subtotal === "0.00", "subtotal ignora cancelado");
+    });
+%}
+
+
+### 30. Lista as comandas ativas da mesa
+GET {{host}}/api/restaurant/tabs?diningTableId={{diningTableId}}
+Authorization: Bearer {{waiterToken}}
+
+> {%
+    client.test("lista pela mesa", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        client.assert(response.body.length === 1, "uma comanda ativa na mesa");
+        client.assert(response.body[0].id === client.global.get("tableTabId"), "a comanda da mesa");
+        client.assert(response.body[0].subtotal === "186.00", "subtotal na lista");
+        client.assert(response.body[0].activeItemCount === 1, "um item ativo");
+    });
+%}
+
+
+### 31. Lista as comandas ativas do cartao
+GET {{host}}/api/restaurant/tabs?cardNumber={{cardNumber}}
+Authorization: Bearer {{waiterToken}}
+
+> {%
+    client.test("lista pelo cartao", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        client.assert(response.body.length === 1, "uma comanda ativa no cartao");
+        client.assert(response.body[0].activeItemCount === 0, "nenhum item ativo");
+    });
+%}
+
+
+### 32. Cancela a comanda do cartao, ja sem item ativo
+POST {{host}}/api/restaurant/tabs/{{cardTabId}}/cancel
+Authorization: Bearer {{waiterToken}}
+Content-Type: application/json
+
+{
+  "reason": "cliente desistiu"
+}
+
+> {%
+    client.test("comanda do cartao cancelada", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        client.assert(response.body.status === "CANCELLED", "comanda CANCELLED");
+        client.assert(response.body.cancellationReason === "cliente desistiu", "motivo gravado");
+    });
+%}
+
+
+### 33. O cartao ficou livre
+GET {{host}}/api/restaurant/tabs?cardNumber={{cardNumber}}
+Authorization: Bearer {{waiterToken}}
+
+> {%
+    client.test("cartao sem comanda ativa", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        client.assert(response.body.length === 0, "lista vazia");
+    });
+%}
+
+
+### 34. Lista todas as comandas ativas, sem filtro: a da mesa esta la
+GET {{host}}/api/restaurant/tabs
+Authorization: Bearer {{waiterToken}}
+
+> {%
+    client.test("lista sem filtro", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        var tableTabId = client.global.get("tableTabId");
+        client.assert(response.body.some(function(tab) { return tab.id === tableTabId; }),
+            "a comanda da mesa deveria estar na lista");
+    });
+%}
+
+
+### ------------------------------------------------------------------
+### Cenarios negativos: um por codigo de erro
+### ------------------------------------------------------------------
+
+
+### 35. Comanda inexistente -> 404 TAB_NOT_FOUND
+GET {{host}}/api/restaurant/tabs/00000000-0000-0000-0000-0000000000ff
+Authorization: Bearer {{waiterToken}}
+
+> {%
+    client.test("comanda inexistente: 404 TAB_NOT_FOUND", function() {
+        client.assert(response.status === 404, "esperado 404, recebido " + response.status);
+        client.assert(response.body.code === "TAB_NOT_FOUND", "code deveria ser TAB_NOT_FOUND, recebido " + response.body.code);
+    });
+%}
+
+
+### 36. Item inexistente na comanda -> 404 TAB_ITEM_NOT_FOUND
+POST {{host}}/api/restaurant/tabs/{{tableTabId}}/items/00000000-0000-0000-0000-0000000000ff/cancel
+Authorization: Bearer {{waiterToken}}
+Content-Type: application/json
+
+{
+  "reason": "teste"
+}
+
+> {%
+    client.test("item inexistente na comanda: 404 TAB_ITEM_NOT_FOUND", function() {
+        client.assert(response.status === 404, "esperado 404, recebido " + response.status);
+        client.assert(response.body.code === "TAB_ITEM_NOT_FOUND", "code deveria ser TAB_ITEM_NOT_FOUND, recebido " + response.body.code);
+    });
+%}
+
+
+### 37. Lanca em comanda cancelada -> 409 TAB_NOT_OPEN
+POST {{host}}/api/restaurant/tabs/{{cardTabId}}/items
+Authorization: Bearer {{waiterToken}}
+Content-Type: application/json
+
+{
+  "menuItemId": "{{buffetId}}",
+  "weightGrams": 300
+}
+
+> {%
+    client.test("lanca em comanda cancelada: 409 TAB_NOT_OPEN", function() {
+        client.assert(response.status === 409, "esperado 409, recebido " + response.status);
+        client.assert(response.body.code === "TAB_NOT_OPEN", "code deveria ser TAB_NOT_OPEN, recebido " + response.body.code);
+    });
+%}
+
+
+### 38. Segunda comanda na mesma mesa -> 409 TAB_ALREADY_OPEN_FOR_DINING_TABLE
+POST {{host}}/api/restaurant/tabs
+Authorization: Bearer {{waiterToken}}
+Content-Type: application/json
+
+{
+  "origin": "TABLE_SERVICE",
+  "diningTableId": "{{diningTableId}}"
+}
+
+> {%
+    client.test("segunda comanda na mesma mesa: 409 TAB_ALREADY_OPEN_FOR_DINING_TABLE", function() {
+        client.assert(response.status === 409, "esperado 409, recebido " + response.status);
+        client.assert(response.body.code === "TAB_ALREADY_OPEN_FOR_DINING_TABLE", "code deveria ser TAB_ALREADY_OPEN_FOR_DINING_TABLE, recebido " + response.body.code);
+    });
+%}
+
+
+### 39. Reabre o cartao sorteado: a comanda cancelada o liberou
+POST {{host}}/api/restaurant/tabs
+Authorization: Bearer {{waiterToken}}
+Content-Type: application/json
+
+{
+  "origin": "SELF_SERVICE",
+  "cardNumber": {{cardNumber}}
+}
+
+> {%
+    client.test("cartao liberado abre de novo", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+    });
+    client.global.set("secondCardTabId", response.body.id);
+%}
+
+
+### 40. Segunda comanda no mesmo cartao -> 409 TAB_ALREADY_OPEN_FOR_CARD
+POST {{host}}/api/restaurant/tabs
+Authorization: Bearer {{waiterToken}}
+Content-Type: application/json
+
+{
+  "origin": "SELF_SERVICE",
+  "cardNumber": {{cardNumber}}
+}
+
+> {%
+    client.test("segunda comanda no mesmo cartao: 409 TAB_ALREADY_OPEN_FOR_CARD", function() {
+        client.assert(response.status === 409, "esperado 409, recebido " + response.status);
+        client.assert(response.body.code === "TAB_ALREADY_OPEN_FOR_CARD", "code deveria ser TAB_ALREADY_OPEN_FOR_CARD, recebido " + response.body.code);
+    });
+%}
+
+
+### 41. Lanca uma pizza P no cartao reaberto, para cancelar duas vezes
+POST {{host}}/api/restaurant/tabs/{{secondCardTabId}}/items
+Authorization: Bearer {{waiterToken}}
+Content-Type: application/json
+
+{
+  "menuItemId": "{{pizzaId}}",
+  "variantId": "{{smallVariantId}}"
+}
+
+> {%
+    client.test("pizza P lancada no cartao", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+        client.assert(response.body.items[0].serviceChargeable === false, "self-service nao cobra taxa");
+    });
+    client.global.set("smallPizzaItemId", response.body.items[0].id);
+%}
+
+
+### 42. Cancela a pizza P
+POST {{host}}/api/restaurant/tabs/{{secondCardTabId}}/items/{{smallPizzaItemId}}/cancel
+Authorization: Bearer {{waiterToken}}
+Content-Type: application/json
+
+{
+  "reason": "pedido duplicado"
+}
+
+> {%
+    client.test("pizza P cancelada", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+    });
+%}
+
+
+### 43. Cancela de novo a pizza P -> 409 TAB_ITEM_ALREADY_CANCELLED
+POST {{host}}/api/restaurant/tabs/{{secondCardTabId}}/items/{{smallPizzaItemId}}/cancel
+Authorization: Bearer {{waiterToken}}
+Content-Type: application/json
+
+{
+  "reason": "de novo"
+}
+
+> {%
+    client.test("cancela de novo a pizza p: 409 TAB_ITEM_ALREADY_CANCELLED", function() {
+        client.assert(response.status === 409, "esperado 409, recebido " + response.status);
+        client.assert(response.body.code === "TAB_ITEM_ALREADY_CANCELLED", "code deveria ser TAB_ITEM_ALREADY_CANCELLED, recebido " + response.body.code);
+    });
+%}
+
+
+### 44. Cancela a comanda da mesa com a pizza ativa -> 409 TAB_HAS_ACTIVE_ITEMS
+POST {{host}}/api/restaurant/tabs/{{tableTabId}}/cancel
+Authorization: Bearer {{waiterToken}}
+Content-Type: application/json
+
+{
+  "reason": "engano"
+}
+
+> {%
+    client.test("cancela a comanda da mesa com a pizza ativa: 409 TAB_HAS_ACTIVE_ITEMS", function() {
+        client.assert(response.status === 409, "esperado 409, recebido " + response.status);
+        client.assert(response.body.code === "TAB_HAS_ACTIVE_ITEMS", "code deveria ser TAB_HAS_ACTIVE_ITEMS, recebido " + response.body.code);
+    });
+%}
+
+
+### 45. Admin desativa a mesa com comanda aberta -> 409 DINING_TABLE_HAS_OPEN_TAB
+POST {{host}}/api/restaurant/dining-tables/{{diningTableId}}/deactivate
+Authorization: Bearer {{adminToken}}
+
+> {%
+    client.test("admin desativa a mesa com comanda aberta: 409 DINING_TABLE_HAS_OPEN_TAB", function() {
+        client.assert(response.status === 409, "esperado 409, recebido " + response.status);
+        client.assert(response.body.code === "DINING_TABLE_HAS_OPEN_TAB", "code deveria ser DINING_TABLE_HAS_OPEN_TAB, recebido " + response.body.code);
+    });
+%}
+
+
+### 46. TABLE_SERVICE com cartao e sem mesa -> 422 INVALID_TAB_OPENING
+POST {{host}}/api/restaurant/tabs
+Authorization: Bearer {{waiterToken}}
+Content-Type: application/json
+
+{
+  "origin": "TABLE_SERVICE",
+  "cardNumber": 12
+}
+
+> {%
+    client.test("table_service com cartao e sem mesa: 422 INVALID_TAB_OPENING", function() {
+        client.assert(response.status === 422, "esperado 422, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_TAB_OPENING", "code deveria ser INVALID_TAB_OPENING, recebido " + response.body.code);
+    });
+%}
+
+
+### 47. Cartao 1000 -> 422 INVALID_CARD_NUMBER
+POST {{host}}/api/restaurant/tabs
+Authorization: Bearer {{waiterToken}}
+Content-Type: application/json
+
+{
+  "origin": "SELF_SERVICE",
+  "cardNumber": 1000
+}
+
+> {%
+    client.test("cartao 1000: 422 INVALID_CARD_NUMBER", function() {
+        client.assert(response.status === 422, "esperado 422, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_CARD_NUMBER", "code deveria ser INVALID_CARD_NUMBER, recebido " + response.body.code);
+    });
+%}
+
+
+### 48. Abre na mesa desativada -> 422 INACTIVE_DINING_TABLE
+POST {{host}}/api/restaurant/tabs
+Authorization: Bearer {{waiterToken}}
+Content-Type: application/json
+
+{
+  "origin": "TABLE_SERVICE",
+  "diningTableId": "{{inactiveDiningTableId}}"
+}
+
+> {%
+    client.test("abre na mesa desativada: 422 INACTIVE_DINING_TABLE", function() {
+        client.assert(response.status === 422, "esperado 422, recebido " + response.status);
+        client.assert(response.body.code === "INACTIVE_DINING_TABLE", "code deveria ser INACTIVE_DINING_TABLE, recebido " + response.body.code);
+    });
+%}
+
+
+### 49. Mesa inexistente -> 404 DINING_TABLE_NOT_FOUND
+POST {{host}}/api/restaurant/tabs
+Authorization: Bearer {{waiterToken}}
+Content-Type: application/json
+
+{
+  "origin": "TABLE_SERVICE",
+  "diningTableId": "00000000-0000-0000-0000-0000000000ff"
+}
+
+> {%
+    client.test("mesa inexistente: 404 DINING_TABLE_NOT_FOUND", function() {
+        client.assert(response.status === 404, "esperado 404, recebido " + response.status);
+        client.assert(response.body.code === "DINING_TABLE_NOT_FOUND", "code deveria ser DINING_TABLE_NOT_FOUND, recebido " + response.body.code);
+    });
+%}
+
+
+### 50. Item esgotado -> 422 MENU_ITEM_UNAVAILABLE
+POST {{host}}/api/restaurant/tabs/{{tableTabId}}/items
+Authorization: Bearer {{waiterToken}}
+Content-Type: application/json
+
+{
+  "menuItemId": "{{soldOutItemId}}"
+}
+
+> {%
+    client.test("item esgotado: 422 MENU_ITEM_UNAVAILABLE", function() {
+        client.assert(response.status === 422, "esperado 422, recebido " + response.status);
+        client.assert(response.body.code === "MENU_ITEM_UNAVAILABLE", "code deveria ser MENU_ITEM_UNAVAILABLE, recebido " + response.body.code);
+    });
+%}
+
+
+### 51. Item fora da janela de horario -> 422 MENU_ITEM_OUTSIDE_AVAILABILITY_WINDOW
+POST {{host}}/api/restaurant/tabs/{{tableTabId}}/items
+Authorization: Bearer {{waiterToken}}
+Content-Type: application/json
+
+{
+  "menuItemId": "{{scheduledItemId}}"
+}
+
+> {%
+    client.test("item fora da janela de horario: 422 MENU_ITEM_OUTSIDE_AVAILABILITY_WINDOW", function() {
+        client.assert(response.status === 422, "esperado 422, recebido " + response.status);
+        client.assert(response.body.code === "MENU_ITEM_OUTSIDE_AVAILABILITY_WINDOW", "code deveria ser MENU_ITEM_OUTSIDE_AVAILABILITY_WINDOW, recebido " + response.body.code);
+    });
+%}
+
+
+### 52. Pizza sem variacao -> 422 MENU_ITEM_VARIANT_REQUIRED
+POST {{host}}/api/restaurant/tabs/{{tableTabId}}/items
+Authorization: Bearer {{waiterToken}}
+Content-Type: application/json
+
+{
+  "menuItemId": "{{pizzaId}}"
+}
+
+> {%
+    client.test("pizza sem variacao: 422 MENU_ITEM_VARIANT_REQUIRED", function() {
+        client.assert(response.status === 422, "esperado 422, recebido " + response.status);
+        client.assert(response.body.code === "MENU_ITEM_VARIANT_REQUIRED", "code deveria ser MENU_ITEM_VARIANT_REQUIRED, recebido " + response.body.code);
+    });
+%}
+
+
+### 53. Variacao que nao e da pizza -> 404 MENU_ITEM_VARIANT_NOT_FOUND
+POST {{host}}/api/restaurant/tabs/{{tableTabId}}/items
+Authorization: Bearer {{waiterToken}}
+Content-Type: application/json
+
+{
+  "menuItemId": "{{pizzaId}}",
+  "variantId": "00000000-0000-0000-0000-0000000000ff"
+}
+
+> {%
+    client.test("variacao que nao e da pizza: 404 MENU_ITEM_VARIANT_NOT_FOUND", function() {
+        client.assert(response.status === 404, "esperado 404, recebido " + response.status);
+        client.assert(response.body.code === "MENU_ITEM_VARIANT_NOT_FOUND", "code deveria ser MENU_ITEM_VARIANT_NOT_FOUND, recebido " + response.body.code);
+    });
+%}
+
+
+### 54. Esgota a variacao P
+POST {{host}}/api/restaurant/menu-items/{{pizzaId}}/variants/{{smallVariantId}}/unavailable
+Authorization: Bearer {{adminToken}}
+
+> {%
+    client.test("variacao P esgotada", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+    });
+%}
+
+
+### 55. Pizza P esgotada -> 422 MENU_ITEM_VARIANT_UNAVAILABLE
+POST {{host}}/api/restaurant/tabs/{{tableTabId}}/items
+Authorization: Bearer {{waiterToken}}
+Content-Type: application/json
+
+{
+  "menuItemId": "{{pizzaId}}",
+  "variantId": "{{smallVariantId}}"
+}
+
+> {%
+    client.test("pizza p esgotada: 422 MENU_ITEM_VARIANT_UNAVAILABLE", function() {
+        client.assert(response.status === 422, "esperado 422, recebido " + response.status);
+        client.assert(response.body.code === "MENU_ITEM_VARIANT_UNAVAILABLE", "code deveria ser MENU_ITEM_VARIANT_UNAVAILABLE, recebido " + response.body.code);
+    });
+%}
+
+
+### 56. Devolve a variacao P
+POST {{host}}/api/restaurant/menu-items/{{pizzaId}}/variants/{{smallVariantId}}/available
+Authorization: Bearer {{adminToken}}
+
+> {%
+    client.test("variacao P disponivel", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+    });
+%}
+
+
+### 57. Buffet sem peso -> 422 SOLD_BY_WEIGHT_REQUIRES_WEIGHT
+POST {{host}}/api/restaurant/tabs/{{tableTabId}}/items
+Authorization: Bearer {{waiterToken}}
+Content-Type: application/json
+
+{
+  "menuItemId": "{{buffetId}}"
+}
+
+> {%
+    client.test("buffet sem peso: 422 SOLD_BY_WEIGHT_REQUIRES_WEIGHT", function() {
+        client.assert(response.status === 422, "esperado 422, recebido " + response.status);
+        client.assert(response.body.code === "SOLD_BY_WEIGHT_REQUIRES_WEIGHT", "code deveria ser SOLD_BY_WEIGHT_REQUIRES_WEIGHT, recebido " + response.body.code);
+    });
+%}
+
+
+### 58. Buffet com quantidade 2 -> 422 SOLD_BY_WEIGHT_REJECTS_QUANTITY
+POST {{host}}/api/restaurant/tabs/{{tableTabId}}/items
+Authorization: Bearer {{waiterToken}}
+Content-Type: application/json
+
+{
+  "menuItemId": "{{buffetId}}",
+  "quantity": 2,
+  "weightGrams": 300
+}
+
+> {%
+    client.test("buffet com quantidade 2: 422 SOLD_BY_WEIGHT_REJECTS_QUANTITY", function() {
+        client.assert(response.status === 422, "esperado 422, recebido " + response.status);
+        client.assert(response.body.code === "SOLD_BY_WEIGHT_REJECTS_QUANTITY", "code deveria ser SOLD_BY_WEIGHT_REJECTS_QUANTITY, recebido " + response.body.code);
+    });
+%}
+
+
+### 59. Buffet com variacao -> 422 SOLD_BY_WEIGHT_REJECTS_VARIANT
+POST {{host}}/api/restaurant/tabs/{{tableTabId}}/items
+Authorization: Bearer {{waiterToken}}
+Content-Type: application/json
+
+{
+  "menuItemId": "{{buffetId}}",
+  "variantId": "{{largeVariantId}}",
+  "weightGrams": 300
+}
+
+> {%
+    client.test("buffet com variacao: 422 SOLD_BY_WEIGHT_REJECTS_VARIANT", function() {
+        client.assert(response.status === 422, "esperado 422, recebido " + response.status);
+        client.assert(response.body.code === "SOLD_BY_WEIGHT_REJECTS_VARIANT", "code deveria ser SOLD_BY_WEIGHT_REJECTS_VARIANT, recebido " + response.body.code);
+    });
+%}
+
+
+### 60. Buffet com adicional -> 422 SOLD_BY_WEIGHT_REJECTS_MODIFIER
+POST {{host}}/api/restaurant/tabs/{{tableTabId}}/items
+Authorization: Bearer {{waiterToken}}
+Content-Type: application/json
+
+{
+  "menuItemId": "{{buffetId}}",
+  "weightGrams": 300,
+  "modifiers": [{ "modifierId": "{{doneLevelId}}", "quantity": 1 }]
+}
+
+> {%
+    client.test("buffet com adicional: 422 SOLD_BY_WEIGHT_REJECTS_MODIFIER", function() {
+        client.assert(response.status === 422, "esperado 422, recebido " + response.status);
+        client.assert(response.body.code === "SOLD_BY_WEIGHT_REJECTS_MODIFIER", "code deveria ser SOLD_BY_WEIGHT_REJECTS_MODIFIER, recebido " + response.body.code);
+    });
+%}
+
+
+### 61. Buffet acima de 50 kg -> 422 INVALID_WEIGHT
+POST {{host}}/api/restaurant/tabs/{{tableTabId}}/items
+Authorization: Bearer {{waiterToken}}
+Content-Type: application/json
+
+{
+  "menuItemId": "{{buffetId}}",
+  "weightGrams": 50001
+}
+
+> {%
+    client.test("buffet acima de 50 kg: 422 INVALID_WEIGHT", function() {
+        client.assert(response.status === 422, "esperado 422, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_WEIGHT", "code deveria ser INVALID_WEIGHT, recebido " + response.body.code);
+    });
+%}
+
+
+### 62. Pizza com peso -> 422 SOLD_BY_UNIT_REJECTS_WEIGHT
+POST {{host}}/api/restaurant/tabs/{{tableTabId}}/items
+Authorization: Bearer {{waiterToken}}
+Content-Type: application/json
+
+{
+  "menuItemId": "{{pizzaId}}",
+  "variantId": "{{largeVariantId}}",
+  "weightGrams": 300
+}
+
+> {%
+    client.test("pizza com peso: 422 SOLD_BY_UNIT_REJECTS_WEIGHT", function() {
+        client.assert(response.status === 422, "esperado 422, recebido " + response.status);
+        client.assert(response.body.code === "SOLD_BY_UNIT_REJECTS_WEIGHT", "code deveria ser SOLD_BY_UNIT_REJECTS_WEIGHT, recebido " + response.body.code);
+    });
+%}
+
+
+### 63. Pizza com quantidade 1000 -> 422 INVALID_QUANTITY
+POST {{host}}/api/restaurant/tabs/{{tableTabId}}/items
+Authorization: Bearer {{waiterToken}}
+Content-Type: application/json
+
+{
+  "menuItemId": "{{pizzaId}}",
+  "variantId": "{{largeVariantId}}",
+  "quantity": 1000
+}
+
+> {%
+    client.test("pizza com quantidade 1000: 422 INVALID_QUANTITY", function() {
+        client.assert(response.status === 422, "esperado 422, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_QUANTITY", "code deveria ser INVALID_QUANTITY, recebido " + response.body.code);
+    });
+%}
+
+
+### 64. Adicional que a pizza nao oferece -> 422 MODIFIER_NOT_OFFERED
+POST {{host}}/api/restaurant/tabs/{{tableTabId}}/items
+Authorization: Bearer {{waiterToken}}
+Content-Type: application/json
+
+{
+  "menuItemId": "{{pizzaId}}",
+  "variantId": "{{largeVariantId}}",
+  "modifiers": [{ "modifierId": "{{notOfferedModifierId}}", "quantity": 1 }]
+}
+
+> {%
+    client.test("adicional que a pizza nao oferece: 422 MODIFIER_NOT_OFFERED", function() {
+        client.assert(response.status === 422, "esperado 422, recebido " + response.status);
+        client.assert(response.body.code === "MODIFIER_NOT_OFFERED", "code deveria ser MODIFIER_NOT_OFFERED, recebido " + response.body.code);
+    });
+%}
+
+
+### 65. Adicional desativado -> 422 INACTIVE_MODIFIER
+POST {{host}}/api/restaurant/tabs/{{tableTabId}}/items
+Authorization: Bearer {{waiterToken}}
+Content-Type: application/json
+
+{
+  "menuItemId": "{{pizzaId}}",
+  "variantId": "{{largeVariantId}}",
+  "modifiers": [{ "modifierId": "{{inactiveModifierId}}", "quantity": 1 }]
+}
+
+> {%
+    client.test("adicional desativado: 422 INACTIVE_MODIFIER", function() {
+        client.assert(response.status === 422, "esperado 422, recebido " + response.status);
+        client.assert(response.body.code === "INACTIVE_MODIFIER", "code deveria ser INACTIVE_MODIFIER, recebido " + response.body.code);
+    });
+%}
+
+
+### 66. Tres bordas, acima do maximo de 2 -> 422 INVALID_TAB_ITEM_MODIFIER_QUANTITY
+POST {{host}}/api/restaurant/tabs/{{tableTabId}}/items
+Authorization: Bearer {{waiterToken}}
+Content-Type: application/json
+
+{
+  "menuItemId": "{{pizzaId}}",
+  "variantId": "{{largeVariantId}}",
+  "modifiers": [{ "modifierId": "{{stuffedCrustId}}", "quantity": 3 }]
+}
+
+> {%
+    client.test("tres bordas, acima do maximo de 2: 422 INVALID_TAB_ITEM_MODIFIER_QUANTITY", function() {
+        client.assert(response.status === 422, "esperado 422, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_TAB_ITEM_MODIFIER_QUANTITY", "code deveria ser INVALID_TAB_ITEM_MODIFIER_QUANTITY, recebido " + response.body.code);
+    });
+%}
+
+
+### 67. A mesma borda duas vezes -> 422 DUPLICATE_TAB_ITEM_MODIFIER
+POST {{host}}/api/restaurant/tabs/{{tableTabId}}/items
+Authorization: Bearer {{waiterToken}}
+Content-Type: application/json
+
+{
+  "menuItemId": "{{pizzaId}}",
+  "variantId": "{{largeVariantId}}",
+  "modifiers": [
+    { "modifierId": "{{stuffedCrustId}}", "quantity": 1 },
+    { "modifierId": "{{stuffedCrustId}}", "quantity": 1 }
+  ]
+}
+
+> {%
+    client.test("a mesma borda duas vezes: 422 DUPLICATE_TAB_ITEM_MODIFIER", function() {
+        client.assert(response.status === 422, "esperado 422, recebido " + response.status);
+        client.assert(response.body.code === "DUPLICATE_TAB_ITEM_MODIFIER", "code deveria ser DUPLICATE_TAB_ITEM_MODIFIER, recebido " + response.body.code);
+    });
+%}
+
+
+### 68. Adicional inexistente -> 404 MODIFIER_NOT_FOUND
+POST {{host}}/api/restaurant/tabs/{{tableTabId}}/items
+Authorization: Bearer {{waiterToken}}
+Content-Type: application/json
+
+{
+  "menuItemId": "{{pizzaId}}",
+  "variantId": "{{largeVariantId}}",
+  "modifiers": [{ "modifierId": "00000000-0000-0000-0000-0000000000ff", "quantity": 1 }]
+}
+
+> {%
+    client.test("adicional inexistente: 404 MODIFIER_NOT_FOUND", function() {
+        client.assert(response.status === 404, "esperado 404, recebido " + response.status);
+        client.assert(response.body.code === "MODIFIER_NOT_FOUND", "code deveria ser MODIFIER_NOT_FOUND, recebido " + response.body.code);
+    });
+%}
+
+
+### 69. Item do cardapio inexistente -> 404 MENU_ITEM_NOT_FOUND
+POST {{host}}/api/restaurant/tabs/{{tableTabId}}/items
+Authorization: Bearer {{waiterToken}}
+Content-Type: application/json
+
+{
+  "menuItemId": "00000000-0000-0000-0000-0000000000ff"
+}
+
+> {%
+    client.test("item do cardapio inexistente: 404 MENU_ITEM_NOT_FOUND", function() {
+        client.assert(response.status === 404, "esperado 404, recebido " + response.status);
+        client.assert(response.body.code === "MENU_ITEM_NOT_FOUND", "code deveria ser MENU_ITEM_NOT_FOUND, recebido " + response.body.code);
+    });
+%}
+
+
+### 70. Observacao com 201 caracteres -> 422 INVALID_SPECIAL_INSTRUCTIONS
+POST {{host}}/api/restaurant/tabs/{{tableTabId}}/items
+Authorization: Bearer {{waiterToken}}
+Content-Type: application/json
+
+{
+  "menuItemId": "{{pizzaId}}",
+  "variantId": "{{largeVariantId}}",
+  "specialInstructions": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+}
+
+> {%
+    client.test("observacao com 201 caracteres: 422 INVALID_SPECIAL_INSTRUCTIONS", function() {
+        client.assert(response.status === 422, "esperado 422, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_SPECIAL_INSTRUCTIONS", "code deveria ser INVALID_SPECIAL_INSTRUCTIONS, recebido " + response.body.code);
+    });
+%}
+
+
+### 71. Cancela item com motivo em branco -> 422 INVALID_CANCELLATION_REASON
+POST {{host}}/api/restaurant/tabs/{{tableTabId}}/items/{{pizzaItemId}}/cancel
+Authorization: Bearer {{waiterToken}}
+Content-Type: application/json
+
+{
+  "reason": "   "
+}
+
+> {%
+    client.test("cancela item com motivo em branco: 422 INVALID_CANCELLATION_REASON", function() {
+        client.assert(response.status === 422, "esperado 422, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_CANCELLATION_REASON", "code deveria ser INVALID_CANCELLATION_REASON, recebido " + response.body.code);
+    });
+%}
+
+
+### 72. Abertura sem origin -> 400 VALIDATION_FAILED
+POST {{host}}/api/restaurant/tabs
+Authorization: Bearer {{waiterToken}}
+Content-Type: application/json
+
+{
+  "diningTableId": "{{diningTableId}}"
+}
+
+> {%
+    client.test("abertura sem origin: 400 VALIDATION_FAILED", function() {
+        client.assert(response.status === 400, "esperado 400, recebido " + response.status);
+        client.assert(response.body.code === "VALIDATION_FAILED", "code deveria ser VALIDATION_FAILED, recebido " + response.body.code);
+    });
+%}
+
+
+### 73. Abertura com origin desconhecida -> 400 MALFORMED_REQUEST
+POST {{host}}/api/restaurant/tabs
+Authorization: Bearer {{waiterToken}}
+Content-Type: application/json
+
+{
+  "origin": "DELIVERY",
+  "diningTableId": "{{diningTableId}}"
+}
+
+> {%
+    client.test("abertura com origin desconhecida: 400 MALFORMED_REQUEST", function() {
+        client.assert(response.status === 400, "esperado 400, recebido " + response.status);
+        client.assert(response.body.code === "MALFORMED_REQUEST", "code deveria ser MALFORMED_REQUEST, recebido " + response.body.code);
+    });
+%}
+
+
+### 74. Lancamento sem menuItemId -> 400 VALIDATION_FAILED
+POST {{host}}/api/restaurant/tabs/{{tableTabId}}/items
+Authorization: Bearer {{waiterToken}}
+Content-Type: application/json
+
+{
+  "quantity": 1
+}
+
+> {%
+    client.test("lancamento sem menuitemid: 400 VALIDATION_FAILED", function() {
+        client.assert(response.status === 400, "esperado 400, recebido " + response.status);
+        client.assert(response.body.code === "VALIDATION_FAILED", "code deveria ser VALIDATION_FAILED, recebido " + response.body.code);
+    });
+%}
+
+
+### 75. Lista sem token -> 401 AUTHENTICATION_REQUIRED
+GET {{host}}/api/restaurant/tabs
+
+> {%
+    client.test("sem token: 401 AUTHENTICATION_REQUIRED", function() {
+        client.assert(response.status === 401, "esperado 401, recebido " + response.status);
+        client.assert(response.body.code === "AUTHENTICATION_REQUIRED", "code deveria ser AUTHENTICATION_REQUIRED");
+    });
+%}
+
+
+### 76. Cozinha lista as comandas -> 403 ACCESS_DENIED
+GET {{host}}/api/restaurant/tabs
+Authorization: Bearer {{kitchenToken}}
+
+> {%
+    client.test("cozinha lista as comandas: 403 ACCESS_DENIED", function() {
+        client.assert(response.status === 403, "esperado 403, recebido " + response.status);
+        client.assert(response.body.code === "ACCESS_DENIED", "code deveria ser ACCESS_DENIED, recebido " + response.body.code);
+    });
+%}
+
+
+### ------------------------------------------------------------------
+### Limpeza: cancela as comandas abertas, para o arquivo rodar de novo
+### ------------------------------------------------------------------
+
+
+### 77. Cancela a pizza da mesa
+POST {{host}}/api/restaurant/tabs/{{tableTabId}}/items/{{pizzaItemId}}/cancel
+Authorization: Bearer {{waiterToken}}
+Content-Type: application/json
+
+{
+  "reason": "limpeza do teste"
+}
+
+> {%
+    client.test("pizza da mesa cancelada", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+    });
+%}
+
+
+### 78. Cancela a comanda da mesa
+POST {{host}}/api/restaurant/tabs/{{tableTabId}}/cancel
+Authorization: Bearer {{waiterToken}}
+Content-Type: application/json
+
+{
+  "reason": "limpeza do teste"
+}
+
+> {%
+    client.test("comanda da mesa cancelada", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        client.assert(response.body.status === "CANCELLED", "comanda CANCELLED");
+    });
+%}
+
+
+### 79. Cancela a comanda do cartao reaberto
+POST {{host}}/api/restaurant/tabs/{{secondCardTabId}}/cancel
+Authorization: Bearer {{waiterToken}}
+Content-Type: application/json
+
+{
+  "reason": "limpeza do teste"
+}
+
+> {%
+    client.test("comanda do cartao cancelada", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        client.assert(response.body.status === "CANCELLED", "comanda CANCELLED");
+    });
+%}
+
+
+### 80. A mesa ficou livre
+GET {{host}}/api/restaurant/tabs?diningTableId={{diningTableId}}
+Authorization: Bearer {{waiterToken}}
+
+> {%
+    client.test("mesa sem comanda ativa", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        client.assert(response.body.length === 0, "lista vazia");
+    });
+%}
