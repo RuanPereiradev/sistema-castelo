@@ -321,6 +321,8 @@ Este glossário é a **linguagem ubíqua do projeto**. Todo subagente recebe est
 | Consumo do restaurante | `TabCharge` | |
 | Ajuste / desconto | `AdjustmentCharge` | Exige autorização e motivo |
 | Pagamento | `Payment` | |
+| Estorno de lançamento | `reverse` | Escreve o lançamento oposto; o original fica |
+| Estorno de pagamento | `refund` | Pagamento passa a `REFUNDED` e deixa de abater o saldo |
 | Saldo | `balance()` | Sempre calculado |
 | Caixa | `CashDrawer` | |
 | Turno de caixa | `CashDrawerSession` | |

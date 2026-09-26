@@ -86,7 +86,7 @@ a URL, o privado com a senha.
 | `30-restaurant-menu.http` | 0.8 | Categorias e itens do cardápio, preço, esgotar, janela de horário, `/public/menu` |
 | `31-restaurant-menu-variants-modifiers.http` | 1.2 | Variações, adicionais, esgotar variação, cardápio público com "a partir de" |
 | `32-restaurant-dining-tables.http` | 1.5 | Cadastro de mesas, ordem natural da lista, leitura pelo garçom, inativas |
-| — | 1.4 | Portas fake de pagamento e fiscal: sem rota. Exercitadas pelo `.http` da task que as consumir (v1.1, v1.2) |
+| `40-billing-folios.http` | 1.3 | Folio: lançamento, pagamento idempotente, estorno, ajuste, fechamento com saldo zero |
 
 Numeração em ordem de execução sugerida. Cada task nova acrescenta o próximo
 número — a 0.8 traz o `30-restaurant-menu.http`.
