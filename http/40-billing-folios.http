@@ -1,0 +1,995 @@
+### Task 1.3 - folio: lancamentos, estorno e pagamentos
+### Ambiente: selecione "dev" no IntelliJ HTTP Client, com http-client.env.json
+### + http-client.private.env.json (copie o .example). Ver http/README.md.
+###
+### Pre-requisito: aplicacao rodando no perfil "dev" com o seed habilitado. Os folios
+### sao abertos e recebem lancamentos pela rota so de dev (/api/billing/dev/folios,
+### decisao #12): nenhuma rota real abre folio nesta task.
+### Rode o arquivo inteiro, em ordem: os cenarios salvam os ids que os seguintes usam.
+###
+### Chaves de idempotencia e codigos de referencia levam um sufixo aleatorio por
+### execucao: a chave e unica no sistema inteiro, e o codigo e unico entre os folios
+### STAY abertos.
+
+
+### 0. Login do admin
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{
+  "username": "{{adminUsername}}",
+  "password": "{{password}}"
+}
+
+> {%
+    client.test("login do admin retorna 200", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+    });
+    client.global.set("accessToken", response.body.accessToken);
+    const suffix = Math.random().toString(36).substring(2, 8);
+    client.global.set("suffix", suffix);
+    client.global.set("stayCode", "Q" + suffix);
+    client.global.set("otherStayCode", "N" + suffix);
+    client.global.set("key1", "k-" + suffix + "-1");
+    client.global.set("key2", "k-" + suffix + "-2");
+    client.global.set("key3", "k-" + suffix + "-3");
+    client.global.set("key4", "k-" + suffix + "-4");
+    client.global.set("key5", "k-" + suffix + "-5");
+    client.global.set("key6", "k-" + suffix + "-6");
+    client.global.set("key7", "k-" + suffix + "-7");
+%}
+
+
+### 1. Login da recepcao
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{
+  "username": "{{frontDeskUsername}}",
+  "password": "{{password}}"
+}
+
+> {%
+    client.test("login da recepcao retorna 200", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+    });
+    client.global.set("frontDeskToken", response.body.accessToken);
+%}
+
+
+### ------------------------------------------------------------------
+### Caminho feliz: folio de comanda (TAB)
+### ------------------------------------------------------------------
+
+
+### 2. [dev] Abre um folio TAB
+POST {{host}}/api/billing/dev/folios
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "type": "TAB"
+}
+
+> {%
+    client.test("folio TAB aberto, sem referencia, saldo zero", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+        client.assert(response.body.status === "OPEN", "folio nasce aberto");
+        client.assert(response.body.referenceCode === null, "folio TAB nao tem referencia");
+        client.assert(response.body.balance === "0.00", "saldo deveria ser 0.00");
+    });
+    client.global.set("tabFolioId", response.body.id);
+%}
+
+
+### 3. [dev] Lanca o consumo de 120.00
+POST {{host}}/api/billing/dev/folios/{{tabFolioId}}/charges
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "sourceType": "TAB",
+  "amount": "120.00",
+  "description": "Restaurante - comanda 142"
+}
+
+> {%
+    client.test("lancamento de 120.00", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+        client.assert(response.body.balance === "120.00", "saldo deveria ser 120.00, veio " + response.body.balance);
+    });
+%}
+
+
+### 4. Recepcao recebe 50.00 em PIX
+POST {{host}}/api/billing/folios/{{tabFolioId}}/payments
+Authorization: Bearer {{frontDeskToken}}
+Content-Type: application/json
+Idempotency-Key: {{key1}}
+
+{
+  "method": "PIX",
+  "amount": "50.00"
+}
+
+> {%
+    client.test("pagamento de 50.00 retorna 201 e saldo 70.00", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+        client.assert(response.body.status === "CONFIRMED", "pagamento nasce CONFIRMED");
+        client.assert(response.body.balance === "70.00", "saldo deveria ser 70.00, veio " + response.body.balance);
+    });
+    client.global.set("tabPaymentId", response.body.id);
+%}
+
+
+### 5. Repete o mesmo pagamento (duplo clique): mesmo id, sem pagar duas vezes
+POST {{host}}/api/billing/folios/{{tabFolioId}}/payments
+Authorization: Bearer {{frontDeskToken}}
+Content-Type: application/json
+Idempotency-Key: {{key1}}
+
+{
+  "method": "PIX",
+  "amount": "50.00"
+}
+
+> {%
+    client.test("repeticao devolve o mesmo pagamento", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+        client.assert(response.body.id === client.global.get("tabPaymentId"), "deveria ser o mesmo pagamento");
+        client.assert(response.body.balance === "70.00", "saldo continua 70.00, veio " + response.body.balance);
+    });
+%}
+
+
+### 6. Recebe os 70.00 restantes em dinheiro
+POST {{host}}/api/billing/folios/{{tabFolioId}}/payments
+Authorization: Bearer {{frontDeskToken}}
+Content-Type: application/json
+Idempotency-Key: {{key2}}
+
+{
+  "method": "CASH",
+  "amount": "70.00"
+}
+
+> {%
+    client.test("saldo zerado", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+        client.assert(response.body.balance === "0.00", "saldo deveria ser 0.00, veio " + response.body.balance);
+    });
+%}
+
+
+### 7. Fecha o folio TAB
+POST {{host}}/api/billing/folios/{{tabFolioId}}/close
+Authorization: Bearer {{frontDeskToken}}
+
+> {%
+    client.test("folio TAB fechado com saldo zero", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        client.assert(response.body.status === "CLOSED", "folio deveria estar CLOSED");
+        client.assert(response.body.closedAt !== null, "closedAt deveria estar preenchido");
+        client.assert(response.body.payments.length === 2, "dois pagamentos, a repeticao nao conta");
+    });
+%}
+
+
+### ------------------------------------------------------------------
+### Caminho feliz: folio de estadia (STAY)
+### ------------------------------------------------------------------
+
+
+### 8. [dev] Abre um folio STAY com o quarto como referencia
+POST {{host}}/api/billing/dev/folios
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "type": "STAY",
+  "referenceCode": "  {{stayCode}}  ",
+  "referenceLabel": "Quarto {{stayCode}} - Joao Silva"
+}
+
+> {%
+    client.test("folio STAY aberto com o codigo aparado", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+        client.assert(response.body.referenceCode === client.global.get("stayCode"), "codigo deveria vir aparado");
+    });
+    client.global.set("stayFolioId", response.body.id);
+%}
+
+
+### 9. [dev] Lanca uma diaria de 300.00
+POST {{host}}/api/billing/dev/folios/{{stayFolioId}}/charges
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "sourceType": "ROOM_NIGHT",
+  "amount": "300.00",
+  "description": "Diaria"
+}
+
+> {%
+    client.test("diaria lancada", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+        client.assert(response.body.balance === "300.00", "saldo deveria ser 300.00");
+    });
+%}
+
+
+### 10. [dev] Lanca um consumo de 45.00, que sera estornado
+POST {{host}}/api/billing/dev/folios/{{stayFolioId}}/charges
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "sourceType": "TAB",
+  "amount": "45.00",
+  "description": "Restaurante - comanda 150"
+}
+
+> {%
+    client.test("consumo lancado", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+        client.assert(response.body.balance === "345.00", "saldo deveria ser 345.00");
+    });
+    client.global.set("stayTabChargeId", response.body.chargeId);
+%}
+
+
+### 11. Recepcao estorna o consumo lancado no quarto errado
+POST {{host}}/api/billing/folios/{{stayFolioId}}/charges/{{stayTabChargeId}}/reversal
+Authorization: Bearer {{frontDeskToken}}
+Content-Type: application/json
+
+{
+  "reason": "Lancado no quarto errado"
+}
+
+> {%
+    const original = response.body.charges.find(function(charge) { return charge.id === client.global.get("stayTabChargeId"); });
+    const reversal = response.body.charges.find(function(charge) { return charge.reversalOf === client.global.get("stayTabChargeId"); });
+    client.test("estorno e um lancamento oposto; o original fica", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+        client.assert(response.body.balance === "300.00", "saldo deveria voltar a 300.00, veio " + response.body.balance);
+        client.assert(original.amount === "45.00", "o original continua intacto");
+        client.assert(original.reversedBy === reversal.id, "o original aponta o estorno");
+        client.assert(reversal.amount === "-45.00", "o estorno tem o valor oposto");
+        client.assert(reversal.reason === "Lancado no quarto errado", "o estorno guarda o motivo");
+    });
+    client.global.set("stayReversalId", reversal.id);
+%}
+
+
+### 12. Recebe 350.00 no cartao: folio STAY aceita e fica com credito
+POST {{host}}/api/billing/folios/{{stayFolioId}}/payments
+Authorization: Bearer {{frontDeskToken}}
+Content-Type: application/json
+Idempotency-Key: {{key3}}
+
+{
+  "method": "CREDIT_CARD",
+  "amount": "350.00"
+}
+
+> {%
+    client.test("pagamento acima do saldo em STAY deixa saldo negativo", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+        client.assert(response.body.balance === "-50.00", "saldo deveria ser -50.00, veio " + response.body.balance);
+    });
+    client.global.set("stayPaymentId", response.body.id);
+%}
+
+
+### 13. Admin estorna o pagamento de 350.00
+POST {{host}}/api/billing/folios/{{stayFolioId}}/payments/{{stayPaymentId}}/refund
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "reason": "Cobrado no cartao errado"
+}
+
+> {%
+    const payment = response.body.payments.find(function(item) { return item.id === client.global.get("stayPaymentId"); });
+    client.test("pagamento estornado deixa de abater o saldo", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        client.assert(payment.status === "REFUNDED", "pagamento deveria estar REFUNDED");
+        client.assert(payment.refundReason === "Cobrado no cartao errado", "motivo do estorno guardado");
+        client.assert(response.body.totalPayments === "0.00", "nenhum pagamento abate");
+        client.assert(response.body.balance === "300.00", "saldo deveria ser 300.00, veio " + response.body.balance);
+    });
+%}
+
+
+### 14. Recebe 280.00 em PIX
+POST {{host}}/api/billing/folios/{{stayFolioId}}/payments
+Authorization: Bearer {{frontDeskToken}}
+Content-Type: application/json
+Idempotency-Key: {{key4}}
+
+{
+  "method": "PIX",
+  "amount": "280.00"
+}
+
+> {%
+    client.test("saldo de 20.00", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+        client.assert(response.body.balance === "20.00", "saldo deveria ser 20.00, veio " + response.body.balance);
+    });
+%}
+
+
+### 15. Admin ajusta um desconto de 20.00
+POST {{host}}/api/billing/folios/{{stayFolioId}}/adjustments
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "amount": "-20.00",
+  "description": "Desconto de cortesia",
+  "reason": "Reclamacao do hospede"
+}
+
+> {%
+    client.test("ajuste zera o saldo", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+        client.assert(response.body.balance === "0.00", "saldo deveria ser 0.00, veio " + response.body.balance);
+        client.assert(response.body.totalCharges === "280.00", "total de lancamentos deveria ser 280.00");
+    });
+%}
+
+
+### 16. Busca o folio pelo numero do quarto
+GET {{host}}/api/billing/folios?referenceCode={{stayCode}}
+Authorization: Bearer {{frontDeskToken}}
+
+> {%
+    client.test("folio STAY aberto achado pelo codigo", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        client.assert(response.body.id === client.global.get("stayFolioId"), "deveria achar o folio da estadia");
+        client.assert(response.body.reference.label === "Quarto " + client.global.get("stayCode") + " - Joao Silva", "label da referencia");
+    });
+%}
+
+
+### 17. Fecha o folio STAY com saldo zero
+POST {{host}}/api/billing/folios/{{stayFolioId}}/close
+Authorization: Bearer {{frontDeskToken}}
+
+> {%
+    client.test("folio STAY fechado", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        client.assert(response.body.status === "CLOSED", "folio deveria estar CLOSED");
+    });
+%}
+
+
+### 18. Le o folio fechado pelo id
+GET {{host}}/api/billing/folios/{{stayFolioId}}
+Authorization: Bearer {{frontDeskToken}}
+
+> {%
+    client.test("folio fechado continua legivel", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        client.assert(response.body.charges.length === 4, "diaria, consumo, estorno e ajuste");
+        client.assert(response.body.payments.length === 2, "pagamento estornado e o de PIX");
+    });
+%}
+
+
+### ------------------------------------------------------------------
+### Preparacao dos negativos: um folio STAY e um TAB abertos
+### ------------------------------------------------------------------
+
+
+### 19. [dev] Abre outro folio STAY
+POST {{host}}/api/billing/dev/folios
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "type": "STAY",
+  "referenceCode": "{{otherStayCode}}",
+  "referenceLabel": "Quarto {{otherStayCode}} - Maria Souza"
+}
+
+> {%
+    client.global.set("otherFolioId", response.body.id);
+%}
+
+
+### 20. [dev] Lanca uma diaria de 100.00 no outro folio
+POST {{host}}/api/billing/dev/folios/{{otherFolioId}}/charges
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "sourceType": "ROOM_NIGHT",
+  "amount": "100.00",
+  "description": "Diaria"
+}
+
+> {%
+    client.global.set("otherRoomNightId", response.body.chargeId);
+%}
+
+
+### 21. [dev] Lanca um consumo de 10.00 no outro folio
+POST {{host}}/api/billing/dev/folios/{{otherFolioId}}/charges
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "sourceType": "TAB",
+  "amount": "10.00",
+  "description": "Restaurante - comanda 151"
+}
+
+> {%
+    client.global.set("otherTabChargeId", response.body.chargeId);
+%}
+
+
+### 22. Estorna o consumo de 10.00 (para os negativos de estorno)
+POST {{host}}/api/billing/folios/{{otherFolioId}}/charges/{{otherTabChargeId}}/reversal
+Authorization: Bearer {{frontDeskToken}}
+Content-Type: application/json
+
+{
+  "reason": "Consumo duplicado"
+}
+
+> {%
+    const reversal = response.body.charges.find(function(charge) { return charge.reversalOf === client.global.get("otherTabChargeId"); });
+    client.test("estorno aceito", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+    });
+    client.global.set("otherReversalId", reversal.id);
+%}
+
+
+### 23. Recebe 5.00 em PIX (para os negativos de estorno de pagamento)
+POST {{host}}/api/billing/folios/{{otherFolioId}}/payments
+Authorization: Bearer {{frontDeskToken}}
+Content-Type: application/json
+Idempotency-Key: {{key5}}
+
+{
+  "method": "PIX",
+  "amount": "5.00"
+}
+
+> {%
+    client.global.set("otherPaymentId", response.body.id);
+%}
+
+
+### 24. Admin estorna o pagamento de 5.00
+POST {{host}}/api/billing/folios/{{otherFolioId}}/payments/{{otherPaymentId}}/refund
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "reason": "Pagamento em duplicidade"
+}
+
+> {%
+    client.test("estorno de pagamento aceito", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+    });
+%}
+
+
+### 25. Recebe 7.00 em dinheiro (continua confirmado)
+POST {{host}}/api/billing/folios/{{otherFolioId}}/payments
+Authorization: Bearer {{frontDeskToken}}
+Content-Type: application/json
+Idempotency-Key: {{key6}}
+
+{
+  "method": "CASH",
+  "amount": "7.00"
+}
+
+> {%
+    client.global.set("confirmedPaymentId", response.body.id);
+%}
+
+
+### 26. [dev] Abre outro folio TAB, sem lancamento
+POST {{host}}/api/billing/dev/folios
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "type": "TAB"
+}
+
+> {%
+    client.global.set("emptyTabFolioId", response.body.id);
+%}
+
+
+### ------------------------------------------------------------------
+### Cenarios negativos: um por codigo de erro
+### ------------------------------------------------------------------
+
+
+### 27. Folio inexistente -> 404 FOLIO_NOT_FOUND
+GET {{host}}/api/billing/folios/00000000-0000-0000-0000-0000000000ff
+Authorization: Bearer {{frontDeskToken}}
+
+> {%
+    client.test("folio inexistente retorna 404", function() {
+        client.assert(response.status === 404, "esperado 404, recebido " + response.status);
+        client.assert(response.body.code === "FOLIO_NOT_FOUND", "code deveria ser FOLIO_NOT_FOUND");
+    });
+%}
+
+
+### 28. Busca pelo codigo de um folio fechado -> 404 FOLIO_NOT_FOUND
+GET {{host}}/api/billing/folios?referenceCode={{stayCode}}
+Authorization: Bearer {{frontDeskToken}}
+
+> {%
+    client.test("folio fechado nao e achado pelo codigo", function() {
+        client.assert(response.status === 404, "esperado 404, recebido " + response.status);
+        client.assert(response.body.code === "FOLIO_NOT_FOUND", "code deveria ser FOLIO_NOT_FOUND");
+    });
+%}
+
+
+### 29. Estorno de lancamento inexistente -> 404 CHARGE_NOT_FOUND
+POST {{host}}/api/billing/folios/{{otherFolioId}}/charges/00000000-0000-0000-0000-0000000000ff/reversal
+Authorization: Bearer {{frontDeskToken}}
+Content-Type: application/json
+
+{
+  "reason": "Teste"
+}
+
+> {%
+    client.test("lancamento inexistente retorna 404", function() {
+        client.assert(response.status === 404, "esperado 404, recebido " + response.status);
+        client.assert(response.body.code === "CHARGE_NOT_FOUND", "code deveria ser CHARGE_NOT_FOUND");
+    });
+%}
+
+
+### 30. Estorno de pagamento inexistente -> 404 PAYMENT_NOT_FOUND
+POST {{host}}/api/billing/folios/{{otherFolioId}}/payments/00000000-0000-0000-0000-0000000000ff/refund
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "reason": "Teste"
+}
+
+> {%
+    client.test("pagamento inexistente retorna 404", function() {
+        client.assert(response.status === 404, "esperado 404, recebido " + response.status);
+        client.assert(response.body.code === "PAYMENT_NOT_FOUND", "code deveria ser PAYMENT_NOT_FOUND");
+    });
+%}
+
+
+### 31. Pagamento novo em folio fechado -> 409 FOLIO_CLOSED
+POST {{host}}/api/billing/folios/{{tabFolioId}}/payments
+Authorization: Bearer {{frontDeskToken}}
+Content-Type: application/json
+Idempotency-Key: {{key7}}
+
+{
+  "method": "PIX",
+  "amount": "1.00"
+}
+
+> {%
+    client.test("folio fechado recusa pagamento", function() {
+        client.assert(response.status === 409, "esperado 409, recebido " + response.status);
+        client.assert(response.body.code === "FOLIO_CLOSED", "code deveria ser FOLIO_CLOSED");
+    });
+%}
+
+
+### 32. Repeticao do pagamento depois do fechamento: devolve o original
+POST {{host}}/api/billing/folios/{{tabFolioId}}/payments
+Authorization: Bearer {{frontDeskToken}}
+Content-Type: application/json
+Idempotency-Key: {{key1}}
+
+{
+  "method": "PIX",
+  "amount": "50.00"
+}
+
+> {%
+    client.test("repeticao vale mesmo com o folio fechado", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+        client.assert(response.body.id === client.global.get("tabPaymentId"), "deveria ser o pagamento original");
+    });
+%}
+
+
+### 33. Fechar com saldo -> 409 FOLIO_BALANCE_NOT_ZERO
+POST {{host}}/api/billing/folios/{{otherFolioId}}/close
+Authorization: Bearer {{frontDeskToken}}
+
+> {%
+    client.test("fechar com saldo retorna 409", function() {
+        client.assert(response.status === 409, "esperado 409, recebido " + response.status);
+        client.assert(response.body.code === "FOLIO_BALANCE_NOT_ZERO", "code deveria ser FOLIO_BALANCE_NOT_ZERO");
+    });
+%}
+
+
+### 34. [dev] Outro STAY aberto com o mesmo codigo -> 409 FOLIO_REFERENCE_ALREADY_IN_USE
+POST {{host}}/api/billing/dev/folios
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "type": "STAY",
+  "referenceCode": "{{otherStayCode}}",
+  "referenceLabel": "Quarto repetido"
+}
+
+> {%
+    client.test("codigo em uso retorna 409", function() {
+        client.assert(response.status === 409, "esperado 409, recebido " + response.status);
+        client.assert(response.body.code === "FOLIO_REFERENCE_ALREADY_IN_USE", "code deveria ser FOLIO_REFERENCE_ALREADY_IN_USE");
+    });
+%}
+
+
+### 35. Estornar de novo o mesmo lancamento -> 409 CHARGE_ALREADY_REVERSED
+POST {{host}}/api/billing/folios/{{otherFolioId}}/charges/{{otherTabChargeId}}/reversal
+Authorization: Bearer {{frontDeskToken}}
+Content-Type: application/json
+
+{
+  "reason": "De novo"
+}
+
+> {%
+    client.test("segundo estorno retorna 409", function() {
+        client.assert(response.status === 409, "esperado 409, recebido " + response.status);
+        client.assert(response.body.code === "CHARGE_ALREADY_REVERSED", "code deveria ser CHARGE_ALREADY_REVERSED");
+    });
+%}
+
+
+### 36. Estornar de novo o mesmo pagamento -> 409 PAYMENT_ALREADY_REFUNDED
+POST {{host}}/api/billing/folios/{{otherFolioId}}/payments/{{otherPaymentId}}/refund
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "reason": "De novo"
+}
+
+> {%
+    client.test("segundo estorno de pagamento retorna 409", function() {
+        client.assert(response.status === 409, "esperado 409, recebido " + response.status);
+        client.assert(response.body.code === "PAYMENT_ALREADY_REFUNDED", "code deveria ser PAYMENT_ALREADY_REFUNDED");
+    });
+%}
+
+
+### 37. Mesma chave, outro valor, mesmo folio -> 409 IDEMPOTENCY_KEY_REUSED
+POST {{host}}/api/billing/folios/{{otherFolioId}}/payments
+Authorization: Bearer {{frontDeskToken}}
+Content-Type: application/json
+Idempotency-Key: {{key6}}
+
+{
+  "method": "CASH",
+  "amount": "8.00"
+}
+
+> {%
+    client.test("chave reusada com outro valor retorna 409", function() {
+        client.assert(response.status === 409, "esperado 409, recebido " + response.status);
+        client.assert(response.body.code === "IDEMPOTENCY_KEY_REUSED", "code deveria ser IDEMPOTENCY_KEY_REUSED");
+    });
+%}
+
+
+### 38. Chave de outro folio -> 409 IDEMPOTENCY_KEY_REUSED
+POST {{host}}/api/billing/folios/{{otherFolioId}}/payments
+Authorization: Bearer {{frontDeskToken}}
+Content-Type: application/json
+Idempotency-Key: {{key1}}
+
+{
+  "method": "PIX",
+  "amount": "50.00"
+}
+
+> {%
+    client.test("chave de outro folio retorna 409", function() {
+        client.assert(response.status === 409, "esperado 409, recebido " + response.status);
+        client.assert(response.body.code === "IDEMPOTENCY_KEY_REUSED", "code deveria ser IDEMPOTENCY_KEY_REUSED");
+    });
+%}
+
+
+### 39. Estornar um estorno -> 422 CHARGE_NOT_REVERSIBLE
+POST {{host}}/api/billing/folios/{{otherFolioId}}/charges/{{otherReversalId}}/reversal
+Authorization: Bearer {{frontDeskToken}}
+Content-Type: application/json
+
+{
+  "reason": "Desfazer o estorno"
+}
+
+> {%
+    client.test("linha de estorno nao se estorna", function() {
+        client.assert(response.status === 422, "esperado 422, recebido " + response.status);
+        client.assert(response.body.code === "CHARGE_NOT_REVERSIBLE", "code deveria ser CHARGE_NOT_REVERSIBLE");
+    });
+%}
+
+
+### 40. [dev] Diaria em folio TAB -> 422 CHARGE_TYPE_NOT_ACCEPTED
+POST {{host}}/api/billing/dev/folios/{{emptyTabFolioId}}/charges
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "sourceType": "ROOM_NIGHT",
+  "amount": "100.00",
+  "description": "Diaria"
+}
+
+> {%
+    client.test("diaria em folio TAB retorna 422", function() {
+        client.assert(response.status === 422, "esperado 422, recebido " + response.status);
+        client.assert(response.body.code === "CHARGE_TYPE_NOT_ACCEPTED", "code deveria ser CHARGE_TYPE_NOT_ACCEPTED");
+    });
+%}
+
+
+### 41. Ajuste de valor zero -> 422 INVALID_CHARGE_AMOUNT
+POST {{host}}/api/billing/folios/{{otherFolioId}}/adjustments
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "amount": "0.00",
+  "description": "Ajuste",
+  "reason": "Teste"
+}
+
+> {%
+    client.test("ajuste zero retorna 422", function() {
+        client.assert(response.status === 422, "esperado 422, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_CHARGE_AMOUNT", "code deveria ser INVALID_CHARGE_AMOUNT");
+    });
+%}
+
+
+### 42. Ajuste sem descricao -> 422 INVALID_CHARGE_DESCRIPTION
+POST {{host}}/api/billing/folios/{{otherFolioId}}/adjustments
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "amount": "-5.00",
+  "description": "   ",
+  "reason": "Teste"
+}
+
+> {%
+    client.test("descricao em branco retorna 422", function() {
+        client.assert(response.status === 422, "esperado 422, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_CHARGE_DESCRIPTION", "code deveria ser INVALID_CHARGE_DESCRIPTION");
+    });
+%}
+
+
+### 43. Estorno sem motivo -> 422 INVALID_CHARGE_REASON
+POST {{host}}/api/billing/folios/{{otherFolioId}}/charges/{{otherRoomNightId}}/reversal
+Authorization: Bearer {{frontDeskToken}}
+Content-Type: application/json
+
+{
+  "reason": "   "
+}
+
+> {%
+    client.test("motivo em branco retorna 422", function() {
+        client.assert(response.status === 422, "esperado 422, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_CHARGE_REASON", "code deveria ser INVALID_CHARGE_REASON");
+    });
+%}
+
+
+### 44. [dev] Codigo de referencia com 21 caracteres -> 422 INVALID_FOLIO_REFERENCE
+POST {{host}}/api/billing/dev/folios
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "type": "STAY",
+  "referenceCode": "123456789012345678901",
+  "referenceLabel": "Quarto longo"
+}
+
+> {%
+    client.test("codigo acima de 20 caracteres retorna 422", function() {
+        client.assert(response.status === 422, "esperado 422, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_FOLIO_REFERENCE", "code deveria ser INVALID_FOLIO_REFERENCE");
+    });
+%}
+
+
+### 45. Pagamento de valor zero -> 422 INVALID_PAYMENT_AMOUNT
+POST {{host}}/api/billing/folios/{{otherFolioId}}/payments
+Authorization: Bearer {{frontDeskToken}}
+Content-Type: application/json
+Idempotency-Key: {{key7}}
+
+{
+  "method": "PIX",
+  "amount": "0.00"
+}
+
+> {%
+    client.test("pagamento zero retorna 422", function() {
+        client.assert(response.status === 422, "esperado 422, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_PAYMENT_AMOUNT", "code deveria ser INVALID_PAYMENT_AMOUNT");
+    });
+%}
+
+
+### 46. Valor mal formado -> 422 INVALID_MONEY
+POST {{host}}/api/billing/folios/{{otherFolioId}}/payments
+Authorization: Bearer {{frontDeskToken}}
+Content-Type: application/json
+Idempotency-Key: {{key7}}
+
+{
+  "method": "PIX",
+  "amount": "10,00"
+}
+
+> {%
+    client.test("valor mal formado retorna 422", function() {
+        client.assert(response.status === 422, "esperado 422, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_MONEY", "code deveria ser INVALID_MONEY");
+    });
+%}
+
+
+### 47. Conta do quarto no registro manual -> 422 PAYMENT_METHOD_NOT_ACCEPTED
+POST {{host}}/api/billing/folios/{{otherFolioId}}/payments
+Authorization: Bearer {{frontDeskToken}}
+Content-Type: application/json
+Idempotency-Key: {{key7}}
+
+{
+  "method": "ROOM_ACCOUNT",
+  "amount": "10.00"
+}
+
+> {%
+    client.test("ROOM_ACCOUNT retorna 422", function() {
+        client.assert(response.status === 422, "esperado 422, recebido " + response.status);
+        client.assert(response.body.code === "PAYMENT_METHOD_NOT_ACCEPTED", "code deveria ser PAYMENT_METHOD_NOT_ACCEPTED");
+    });
+%}
+
+
+### 48. Pagamento acima do saldo em folio TAB -> 422 PAYMENT_EXCEEDS_BALANCE
+POST {{host}}/api/billing/folios/{{emptyTabFolioId}}/payments
+Authorization: Bearer {{frontDeskToken}}
+Content-Type: application/json
+Idempotency-Key: {{key7}}
+
+{
+  "method": "CASH",
+  "amount": "0.01"
+}
+
+> {%
+    client.test("TAB recusa pagamento acima do saldo", function() {
+        client.assert(response.status === 422, "esperado 422, recebido " + response.status);
+        client.assert(response.body.code === "PAYMENT_EXCEEDS_BALANCE", "code deveria ser PAYMENT_EXCEEDS_BALANCE");
+    });
+%}
+
+
+### 49. Estorno de pagamento sem motivo -> 422 INVALID_PAYMENT_REFUND_REASON
+POST {{host}}/api/billing/folios/{{otherFolioId}}/payments/{{confirmedPaymentId}}/refund
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "reason": ""
+}
+
+> {%
+    client.test("motivo em branco retorna 422", function() {
+        client.assert(response.status === 422, "esperado 422, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_PAYMENT_REFUND_REASON", "code deveria ser INVALID_PAYMENT_REFUND_REASON");
+    });
+%}
+
+
+### 50. Pagamento sem Idempotency-Key -> 422 INVALID_IDEMPOTENCY_KEY
+POST {{host}}/api/billing/folios/{{otherFolioId}}/payments
+Authorization: Bearer {{frontDeskToken}}
+Content-Type: application/json
+
+{
+  "method": "PIX",
+  "amount": "10.00"
+}
+
+> {%
+    client.test("sem chave retorna 422", function() {
+        client.assert(response.status === 422, "esperado 422, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_IDEMPOTENCY_KEY", "code deveria ser INVALID_IDEMPOTENCY_KEY");
+    });
+%}
+
+
+### 51. Leitura sem token -> 401 AUTHENTICATION_REQUIRED
+GET {{host}}/api/billing/folios/{{otherFolioId}}
+
+> {%
+    client.test("sem token retorna 401", function() {
+        client.assert(response.status === 401, "esperado 401, recebido " + response.status);
+        client.assert(response.body.code === "AUTHENTICATION_REQUIRED", "code deveria ser AUTHENTICATION_REQUIRED");
+    });
+%}
+
+
+### 52. Recepcao tentando ajustar -> 403 ACCESS_DENIED
+POST {{host}}/api/billing/folios/{{otherFolioId}}/adjustments
+Authorization: Bearer {{frontDeskToken}}
+Content-Type: application/json
+
+{
+  "amount": "-100.00",
+  "description": "Desconto",
+  "reason": "Teste"
+}
+
+> {%
+    client.test("recepcao nao ajusta: 403 ACCESS_DENIED", function() {
+        client.assert(response.status === 403, "esperado 403, recebido " + response.status);
+        client.assert(response.body.code === "ACCESS_DENIED", "code deveria ser ACCESS_DENIED");
+    });
+%}
+
+
+### 53. Login do garcom
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{
+  "username": "{{waiterUsername}}",
+  "password": "{{password}}"
+}
+
+> {%
+    client.global.set("waiterToken", response.body.accessToken);
+%}
+
+
+### 54. Garcom tentando ler o folio -> 403 ACCESS_DENIED
+GET {{host}}/api/billing/folios/{{otherFolioId}}
+Authorization: Bearer {{waiterToken}}
+
+> {%
+    client.test("garcom nao le folio: 403 ACCESS_DENIED", function() {
+        client.assert(response.status === 403, "esperado 403, recebido " + response.status);
+        client.assert(response.body.code === "ACCESS_DENIED", "code deveria ser ACCESS_DENIED");
+    });
+%}

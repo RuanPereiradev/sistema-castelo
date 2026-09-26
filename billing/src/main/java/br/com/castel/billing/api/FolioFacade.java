@@ -69,4 +69,14 @@ public interface FolioFacade {
     Money balanceOf(FolioId folioId);
 
     FolioView findById(FolioId folioId);
+
+    /**
+     * Closes a folio whose balance is exactly zero, in the transaction of the caller.
+     *
+     * <p>Closing is always explicit, never a side effect of a payment (decision #8 of task 1.3): the
+     * closing of a tab (task 3.2) and the check-out (task 3.4) call this in the same transaction that
+     * closes their own side (decision #11 of task 1.3). A closed folio takes no further write, and
+     * there is no reopening in version 1.
+     */
+    void close(FolioId folioId);
 }

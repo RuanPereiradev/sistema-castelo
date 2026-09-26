@@ -38,3 +38,7 @@ Cada task já tem seu número atribuído em `docs/schema-banco-de-dados.md`
 Renumerada em 2026-09-24 (decisão #5 da task 1.2): o restaurante é construído
 antes do hotel, e a versão segue a ordem de execução. Com o hotel no meio, o
 Flyway recusaria V5/V7 depois de V6/V8 já aplicadas em qualquer banco.
+
+**Ordem de merge:** a V6 (1.3) entra na `main` antes da V7 (2.2), que rodam em
+paralelo. A V7 não cria `tab.folio_id`: a ligação comanda → folio vem com a
+migration da 3.2.
