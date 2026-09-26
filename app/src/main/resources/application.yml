@@ -49,6 +49,14 @@ castel:
       max-waiting-password-checks-per-ip: 30
       password-check-slot-timeout: 2s
 
+  payment:
+    # Adquirente. v1: fake (nenhum pagamento sai do sistema). O adaptador real da v1.1
+    # entra com o seu proprio valor aqui.
+    processor: fake
+  tax-invoice:
+    # Emissor fiscal. v1: fake. Real na v1.2.
+    issuer: fake
+
 app:
   security:
     jwt:

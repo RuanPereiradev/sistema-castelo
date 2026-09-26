@@ -37,3 +37,6 @@ Thumbs.db
 # Claude Code
 .claude/agent-memory-local/
 # .claude/agent-memory/ (project-scoped agent memory) is versioned intentionally; do not ignore it
+
+# Worktrees temporarias dos agentes do Claude Code
+.claude/worktrees/
