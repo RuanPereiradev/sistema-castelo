@@ -1,0 +1,551 @@
+### Task 2.4 - caixa: abertura de turno, sangria, suprimento e fechamento
+### Ambiente: selecione "dev" no IntelliJ HTTP Client, com http-client.env.json
+### + http-client.private.env.json (copie o .example). Ver http/README.md.
+###
+### Pre-requisito: aplicacao rodando no perfil "dev" com o seed habilitado. O folio que
+### recebe o pagamento em dinheiro e aberto pela rota so de dev (/api/billing/dev/folios).
+### Rode o arquivo inteiro, em ordem: os cenarios salvam os ids que os seguintes usam.
+###
+### A propriedade tem um turno aberto por vez: a preparacao fecha um turno esquecido, e o
+### arquivo termina com o turno fechado, para rodar de novo e para o 40 nao vincular
+### pagamentos em dinheiro a um turno aberto.
+###
+### CASH_DRAWER_SESSION_NOT_OPEN exige o controle de caixa ligado
+### (billing.cash-drawer.required), que ainda nao tem rota (4.7): fica no teste de
+### integracao. O 403 do perfil KITCHEN tambem: o ambiente nao tem usuario de cozinha.
+
+
+### 0. Login do admin
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{
+  "username": "{{adminUsername}}",
+  "password": "{{password}}"
+}
+
+> {%
+    client.test("login do admin retorna 200", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+    });
+    client.global.set("accessToken", response.body.accessToken);
+    const suffix = Math.random().toString(36).substring(2, 8);
+    client.global.set("cashKey1", "c-" + suffix + "-1");
+    client.global.set("cashKey2", "c-" + suffix + "-2");
+    client.global.set("cashKey3", "c-" + suffix + "-3");
+    client.global.set("cashKey4", "c-" + suffix + "-4");
+    client.global.set("cashKey5", "c-" + suffix + "-5");
+    client.global.set("paymentKey", "c-" + suffix + "-p");
+%}
+
+
+### 1. Login da recepcao
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{
+  "username": "{{frontDeskUsername}}",
+  "password": "{{password}}"
+}
+
+> {%
+    client.test("login da recepcao retorna 200", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+    });
+    client.global.set("frontDeskToken", response.body.accessToken);
+%}
+
+
+### 2. Login do garcom
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{
+  "username": "{{waiterUsername}}",
+  "password": "{{password}}"
+}
+
+> {%
+    client.test("login do garcom retorna 200", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+    });
+    client.global.set("waiterToken", response.body.accessToken);
+%}
+
+
+### ------------------------------------------------------------------
+### Preparacao
+### ------------------------------------------------------------------
+
+
+### 3. Procura um turno esquecido aberto (200 ou 404)
+GET {{host}}/api/billing/cash-sessions/current
+Authorization: Bearer {{accessToken}}
+
+> {%
+    client.test("turno atual: 200 ou 404", function() {
+        client.assert(response.status === 200 || response.status === 404, "esperado 200 ou 404, recebido " + response.status);
+    });
+    client.global.set("staleSessionId",
+        response.status === 200 ? response.body.id : "00000000-0000-7000-8000-000000000000");
+%}
+
+
+### 4. Admin fecha o turno esquecido, se houver (200 ou 404)
+POST {{host}}/api/billing/cash-sessions/{{staleSessionId}}/close
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "countedAmount": "0.00",
+  "note": "Fechado pela bancada .http"
+}
+
+> {%
+    client.test("turno esquecido fechado, ou nenhum", function() {
+        client.assert(response.status === 200 || response.status === 404, "esperado 200 ou 404, recebido " + response.status);
+    });
+%}
+
+
+### 5. [dev] Abre um folio TAB
+POST {{host}}/api/billing/dev/folios
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "type": "TAB"
+}
+
+> {%
+    client.test("folio TAB aberto", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+    });
+    client.global.set("cashFolioId", response.body.id);
+%}
+
+
+### 6. [dev] Lanca o consumo de 150.00
+POST {{host}}/api/billing/dev/folios/{{cashFolioId}}/charges
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "sourceType": "TAB",
+  "amount": "150.00",
+  "description": "Restaurante - comanda 77"
+}
+
+> {%
+    client.test("lancamento de 150.00", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+        client.assert(response.body.balance === "150.00", "saldo deveria ser 150.00, veio " + response.body.balance);
+    });
+%}
+
+
+### ------------------------------------------------------------------
+### Caminho feliz
+### ------------------------------------------------------------------
+
+
+### 7. Admin abre o turno com fundo de troco de 100.00
+POST {{host}}/api/billing/cash-sessions
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "openingFloat": "100.00"
+}
+
+> {%
+    client.test("turno aberto com fundo de 100.00", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+        client.assert(response.body.status === "OPEN", "turno nasce aberto");
+        client.assert(response.body.openingFloat === "100.00", "fundo deveria ser 100.00");
+        client.assert(response.body.expectedAmount === "100.00", "o admin ve o esperado: 100.00");
+        client.assert(response.body.difference === null, "sem diferenca enquanto aberto");
+    });
+    client.global.set("sessionId", response.body.id);
+%}
+
+
+### 8. Recepcao registra suprimento de 50.00
+POST {{host}}/api/billing/cash-sessions/{{sessionId}}/supplies
+Authorization: Bearer {{frontDeskToken}}
+Content-Type: application/json
+Idempotency-Key: {{cashKey1}}
+
+{
+  "amount": "50.00",
+  "reason": "Troco para a noite"
+}
+
+> {%
+    client.test("suprimento de 50.00 retorna 201", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+        client.assert(response.body.totalSupplies === "50.00", "suprimentos deveriam somar 50.00");
+        client.assert(response.body.movements.length === 1, "um movimento");
+        client.assert(response.body.movements[0].type === "CASH_SUPPLY", "movimento e suprimento");
+    });
+%}
+
+
+### 9. Recepcao recebe 150.00 em dinheiro no folio: cai no turno aberto
+POST {{host}}/api/billing/folios/{{cashFolioId}}/payments
+Authorization: Bearer {{frontDeskToken}}
+Content-Type: application/json
+Idempotency-Key: {{paymentKey}}
+
+{
+  "method": "CASH",
+  "amount": "150.00"
+}
+
+> {%
+    client.test("pagamento em dinheiro de 150.00 quita o folio", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+        client.assert(response.body.balance === "0.00", "saldo deveria ser 0.00, veio " + response.body.balance);
+    });
+%}
+
+
+### 10. Recepcao le o turno: fechamento cego, sem esperado nem total em dinheiro
+GET {{host}}/api/billing/cash-sessions/{{sessionId}}
+Authorization: Bearer {{frontDeskToken}}
+
+> {%
+    client.test("recepcao nao ve o esperado com o turno aberto", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        client.assert(response.body.expectedAmount === null, "esperado oculto para a recepcao");
+        client.assert(response.body.cashPaymentsTotal === null, "total em dinheiro oculto para a recepcao");
+        client.assert(response.body.cashPaymentCount === 1, "um pagamento em dinheiro no turno");
+    });
+%}
+
+
+### 11. Admin le o turno atual: 150.00 em dinheiro, esperado 300.00
+GET {{host}}/api/billing/cash-sessions/current
+Authorization: Bearer {{accessToken}}
+
+> {%
+    client.test("admin ve o esperado: 100 + 50 + 150", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        client.assert(response.body.id === client.global.get("sessionId"), "deveria ser o turno aberto");
+        client.assert(response.body.cashPaymentsTotal === "150.00", "dinheiro deveria somar 150.00, veio " + response.body.cashPaymentsTotal);
+        client.assert(response.body.expectedAmount === "300.00", "esperado deveria ser 300.00, veio " + response.body.expectedAmount);
+    });
+%}
+
+
+### 12. Recepcao registra sangria de 200.00
+POST {{host}}/api/billing/cash-sessions/{{sessionId}}/drops
+Authorization: Bearer {{frontDeskToken}}
+Content-Type: application/json
+Idempotency-Key: {{cashKey2}}
+
+{
+  "amount": "200.00",
+  "reason": "Deposito no cofre"
+}
+
+> {%
+    client.test("sangria de 200.00 retorna 201", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+        client.assert(response.body.totalDrops === "200.00", "sangrias deveriam somar 200.00");
+        client.assert(response.body.movements.length === 2, "dois movimentos");
+    });
+%}
+
+
+### 13. Repete a mesma sangria (duplo clique): uma sangria so
+POST {{host}}/api/billing/cash-sessions/{{sessionId}}/drops
+Authorization: Bearer {{frontDeskToken}}
+Content-Type: application/json
+Idempotency-Key: {{cashKey2}}
+
+{
+  "amount": "200.00",
+  "reason": "Deposito no cofre"
+}
+
+> {%
+    client.test("repeticao nao registra outra sangria", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+        client.assert(response.body.totalDrops === "200.00", "sangrias continuam 200.00");
+        client.assert(response.body.movements.length === 2, "continuam dois movimentos");
+    });
+%}
+
+
+### ------------------------------------------------------------------
+### Negativos com o turno aberto
+### ------------------------------------------------------------------
+
+
+### 14. Abrir outro turno com um aberto -> 409 CASH_DRAWER_SESSION_ALREADY_OPEN
+POST {{host}}/api/billing/cash-sessions
+Authorization: Bearer {{frontDeskToken}}
+Content-Type: application/json
+
+{
+  "openingFloat": "50.00"
+}
+
+> {%
+    client.test("segundo turno aberto recusado", function() {
+        client.assert(response.status === 409, "esperado 409, recebido " + response.status);
+        client.assert(response.body.code === "CASH_DRAWER_SESSION_ALREADY_OPEN", "code: " + response.body.code);
+    });
+%}
+
+
+### 15. Fundo de troco negativo -> 422 INVALID_OPENING_FLOAT
+POST {{host}}/api/billing/cash-sessions
+Authorization: Bearer {{frontDeskToken}}
+Content-Type: application/json
+
+{
+  "openingFloat": "-1.00"
+}
+
+> {%
+    client.test("fundo negativo recusado", function() {
+        client.assert(response.status === 422, "esperado 422, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_OPENING_FLOAT", "code: " + response.body.code);
+    });
+%}
+
+
+### 16. Sangria sem Idempotency-Key -> 422 INVALID_IDEMPOTENCY_KEY
+POST {{host}}/api/billing/cash-sessions/{{sessionId}}/drops
+Authorization: Bearer {{frontDeskToken}}
+Content-Type: application/json
+
+{
+  "amount": "10.00",
+  "reason": "Sem chave"
+}
+
+> {%
+    client.test("sangria sem chave recusada", function() {
+        client.assert(response.status === 422, "esperado 422, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_IDEMPOTENCY_KEY", "code: " + response.body.code);
+    });
+%}
+
+
+### 17. Mesma chave com outro valor -> 409 IDEMPOTENCY_KEY_REUSED
+POST {{host}}/api/billing/cash-sessions/{{sessionId}}/drops
+Authorization: Bearer {{frontDeskToken}}
+Content-Type: application/json
+Idempotency-Key: {{cashKey2}}
+
+{
+  "amount": "20.00",
+  "reason": "Deposito no cofre"
+}
+
+> {%
+    client.test("chave reusada com outro valor recusada", function() {
+        client.assert(response.status === 409, "esperado 409, recebido " + response.status);
+        client.assert(response.body.code === "IDEMPOTENCY_KEY_REUSED", "code: " + response.body.code);
+    });
+%}
+
+
+### 18. Suprimento de 0.00 -> 422 INVALID_CASH_MOVEMENT_AMOUNT
+POST {{host}}/api/billing/cash-sessions/{{sessionId}}/supplies
+Authorization: Bearer {{frontDeskToken}}
+Content-Type: application/json
+Idempotency-Key: {{cashKey3}}
+
+{
+  "amount": "0.00",
+  "reason": "Valor zero"
+}
+
+> {%
+    client.test("suprimento zero recusado", function() {
+        client.assert(response.status === 422, "esperado 422, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_CASH_MOVEMENT_AMOUNT", "code: " + response.body.code);
+    });
+%}
+
+
+### 19. Suprimento sem motivo -> 422 INVALID_CASH_MOVEMENT_REASON
+POST {{host}}/api/billing/cash-sessions/{{sessionId}}/supplies
+Authorization: Bearer {{frontDeskToken}}
+Content-Type: application/json
+Idempotency-Key: {{cashKey4}}
+
+{
+  "amount": "10.00",
+  "reason": "   "
+}
+
+> {%
+    client.test("suprimento sem motivo recusado", function() {
+        client.assert(response.status === 422, "esperado 422, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_CASH_MOVEMENT_REASON", "code: " + response.body.code);
+    });
+%}
+
+
+### 20. Recepcao fecha o turno aberto pelo admin -> 409 CASH_DRAWER_SESSION_NOT_OWNED
+POST {{host}}/api/billing/cash-sessions/{{sessionId}}/close
+Authorization: Bearer {{frontDeskToken}}
+Content-Type: application/json
+
+{
+  "countedAmount": "100.00"
+}
+
+> {%
+    client.test("so quem abriu, ou o admin, fecha", function() {
+        client.assert(response.status === 409, "esperado 409, recebido " + response.status);
+        client.assert(response.body.code === "CASH_DRAWER_SESSION_NOT_OWNED", "code: " + response.body.code);
+    });
+%}
+
+
+### 21. Contagem negativa -> 422 INVALID_COUNTED_AMOUNT
+POST {{host}}/api/billing/cash-sessions/{{sessionId}}/close
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "countedAmount": "-1.00",
+  "note": "Contagem invalida"
+}
+
+> {%
+    client.test("contagem negativa recusada", function() {
+        client.assert(response.status === 422, "esperado 422, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_COUNTED_AMOUNT", "code: " + response.body.code);
+    });
+%}
+
+
+### 22. Fechar com diferenca e sem justificativa -> 422 CASH_CLOSING_NOTE_REQUIRED
+POST {{host}}/api/billing/cash-sessions/{{sessionId}}/close
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "countedAmount": "99.50"
+}
+
+> {%
+    client.test("quebra sem justificativa recusada", function() {
+        client.assert(response.status === 422, "esperado 422, recebido " + response.status);
+        client.assert(response.body.code === "CASH_CLOSING_NOTE_REQUIRED", "code: " + response.body.code);
+    });
+%}
+
+
+### 23. Turno inexistente -> 404 CASH_DRAWER_SESSION_NOT_FOUND
+GET {{host}}/api/billing/cash-sessions/00000000-0000-7000-8000-000000000000
+Authorization: Bearer {{frontDeskToken}}
+
+> {%
+    client.test("turno inexistente: 404", function() {
+        client.assert(response.status === 404, "esperado 404, recebido " + response.status);
+        client.assert(response.body.code === "CASH_DRAWER_SESSION_NOT_FOUND", "code: " + response.body.code);
+    });
+%}
+
+
+### 24. Garcom lendo o caixa -> 403 ACCESS_DENIED
+GET {{host}}/api/billing/cash-sessions/current
+Authorization: Bearer {{waiterToken}}
+
+> {%
+    client.test("garcom nao acessa o caixa", function() {
+        client.assert(response.status === 403, "esperado 403, recebido " + response.status);
+        client.assert(response.body.code === "ACCESS_DENIED", "code: " + response.body.code);
+    });
+%}
+
+
+### 25. Leitura sem token -> 401 AUTHENTICATION_REQUIRED
+GET {{host}}/api/billing/cash-sessions/current
+
+> {%
+    client.test("sem token retorna 401", function() {
+        client.assert(response.status === 401, "esperado 401, recebido " + response.status);
+        client.assert(response.body.code === "AUTHENTICATION_REQUIRED", "code: " + response.body.code);
+    });
+%}
+
+
+### ------------------------------------------------------------------
+### Fechamento
+### ------------------------------------------------------------------
+
+
+### 26. Admin fecha contando 99.50, com justificativa: esperado 100.00, falta 0.50
+POST {{host}}/api/billing/cash-sessions/{{sessionId}}/close
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "countedAmount": "99.50",
+  "note": "Faltaram 50 centavos no troco"
+}
+
+> {%
+    client.test("turno fechado com a quebra congelada", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        client.assert(response.body.status === "CLOSED", "turno deveria estar fechado");
+        client.assert(response.body.expectedAmount === "100.00", "esperado deveria ser 100.00, veio " + response.body.expectedAmount);
+        client.assert(response.body.countedAmount === "99.50", "contagem deveria ser 99.50");
+        client.assert(response.body.difference === "-0.50", "diferenca deveria ser -0.50, veio " + response.body.difference);
+        client.assert(response.body.closedAt !== null, "fechamento registra o instante");
+    });
+%}
+
+
+### 27. Recepcao le o turno fechado: o esperado congelado aparece
+GET {{host}}/api/billing/cash-sessions/{{sessionId}}
+Authorization: Bearer {{frontDeskToken}}
+
+> {%
+    client.test("turno fechado mostra os valores congelados", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        client.assert(response.body.expectedAmount === "100.00", "esperado congelado: 100.00");
+        client.assert(response.body.cashPaymentsTotal === "150.00", "dinheiro contado: 150.00");
+        client.assert(response.body.closingNote === "Faltaram 50 centavos no troco", "justificativa gravada");
+    });
+%}
+
+
+### 28. Sangria no turno fechado -> 409 CASH_DRAWER_SESSION_CLOSED
+POST {{host}}/api/billing/cash-sessions/{{sessionId}}/drops
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+Idempotency-Key: {{cashKey5}}
+
+{
+  "amount": "10.00",
+  "reason": "Depois do fechamento"
+}
+
+> {%
+    client.test("turno fechado nao recebe movimento", function() {
+        client.assert(response.status === 409, "esperado 409, recebido " + response.status);
+        client.assert(response.body.code === "CASH_DRAWER_SESSION_CLOSED", "code: " + response.body.code);
+    });
+%}
+
+
+### 29. Sem turno aberto -> 404 CASH_DRAWER_SESSION_NOT_FOUND
+GET {{host}}/api/billing/cash-sessions/current
+Authorization: Bearer {{frontDeskToken}}
+
+> {%
+    client.test("nenhum turno aberto no fim", function() {
+        client.assert(response.status === 404, "esperado 404, recebido " + response.status);
+        client.assert(response.body.code === "CASH_DRAWER_SESSION_NOT_FOUND", "code: " + response.body.code);
+    });
+%}

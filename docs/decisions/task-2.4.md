@@ -17,9 +17,9 @@ da V9 (3.2) e da V10 (3.5).
 | | |
 |---|---|
 | Branch | `task/2.4-cash-drawer` (a partir de `task/billing-api-payment`) |
-| Rodada atual | 0 — implementação do DEV |
-| Build | pendente |
-| Testes | integração no `app` (DEV); unidade do domínio com o agente de teste |
+| Rodada atual | 0 — implementação do DEV concluída; aguarda testes de unidade (agente de teste) e revisão do Ruan. Entra na `main` depois do PR #17 e antes da 3.2 |
+| Build | `./mvnw clean install` **verde**, ArchUnit incluído (256 testes no `app`) |
+| Testes | 6 de integração no `app` (4 de fatia, 2 de concorrência), 517 linhas, para 1.649 de produção. O teste da corrida fechamento × `CASH` foi provado contra a trava fraca: com `FOR NO KEY UPDATE` no fechamento, falha. Unidade do domínio: com o agente de teste, que tem até ~1.600 linhas de orçamento (1,3:1) |
 
 ---
 
@@ -47,6 +47,8 @@ rascunho da spec. Valem sobre o rascunho quando divergem (C5 e C7).
 | 15 | 0 | **C10.** Turno nunca fecha sozinho e pode atravessar o dia | implementado |
 | 16 | 0 | Decisões do DEV (sem regra de negócio nova): `drop`/`supply` não recebem o autor nem os pagamentos — o autor do movimento é o `created_by` da auditoria, e sem a C7 a sangria não precisa do esperado; `expectedAmount(cashPayments)` com o turno `CLOSED` devolve o valor congelado; `cashPaymentsTotal` do turno fechado é derivado do congelado (esperado − fundo − suprimentos + sangrias), e `cashPaymentCount` é sempre a contagem viva; o turno aberto é travado `FOR KEY SHARE` e lido em **todo** recebimento (não só em `CASH`), para o caso de uso não ter `if` de método; o fechamento trava com `FOR UPDATE` nativo, porque o `PESSIMISTIC_WRITE` do Hibernate sai `FOR NO KEY UPDATE` e não conflita com `KEY SHARE`; o estorno de um pagamento com turno trava esse turno `FOR KEY SHARE`, aberto ou fechado; `ADMIN` é lido na rota por `HttpServletRequest.isUserInRole` | implementado (DEV, aguarda Ruan) |
 
+| 17 | 0 | Decisões do DEV na integração: `AbstractIntegrationTest` semeia `billing.cash-drawer.required = false` junto com a propriedade de teste, porque a V8 roda antes dela e todo pagamento lê a chave; o `.http` roda do zero e de novo (verificado duas vezes numa instância isolada, junto com o `40`); a semeadura da V8 numa base que já tem propriedade foi verificada aplicando V1–V8 à mão | implementado (DEV, aguarda Ruan) |
+
 Valores de status: `pendente` · `implementado` · `revertida pela #n`
 
 ---
@@ -56,19 +58,19 @@ Valores de status: `pendente` · `implementado` · `revertida pela #n`
 Lista viva. Item aprovado pelo Ruan **entra aqui** e só sai por decisão
 explícita do Ruan.
 
-- [ ] Spec `docs/task-2.4-cash-drawer.md` e §12 de `docs/schema-banco-de-dados.md` atualizados antes da migration
-- [ ] `V8__cash.sql`: `cash_drawer_session`, `cash_movement`, FK/`CHECK`/índice em `payment`, seed da configuração
-- [ ] Agregado `CashDrawerSession` com `CashMovement` append-only; `CashDrawerSessionStatus`, `CashMovementType`
-- [ ] Abrir turno com `openingFloat`, um aberto por propriedade (inclusive em corrida)
-- [ ] Sangria e suprimento com valor, motivo e `Idempotency-Key`
-- [ ] Fechar com contagem: congela `expectedAmount`, `difference()` derivada, justificativa com diferença ≠ 0, dono ou `ADMIN`
-- [ ] Vínculo do pagamento `CASH` ao turno aberto dentro de `FolioService.registerPayment` (`CashDrawerAssignment`), com `billing.cash-drawer.required`
-- [ ] `Payment` mapeia `cash_drawer_session_id`; `PaymentMethod.goesToCashDrawer()`
-- [ ] Concorrência: fechamento × pagamento `CASH` e × estorno (`FOR UPDATE` × `FOR KEY SHARE`)
-- [ ] Rotas REST do caixa, fechamento cego
-- [ ] `DevUserSeeder` semeia a configuração (G3)
-- [ ] `http/41-billing-cash-sessions.http` e a linha no `http/README.md`
-- [ ] Testes de integração no `app`: fatia, controle ligado, estorno, corrida de abertura, corrida fechamento × `CASH`
+- [x] Spec `docs/task-2.4-cash-drawer.md` e §12 de `docs/schema-banco-de-dados.md` atualizados antes da migration
+- [x] `V8__cash.sql`: `cash_drawer_session`, `cash_movement`, FK/`CHECK`/índice em `payment`, seed da configuração
+- [x] Agregado `CashDrawerSession` com `CashMovement` append-only; `CashDrawerSessionStatus`, `CashMovementType`
+- [x] Abrir turno com `openingFloat`, um aberto por propriedade (inclusive em corrida)
+- [x] Sangria e suprimento com valor, motivo e `Idempotency-Key`
+- [x] Fechar com contagem: congela `expectedAmount`, `difference()` derivada, justificativa com diferença ≠ 0, dono ou `ADMIN`
+- [x] Vínculo do pagamento `CASH` ao turno aberto dentro de `FolioService.registerPayment` (`CashDrawerAssignment`), com `billing.cash-drawer.required`
+- [x] `Payment` mapeia `cash_drawer_session_id`; `PaymentMethod.goesToCashDrawer()`
+- [x] Concorrência: fechamento × pagamento `CASH` e × estorno (`FOR UPDATE` × `FOR KEY SHARE`)
+- [x] Rotas REST do caixa, fechamento cego
+- [x] `DevUserSeeder` semeia a configuração (G3)
+- [x] `http/41-billing-cash-sessions.http` e a linha no `http/README.md`
+- [x] Testes de integração no `app`: fatia, controle ligado, estorno, corrida de abertura, corrida fechamento × `CASH`
 
 ### Fora do escopo
 
@@ -100,6 +102,7 @@ Especificado em `docs/task-2.4-cash-drawer.md`, seções 5 e 6.
 | Estorno de `CASH` de turno já fechado não mexe no turno; a saída se registra como sangria no turno atual | C8 | Movimento próprio de devolução, se o cliente pedir |
 | `CASH_DRAWER_SESSION_NOT_OPEN` não tem cenário no `.http`: ligar o controle não tem rota até a 4.7 | Coberto pelo teste de integração | `.http` da 4.7 |
 | `cashPaymentCount` de um turno fechado é a contagem viva e pode divergir do total congelado depois de um estorno | O total congelado é o que vale para a conferência; a contagem é informativa | Relatório de turno (5.1) |
+| A corrida estorno × fechamento tem a trava (`FOR KEY SHARE` no turno do pagamento), mas não tem teste de concorrência próprio | O mecanismo é o mesmo da corrida pagamento × fechamento, que tem teste e foi provado contra a trava fraca; o estorno já é raro e só do `ADMIN` | Teste dedicado, se o review pedir |
 | O 403 do `KITCHEN` não está no `.http` (não há usuário de cozinha no `http-client.env.json`) | Coberto pelo teste de integração | Quando o ambiente ganhar a chave |
 
 ---
