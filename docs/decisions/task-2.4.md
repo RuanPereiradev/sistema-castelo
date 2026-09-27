@@ -17,9 +17,9 @@ da V9 (3.2) e da V10 (3.5).
 | | |
 |---|---|
 | Branch | `task/2.4-cash-drawer` (a partir de `task/billing-api-payment`) |
-| Rodada atual | 0 — implementação do DEV concluída; aguarda testes de unidade (agente de teste) e revisão do Ruan. Entra na `main` depois do PR #17 e antes da 3.2 |
+| Rodada atual | 1 — review do orquestrador aplicado (#18 a #21); aguarda revisão do Ruan. Entra na `main` depois do PR #17 e antes da 3.2 |
 | Build | `./mvnw clean install` **verde**, ArchUnit incluído (256 testes no `app`) |
-| Testes | 6 de integração no `app` (4 de fatia, 2 de concorrência), 517 linhas, para 1.649 de produção. O teste da corrida fechamento × `CASH` foi provado contra a trava fraca: com `FOR NO KEY UPDATE` no fechamento, falha. Unidade do domínio: com o agente de teste, que tem até ~1.600 linhas de orçamento (1,3:1) |
+| Testes | 71 de unidade (agente de teste) + 8 de integração no `app` (5 de fatia, 3 de concorrência). Os testes das corridas fechamento × `CASH` e estorno × fechamento foram provados contra a trava fraca ou ausente: falham sem ela. Rodada 0: 517 linhas de integração para 1.649 de produção. O teste da corrida fechamento × `CASH` foi provado contra a trava fraca: com `FOR NO KEY UPDATE` no fechamento, falha. Unidade do domínio: com o agente de teste, que tem até ~1.600 linhas de orçamento (1,3:1) |
 
 ---
 
@@ -48,7 +48,10 @@ rascunho da spec. Valem sobre o rascunho quando divergem (C5 e C7).
 | 16 | 0 | Decisões do DEV (sem regra de negócio nova): `drop`/`supply` não recebem o autor nem os pagamentos — o autor do movimento é o `created_by` da auditoria, e sem a C7 a sangria não precisa do esperado; `expectedAmount(cashPayments)` com o turno `CLOSED` devolve o valor congelado; `cashPaymentsTotal` do turno fechado é derivado do congelado (esperado − fundo − suprimentos + sangrias), e `cashPaymentCount` é sempre a contagem viva; o turno aberto é travado `FOR KEY SHARE` e lido em **todo** recebimento (não só em `CASH`), para o caso de uso não ter `if` de método; o fechamento trava com `FOR UPDATE` nativo, porque o `PESSIMISTIC_WRITE` do Hibernate sai `FOR NO KEY UPDATE` e não conflita com `KEY SHARE`; o estorno de um pagamento com turno trava esse turno `FOR KEY SHARE`, aberto ou fechado; `ADMIN` é lido na rota por `HttpServletRequest.isUserInRole` | implementado (DEV, aguarda Ruan) |
 
 | 17 | 0 | Decisões do DEV na integração: `AbstractIntegrationTest` semeia `billing.cash-drawer.required = false` junto com a propriedade de teste, porque a V8 roda antes dela e todo pagamento lê a chave; o `.http` roda do zero e de novo (verificado duas vezes numa instância isolada, junto com o `40`); a semeadura da V8 numa base que já tem propriedade foi verificada aplicando V1–V8 à mão | implementado (DEV, aguarda Ruan) |
-
+| 18 | 1 | Review, **bloqueante corrigido**: um suprimento perto do limite de `Money` gravava, e daí o esperado estourava em todo `close` e no GET do `ADMIN`, deixando o turno impossível de fechar e a propriedade sem poder abrir outro (C1). (a) Os movimentos são somados pelo `signedAmount`, então um movimento e o seu oposto se anulam sem passar pelo limite; (b) `drop`/`supply` calculam o esperado dentro da transação, antes do commit (padrão `saveReadable` da 1.3 #27): um movimento que tornaria o esperado irrepresentável é recusado com `MONEY_OUT_OF_RANGE` e nada grava. (c) Mesma classe de falha por outro caminho, fechada pelo DEV: um pagamento `CASH` num folio `STAY` aceita valor acima do saldo (1.3 #1), então um valor digitado errado também estouraria o esperado; `registerPayment` lê o esperado do turno do pagamento antes do commit e recusa com o mesmo código. Spec: invariante 9 (soma com sinal), 18a (turno sempre legível) e `MONEY_OUT_OF_RANGE` na §5 | implementado |
+| 19 | 1 | Review: teste de concorrência estorno × fechamento acrescentado; sem o `lockForKeyShare` do estorno, ele falha | implementado |
+| 20 | 1 | Review: **recusada** a sugestão de tratar `billing.cash-drawer.required` ausente como `false`. Sem valor padrão escondido, consistente com `Settings`: a chave ausente continua `SETTING_NOT_FOUND` | recusada |
+| 21 | 1 | Os testes de unidade do agente de teste (`task/2.4-cash-drawer-tests`, 71 testes) entram na branch. A regra da nota no fechamento cego **não** muda nesta rodada: há pergunta aberta ao Ruan | implementado |
 Valores de status: `pendente` · `implementado` · `revertida pela #n`
 
 ---
@@ -102,7 +105,6 @@ Especificado em `docs/task-2.4-cash-drawer.md`, seções 5 e 6.
 | Estorno de `CASH` de turno já fechado não mexe no turno; a saída se registra como sangria no turno atual | C8 | Movimento próprio de devolução, se o cliente pedir |
 | `CASH_DRAWER_SESSION_NOT_OPEN` não tem cenário no `.http`: ligar o controle não tem rota até a 4.7 | Coberto pelo teste de integração | `.http` da 4.7 |
 | `cashPaymentCount` de um turno fechado é a contagem viva e pode divergir do total congelado depois de um estorno | O total congelado é o que vale para a conferência; a contagem é informativa | Relatório de turno (5.1) |
-| A corrida estorno × fechamento tem a trava (`FOR KEY SHARE` no turno do pagamento), mas não tem teste de concorrência próprio | O mecanismo é o mesmo da corrida pagamento × fechamento, que tem teste e foi provado contra a trava fraca; o estorno já é raro e só do `ADMIN` | Teste dedicado, se o review pedir |
 | O 403 do `KITCHEN` não está no `.http` (não há usuário de cozinha no `http-client.env.json`) | Coberto pelo teste de integração | Quando o ambiente ganhar a chave |
 
 ---
@@ -111,4 +113,4 @@ Especificado em `docs/task-2.4-cash-drawer.md`, seções 5 e 6.
 
 | # | Pergunta | Desde a rodada |
 |---|---|---|
-| | | |
+| 1 | Regra da nota no fechamento cego (pergunta do orquestrador ao Ruan; nada muda até a resposta) | 1 |

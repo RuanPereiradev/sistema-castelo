@@ -8,8 +8,10 @@ import br.com.castel.billing.api.ChargeSource;
 import br.com.castel.billing.api.FolioFacade;
 import br.com.castel.billing.api.FolioId;
 import br.com.castel.billing.api.FolioOwner;
+import br.com.castel.billing.api.PaymentId;
 import br.com.castel.billing.api.PaymentMethod;
 import br.com.castel.billing.application.CashDrawerSessionService;
+import br.com.castel.billing.application.FolioService;
 import br.com.castel.billing.domain.CashDrawerSession;
 import br.com.castel.billing.domain.CashDrawerSessionId;
 import br.com.castel.identity.api.Role;
@@ -22,6 +24,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Clock;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
@@ -44,7 +47,9 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
- * The two races of task 2.4, each over several rounds with every side released at the same instant.
+ * The races of task 2.4, each over several rounds with every side released at the same instant.
+ *
+ * <p>The third race, a refund during a closing, is described on its test.
  *
  * <p>Several openings at once: the unique index on the open session decides, and every loser answers
  * {@code CASH_DRAWER_SESSION_ALREADY_OPEN}, never a 500 (invariant 3). A cash payment during a closing:
@@ -71,6 +76,9 @@ class CashDrawerSessionConcurrencyIntegrationTest extends AbstractIntegrationTes
 
     @Autowired
     private CashDrawerSessionService cashDrawerSessions;
+
+    @Autowired
+    private FolioService folioService;
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
@@ -143,6 +151,35 @@ class CashDrawerSessionConcurrencyIntegrationTest extends AbstractIntegrationTes
             assertThat(linkedTo).isIn(null, sessionId.value().toString());
             assertThat(closed.frozenCashPayments()).contains(counted);
             assertThat(closed.frozenExpectedAmount()).contains(Money.of("50.00").plus(counted));
+        }
+    }
+
+    /**
+     * Invariant 27: the refund locks the session of the payment {@code FOR KEY SHARE}, so it either
+     * commits before the closing sums the payments, or takes its moment after the closing committed.
+     * The payment is counted in the frozen amount exactly when it was refunded after the closing.
+     * Without the lock, a refund stamped before the closing can commit after the sum and still be
+     * counted.
+     */
+    @Test
+    void shouldCountARefundedCashPaymentOnlyWhenTheRefundCameAfterTheClosing() throws Exception {
+        for (int round = 0; round < ROUNDS * 2; round++) {
+            CashDrawerSessionId sessionId = cashDrawerSessions.open(Money.of("50.00")).session().id();
+            FolioId folioId = tabFolioOwing("100.00");
+            PaymentId paymentId = folioService.registerPayment(
+                    folioId, PaymentMethod.CASH, Money.of("100.00"), "key-" + UUID.randomUUID()).payment().id();
+            Callable<Object> refund = () -> folioService.refundPayment(folioId, paymentId, "Paid by mistake");
+            Callable<Object> closing = () ->
+                    cashDrawerSessions.close(sessionId, Money.of("50.00"), "Counted during the race", false);
+
+            runTogether(List.of(refund, closing));
+
+            CashDrawerSession closed = cashDrawerSessions.find(sessionId).session();
+            Instant refundedAt = jdbcTemplate.queryForObject(
+                    "select refunded_at from payment where id = ?", Instant.class, paymentId.value());
+            Money counted = refundedAt.isAfter(closed.closedAt().orElseThrow()) ? Money.of("100.00") : Money.ZERO;
+            assertThat(closed.frozenCashPayments()).as("refunded at %s, closed at %s", refundedAt, closed.closedAt())
+                    .contains(counted);
         }
     }
 

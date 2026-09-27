@@ -109,8 +109,11 @@ O SQL exato está na §12 do schema. Mapeamento:
 Ordem: chave válida → replay/chave reusada → turno fechado → valor → motivo.
 
 ### Valor esperado e fechamento
-9. **`expectedAmount(cashPayments)` = `openingFloat` + `cashPayments` +
-   Σ `CASH_SUPPLY` − Σ `CASH_DROP`.** `cashPayments` é a soma dos pagamentos
+9. **`expectedAmount(cashPayments)` = `openingFloat` + Σ `signedAmount` dos
+   movimentos (suprimento soma, sangria subtrai, na ordem de registro) +
+   `cashPayments`.** Somar com sinal faz um movimento e o seu oposto se anularem
+   sem que a conta passe pela soma dos suprimentos sozinha, que pode sair da
+   faixa de `Money` (decisão #18). `cashPayments` é a soma dos pagamentos
    `CASH` `CONFIRMED` vinculados ao turno, lida por consulta
    (`CashPaymentTotals`) e passada pelo caso de uso. Pagamento `REFUNDED` não
    entra. Pode ser negativo (sangria acima do esperado, invariante 7). Com o
@@ -134,8 +137,15 @@ Ordem no fechamento: turno existe → fechado → dono → contagem → justific
 ### Leitura
 17. `frozenExpectedAmount()`: o esperado congelado, vazio enquanto `OPEN`
 18. `frozenCashPayments()`: os pagamentos `CASH` contados no fechamento,
-    derivados do congelado (`frozenExpectedAmount − openingFloat − totalSupplies
-    + totalDrops`); vazio enquanto `OPEN`
+    derivados do congelado (`frozenExpectedAmount − openingFloat − Σ
+    signedAmount`); vazio enquanto `OPEN`
+18a. **Turno sempre legível** (decisão #18): o valor esperado, `totalDrops()` e
+    `totalSupplies()` são calculados dentro da transação de toda sangria e todo
+    suprimento, antes do commit (padrão da 1.3 #27). O mesmo vale para o
+    esperado do turno em que cai um pagamento `CASH`. Um movimento ou pagamento
+    que tornaria algum deles irrepresentável é recusado com `MONEY_OUT_OF_RANGE`
+    e nada é gravado. Assim o turno nunca fica impossível de fechar, o que
+    impediria a propriedade de abrir outro (C1)
 19. **Fechamento cego** (C4): `revealsExpectedAmountTo(viewerIsAdmin)` é
     verdadeiro com o turno `CLOSED` ou para o `ADMIN`; com o turno `OPEN` e quem
     não é `ADMIN`, falso
@@ -169,8 +179,10 @@ Ordem no fechamento: turno existe → fechado → dono → contagem → justific
     chega durante o fechamento espera, relê a linha já `CLOSED` e não a vincula.
     Nunca fica pagamento vinculado a turno fechado sem entrar no valor esperado
 27. O estorno de um pagamento vinculado trava o turno dele `FOR KEY SHARE`,
-    aberto ou fechado: ou o estorno entra antes da soma do fechamento, ou depois
-    do congelamento (invariante 24)
+    aberto ou fechado: ou o estorno commita antes da soma do fechamento, ou só
+    toma o seu instante depois do commit do fechamento (invariante 24). Portanto
+    o pagamento entra no congelado exatamente quando `refundedAt` é posterior a
+    `closedAt`
 28. Ordem global das travas: **comanda → folio → turno de caixa**. O fechamento
     do caixa não trava folio, então não há ciclo
 29. `findByIdForUpdate` tira do contexto a instância já carregada (1.3 #26)
@@ -274,6 +286,7 @@ transação. A 3.2 respeita a ordem de travas comanda → folio → turno.
 | `INVALID_COUNTED_AMOUNT` | 422 | Contagem < 0 |
 | `CASH_CLOSING_NOTE_REQUIRED` | 422 | Diferença ≠ 0 sem justificativa, ou justificativa acima de 500 |
 | `INVALID_IDEMPOTENCY_KEY` | 422 | Reusado da 1.3 |
+| `MONEY_OUT_OF_RANGE` | 422 | Do shared-kernel: sangria, suprimento ou pagamento `CASH` que tornaria o esperado ou um total do turno irrepresentável (18a) |
 
 Valor ausente ou mal formado na rota reusa os códigos de `Money` do
 shared-kernel (`INVALID_MONEY`), como na 1.3 #25.
@@ -342,6 +355,11 @@ pagamento × fechamento. Enxuto em texto e validação (uma borda por limite).
 5. **Concorrência:** fechamento junto com um `CASH`. Ou o pagamento entra no
    `expectedAmount` congelado, ou fica sem vínculo. Nunca fica vinculado a turno
    fechado sem ter sido contado
+6. **Concorrência:** fechamento junto com o estorno de um `CASH` do turno: o
+   pagamento é contado exatamente quando o estorno veio depois do fechamento
+   (invariante 27)
+7. Movimento que tiraria o esperado da faixa de `Money` é recusado com
+   `MONEY_OUT_OF_RANGE`, e o turno continua legível e fechável (18a)
 
 ---
 

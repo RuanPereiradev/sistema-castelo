@@ -159,6 +159,30 @@ class CashDrawerSessionHttpIntegrationTest extends AbstractIntegrationTest {
                 .isEqualTo("CASH_DRAWER_SESSION_NOT_FOUND");
     }
 
+    /**
+     * Decision #18: a drop and a supply cancel out through their signs, so the float plus a supply at
+     * the top of the range is still representable after a drop; and a movement that would take the
+     * expected amount beyond the range is refused before it commits, leaving the session closable.
+     */
+    @Test
+    void shouldRefuseAMovementThatTakesTheExpectedAmountOutOfRangeAndKeepTheSessionClosable() {
+        String adminToken = accessTokenFor(createUser(Role.ADMIN));
+        String sessionPath = SESSIONS + "/"
+                + send(post(SESSIONS, adminToken, "{\"openingFloat\":\"100.00\"}"), 201).get("id").asString();
+        send(movement(sessionPath + "/drops", adminToken, "100.00", "To the safe", uniqueKey()), 201);
+        send(movement(sessionPath + "/supplies", adminToken, "9999999999.99", "Typed by mistake", uniqueKey()), 201);
+
+        JsonNode refused = send(movement(sessionPath + "/supplies", adminToken, "0.01", "One cent more", uniqueKey()), 422);
+
+        assertThat(codeOf(refused)).isEqualTo("MONEY_OUT_OF_RANGE");
+        JsonNode open = send(get(sessionPath, adminToken), 200);
+        assertThat(open.get("movements")).hasSize(2);
+        assertThat(open.get("expectedAmount").asString()).isEqualTo("9999999999.99");
+        JsonNode closed = send(close(sessionPath, adminToken, "100.00", "Supply typed by mistake"), 200);
+        assertThat(closed.get("difference").asString()).isEqualTo("-9999999899.99");
+        assertThat(closed.get("cashPaymentsTotal").asString()).isEqualTo("0.00");
+    }
+
     @Test
     void shouldKeepTheWaiterAndTheKitchenOutOfTheCashDrawer() {
         for (Role role : Set.of(Role.WAITER, Role.KITCHEN)) {

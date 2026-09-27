@@ -12,6 +12,7 @@ import br.com.castel.billing.api.PaymentId;
 import br.com.castel.billing.api.PaymentMethod;
 import br.com.castel.billing.api.ReceivedPaymentView;
 import br.com.castel.billing.domain.CashDrawerAssignment;
+import br.com.castel.billing.domain.CashDrawerSessionId;
 import br.com.castel.billing.domain.CashDrawerSessionNotOpenException;
 import br.com.castel.billing.domain.CashDrawerSessionRepository;
 import br.com.castel.billing.domain.Charge;
@@ -205,6 +206,7 @@ public class FolioService implements FolioFacade {
         Payment payment =
                 folio.receive(method, amount, key, auditorAware.currentAuditorId(), clock.instant(), cashDrawer);
         folios.save(folio);
+        payment.cashDrawerSessionId().ifPresent(this::requireReadableCashDrawerSession);
         return new ReceivedPayment(payment, folio.balance());
     }
 
@@ -293,6 +295,17 @@ public class FolioService implements FolioFacade {
         if (holder.filter(other -> !other.equals(folio.id())).isPresent()) {
             throw new IdempotencyKeyReusedException("The idempotency key was used on another folio");
         }
+    }
+
+    /**
+     * Reads the expected amount of the session the cash payment fell into, after the payment was
+     * written and inside its transaction (decision #18 of task 2.4). A payment that takes it out of
+     * the range of {@link Money} fails with {@code MONEY_OUT_OF_RANGE} and rolls back, instead of
+     * leaving a session no closing could answer, which would keep the property from opening another.
+     */
+    private void requireReadableCashDrawerSession(CashDrawerSessionId sessionId) {
+        Money cashPayments = cashDrawerSessions.sumConfirmedCashPayments(sessionId).total();
+        cashDrawerSessions.findById(sessionId).ifPresent(session -> session.expectedAmount(cashPayments));
     }
 
     private static FolioNotFoundException notFound(FolioId folioId) {

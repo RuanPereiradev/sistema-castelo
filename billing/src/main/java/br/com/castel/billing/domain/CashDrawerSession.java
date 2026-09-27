@@ -239,8 +239,8 @@ public class CashDrawerSession extends AuditedEntity {
     // ------------------------------------------------------------------ totals
 
     /**
-     * What the drawer should hold: the float, plus the cash payments, plus the supplies, minus the
-     * drops. Negative after a drop above it (decision C7). Once closed, the amount frozen at the
+     * What the drawer should hold: the float, plus the supplies and minus the drops, each with its
+     * sign in the order it was registered, plus the cash payments. Negative after a drop above it (decision C7). Once closed, the amount frozen at the
      * closing, whatever is passed in.
      *
      * @param cashPayments the confirmed cash payments linked to this session
@@ -250,7 +250,7 @@ public class CashDrawerSession extends AuditedEntity {
         if (!isOpen()) {
             return expectedAmount;
         }
-        return openingFloat.plus(cashPayments).plus(totalSupplies()).minus(totalDrops());
+        return openingFloat.plus(totalMovements()).plus(cashPayments);
     }
 
     /** The expected amount frozen at the closing; empty while open. */
@@ -260,7 +260,7 @@ public class CashDrawerSession extends AuditedEntity {
 
     /** The cash payments counted at the closing, derived from the frozen expected amount; empty while open. */
     public Optional<Money> frozenCashPayments() {
-        return frozenExpectedAmount().map(frozen -> frozen.minus(openingFloat).minus(totalSupplies()).plus(totalDrops()));
+        return frozenExpectedAmount().map(frozen -> frozen.minus(openingFloat).minus(totalMovements()));
     }
 
     /** The count minus the frozen expected amount: positive is a surplus, negative a shortfall. Empty while open. */
@@ -282,6 +282,14 @@ public class CashDrawerSession extends AuditedEntity {
 
     public Money totalSupplies() {
         return totalOf(CashMovementType.CASH_SUPPLY);
+    }
+
+    /**
+     * Every movement with its sign, in the order it was registered: a movement and its opposite cancel
+     * out without the sum passing through the sum of the supplies alone, which may be out of range.
+     */
+    private Money totalMovements() {
+        return movements.stream().map(CashMovement::signedAmount).reduce(Money.ZERO, Money::plus);
     }
 
     private Money totalOf(CashMovementType type) {

@@ -63,7 +63,7 @@ public class CashDrawerSessionService {
         CashDrawerSession session = loadForUpdate(sessionId);
         rejectKeyHeldByAnother(key, session);
         session.drop(amount, reason, key);
-        return withTotals(sessions.save(session));
+        return saveReadable(session);
     }
 
     /** @throws IdempotencyKeyReusedException if another session holds the key */
@@ -74,7 +74,7 @@ public class CashDrawerSessionService {
         CashDrawerSession session = loadForUpdate(sessionId);
         rejectKeyHeldByAnother(key, session);
         session.supply(amount, reason, key);
-        return withTotals(sessions.save(session));
+        return saveReadable(session);
     }
 
     /**
@@ -115,6 +115,20 @@ public class CashDrawerSessionService {
 
     private CashDrawerSession loadForUpdate(CashDrawerSessionId sessionId) {
         return sessions.findByIdForUpdate(sessionId).orElseThrow(() -> notFound(sessionId));
+    }
+
+    /**
+     * Reads the totals before saving, inside the transaction (decision #18 of task 2.4, the pattern of
+     * decision #27 of task 1.3). A movement that takes the expected amount or a total out of the range
+     * of {@link Money} fails here with {@code MONEY_OUT_OF_RANGE} and rolls back, instead of committing
+     * a session that no closing and no reading could answer any more.
+     */
+    private CashDrawerSessionWithTotals saveReadable(CashDrawerSession session) {
+        CashPaymentTotals cashPayments = sessions.sumConfirmedCashPayments(session.id());
+        session.expectedAmount(cashPayments.total());
+        session.totalDrops();
+        session.totalSupplies();
+        return new CashDrawerSessionWithTotals(sessions.save(session), cashPayments);
     }
 
     private CashDrawerSessionWithTotals withTotals(CashDrawerSession session) {
