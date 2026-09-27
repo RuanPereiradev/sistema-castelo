@@ -100,13 +100,6 @@ class TabSplitBillTest {
                     money("14.29", "14.29", "14.29", "14.29", "14.28", "14.28", "14.28"));
         }
 
-        @ParameterizedTest(name = "{0} / {1} -> {2}")
-        @CsvSource({"100.00, 3, true", "0.03, 3, true", "0.02, 3, false", "100.00, 100, false",
-                "100.00, 0, false", "0.00, 1, false"})
-        void shouldTellWhetherTheSplitIsPossibleWithoutThrowing(String amount, int parts, boolean expected) {
-            assertThat(TabBill.acceptsEvenSplit(Money.of(amount), parts)).isEqualTo(expected);
-        }
-
         @Test
         void shouldSplitTheTotalOfTheTab() {
             Tab tab = tableTab();

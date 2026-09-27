@@ -963,7 +963,7 @@ ALTER TABLE tab_item
 
 CREATE INDEX idx_tab_folio ON tab (folio_id) WHERE folio_id IS NOT NULL;
 
--- + seed de restaurant.service_charge_percent = 10.00 para cada property
+-- + seed de restaurant.service-charge-percent = 10.00 para cada property
 ```
 
 **Taxa de serviço.** `service_chargeable` continua o retrato imutável da

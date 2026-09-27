@@ -27,8 +27,8 @@ do DEV nesta task, pendentes de revisão.
 | | |
 |---|---|
 | Branch | `task/3.2-tab-closing` (base `origin/task/billing-api-payment`) |
-| Rodada atual | 1 — D20/D21 aplicadas; aguarda testes de unidade (agente de teste) e revisão do Ruan. Conflito esperado com a 3.5 no construtor do `TabService` (resolvido pelo orquestrador no rebase) |
-| Build | `./mvnw -Dmaven.repo.local=<isolado> clean install` **verde** — 1540 testes, 0 falhas, ArchUnit incluído. `.http` 34 rodado duas vezes seguidas em banco isolado (63/63) e o 33 sem regressão (81/81) |
+| Rodada atual | 3 — review do orquestrador aplicado (R1, D25–D30) e rebase sobre a 2.4; testes de unidade incorporados (D24); aguarda revisão do Ruan. Conflito esperado com a 3.5 no construtor do `TabService` (resolvido pelo orquestrador no rebase) |
+| Build | `./mvnw -Dmaven.repo.local=<isolado> clean install` **verde** — 1621 testes, 0 falhas, ArchUnit incluído (rodada 3). `.http` numa instância isolada: 34 duas vezes (69/69), 33 (81/81), 40 (56/56), 41 (30/30) |
 | Testes | 7 de integração (3 de fluxo, 4 de concorrência), 441 linhas, para ~1.700 de produção (com migration, javadoc e o `.http` fora da conta). Os de unidade do domínio vêm do agente de teste e completam o orçamento |
 
 ---
@@ -39,7 +39,7 @@ do DEV nesta task, pendentes de revisão.
 |---|---|---|---|
 | G1 | 0 | Migration da 3.2 é a **`V9__tab_closing.sql`** (ex-V11); V8 = 2.4, V10 = 3.5, hotel em V11/V12. Aprovado pelo Ruan, 2026-09-26 | implementado |
 | G2 | 0 | `PaymentMethod`/`PaymentId` no `billing.api` e `FolioFacade.receivePayment(FolioId, PaymentMethod, Money, String) → ReceivedPaymentView`, em PR de preparação (#17). A 3.2 não toca no `billing`. Aprovado pelo Ruan, 2026-09-26 | implementado (PR #17) |
-| G3 | 0 | A migration semeia `restaurant.service_charge_percent = 10.00` nas `property` existentes; o `DevUserSeeder` (identity/infra) grava a chave ao criar a propriedade. Aprovado pelo Ruan, 2026-09-26 | implementado |
+| G3 | 0 | A migration semeia `restaurant.service-charge-percent = 10.00` nas `property` existentes; o `DevUserSeeder` (identity/infra) grava a chave ao criar a propriedade. Aprovado pelo Ruan, 2026-09-26 | implementado |
 | G4 | 0 | O caixa do restaurante e do self-service opera com o perfil `WAITER`: fecha e recebe pela comanda. `FRONT_DESK` e `KITCHEN` recebem 403 nas rotas da 3.2. Aprovado pelo Ruan, 2026-09-26 | implementado |
 | G5 | 0 | Glossário: `TabDestination` (`DIRECT_PAYMENT` · `ROOM_ACCOUNT`), `guestCount`, `splitGroup`, `serviceChargeWaived`, `reopen`, `TabBill`, `TabBilling`. Aprovado pelo Ruan, 2026-09-26 | implementado |
 | F1 | 0 | O percentual congela no `startClosing` (pré-conta) | implementado |
@@ -66,23 +66,30 @@ do DEV nesta task, pendentes de revisão.
 | D6 | 0 | Descrição do `TabCharge`: `"Tab card <n>"` ou `"Tab table <diningTableId>"`, montada pelo agregado, que não conhece o rótulo da mesa. A 3.3 revê quando o lançamento for para o folio do hóspede | implementado (DEV, aguarda Ruan) |
 | D7 | 0 | `serviceChargeBase()` sem parâmetro (não depende do percentual); `serviceCharge`, `total`, `bill` e `evenSplit` recebem o `currentRate` obrigatório, e usam o congelado quando há | implementado (DEV, aguarda Ruan) |
 | D8 | 0 | Grupo e `guestCount` em `CLOSED`/`CANCELLED`/`MERGED` respondem `TAB_NOT_OPEN` (o código "a comanda não aceita mais mudança" da 2.2 #16), sem código novo | implementado (DEV, aguarda Ruan) |
-| D9 | 0 | `@DynamicUpdate` em `Tab` e `TabItem`: quem grava sob `FOR KEY SHARE` (grupo, taxa do item, pessoas, cancelamento de item, KDS da 3.5) só escreve as colunas que mudou. Sem isso, uma mudança de grupo lida antes de um cancelamento concorrente regravaria o `status` antigo do item | implementado (DEV, aguarda Ruan) |
+| D9 | 0 | ~~`@DynamicUpdate` em `Tab` e `TabItem`: quem grava sob `FOR KEY SHARE` (grupo, taxa do item, pessoas, cancelamento de item, KDS da 3.5) só escreve as colunas que mudou. Sem isso, uma mudança de grupo lida antes de um cancelamento concorrente regravaria o `status` antigo do item~~ | **revertida pela D27** (texto corrigido) |
 | D10 | 0 | Pagamento responde `TabPaymentResponse {paymentId, method, amount, paidAt, bill}`: o replay devolve o pagamento original e a pré-conta atual | implementado (DEV, aguarda Ruan) |
-| D11 | 0 | Divisão igual na pré-conta: `parts` explícito inválido = 422; sem `parts`, usa `guestCount` só quando a divisão é possível (senão `null`, a leitura não falha); `balanceEvenSplit` só com saldo positivo e divisão possível; `splitGroup` na consulta redivide o total do grupo (F5), e grupo sem item ativo = `INVALID_SPLIT_GROUP` | implementado (DEV, aguarda Ruan) |
+| D11 | 0 | (regra movida do DTO web para `TabClosingView.evenSplit`, D28) Divisão igual na pré-conta: `parts` explícito inválido = 422; sem `parts`, usa `guestCount` só quando a divisão é possível (senão `null`, a leitura não falha); `balanceEvenSplit` só com saldo positivo e divisão possível; `splitGroup` na consulta redivide o total do grupo (F5), e grupo sem item ativo = `INVALID_SPLIT_GROUP` | implementado (DEV, aguarda Ruan) |
 | D12 | 0 | Grupos: tudo ou nada — primeiro todos os números, depois todos os itens, depois aplica. Item cancelado pode ser movido. Lista de grupos só com grupo que tem item ativo, em ordem crescente. Rotas sem bean validation para o que o domínio recusa | implementado (DEV, aguarda Ruan) |
 | D13 | 0 | Taxa do item: status → item existe → item não elegível (422) → item cancelado (aceito sem mudar nada) → mesmo estado (aceito). `restoreServiceCharge` numa comanda de self-service deixa a taxa desligada | implementado (DEV, aguarda Ruan) |
 | D14 | 0 | Testes de integração em classes novas (`TabClosingHttpIntegrationTest`, `TabClosingConcurrencyIntegrationTest`), sem tocar no `TabHttpIntegrationTest` da 2.2 | implementado |
 | D15 | 0 | Adaptador da porta em `restaurant.infra`: `FolioFacadeTabBilling` sobre o `FolioFacade`; transação do chamador | implementado (DEV, aguarda Ruan) |
 | D16 | 0 | Comanda com total zero (só possível com item por peso de centavo zero) no `startClosing` recebe `INVALID_CHARGE_AMOUNT` do billing: o folio não aceita lançamento zero. Aceito como limitação | implementado (DEV, aguarda Ruan) |
 
-| D17 | 0 | O `DevUserSeeder` grava a chave a cada subida com `ON CONFLICT DO NOTHING`, não só quando cria a propriedade: cobre o banco `dev` em qualquer ordem de subida e nunca sobrescreve um valor mudado à mão | implementado (DEV, aguarda Ruan) |
+| D17 | 0 | ~~O `DevUserSeeder` grava a chave a cada subida com `ON CONFLICT DO NOTHING`, não só quando cria a propriedade~~ | **revertida pela D29** |
 | D18 | 0 | O grupo da pré-conta é o record aninhado `TabBill.SplitGroup`, e não o `SplitGroupBill` do rascunho: evita um nome novo fora do glossário (`TabBill` + `splitGroup` já aprovados) | implementado (DEV, aguarda Ruan) |
 | D19 | 0 | `TabBilling.charge` recebe também o `TabId`, para o lançamento levar `ChargeSource.tab(id)` sem o adaptador ler o dono do folio (que na 3.3 será a reserva) | implementado (DEV, aguarda Ruan) |
 
 | D20 | 1 | **Revê a D1** (orquestrador do lote 2, decisão de fronteira de arquivo): o front precisa do total ao vivo. O `TabController` passa o percentual atual (`TabClosingService.currentServiceChargeRate()`) ao `TabResponse` e à lista: `serviceChargeRate`, `serviceCharge` e `total` vêm ao vivo em `OPEN` e congelados depois. Toda leitura de comanda passa a ler o `Setting` | implementado |
 | D21 | 1 | **Revê a D2** (orquestrador do lote 2): o `TabService` recebe `TabBilling` no construtor e o `cancel` chama `tab.cancel(reason, tabBilling, by, at)`. Comanda reaberta cancelada fecha o folio junto, ou recusa com `FOLIO_BALANCE_NOT_ZERO`. O `IllegalStateException` do `cancel` antigo saiu: nenhuma rota o alcança mais, e o método antigo fica para comanda sem folio (usado pelos testes de unidade da 2.2). O `TabClosingService.cancel` saiu, por ser duplicado | implementado |
-| D22 | 1 | O suporte de teste (`AbstractIntegrationTest`) grava `restaurant.service_charge_percent` junto com a propriedade única, como a V9 faz com as propriedades existentes e o `DevUserSeeder` no `dev`: com a D20, toda leitura de comanda precisa da chave, inclusive nos testes da 2.2 | implementado |
+| D22 | 1 | O suporte de teste (`AbstractIntegrationTest`) grava `restaurant.service-charge-percent` junto com a propriedade única, como a V9 faz com as propriedades existentes e o `DevUserSeeder` no `dev`: com a D20, toda leitura de comanda precisa da chave, inclusive nos testes da 2.2 | implementado |
 | D23 | 1 | Maven rodado com repositório local isolado (fora do git), porque o `~/.m2` é compartilhado com as worktrees da 2.4 e da 3.5 | implementado |
+| R1 | 3 | **Decisão do Ruan (2026-09-27):** o folio de comanda não é estornado nem fechado pelas rotas do billing, para nenhum perfil (`ADMIN` inclusive): `FOLIO_OWNED_BY_TAB` (409). Quem estorna e fecha é a comanda (`reopen`/`close`/`cancel`) pela fachada. Pagamento, `refund` e ajuste do `ADMIN` seguem liberados. Regra em `Folio.requireManagedByCounter()`, chamada só por `FolioService.reverseCharge` e `closeFolio` (rotas); a fachada `close` ganhou corpo próprio. O `40` e o `FolioHttpIntegrationTest` foram ajustados: o fechamento do folio `TAB` do `40` virou o negativo, e o teste de estorno repetido passou a usar folio `STAY` | implementado |
+| D25 | 3 | Review (orquestrador): o percentual é lido **antes** da escrita no `TabController` e nas rotas `reopen`/`close` do `TabClosingController`; as demais rotas de fechamento montam a pré-conta dentro da transação. Um `SETTING_NOT_FOUND` recusa antes de gravar, e um retry não duplica item | implementado |
+| D26 | 3 | Review (orquestrador): chave do `Setting` em kebab-case, `restaurant.service-charge-percent`, como `billing.cash-drawer.required` (2.4). A V9 ainda não foi aplicada em lugar nenhum | implementado |
+| D27 | 3 | **Corrige a D9:** `@DynamicUpdate` só impede que mover o item de grupo ou dispensar a taxa regrave o `status` que outra transação acabou de mudar. Cancelamento e KDS gravam os dois `tab_item.status`, e quem os separa é a trava `FOR UPDATE` da linha do item (a 3.5 trava o item antes de transicionar) | implementado |
+| D28 | 3 | A regra da divisão padrão (D11) sai do `TabBillResponse` e vai para `TabClosingView.evenSplit(parts, splitGroup)`; o contrato ganha `evenSplitGroup` documentado | implementado |
+| D29 | 3 | Rebase sobre a 2.4: o `DevUserSeeder` segue o padrão dela, com as chaves gravadas **ao criar a propriedade** (`seedSettings`); a V9 cobre as propriedades já existentes. Revê a D17. O suporte de teste grava as duas chaves em `seedSettingsOf` | implementado |
+| D30 | 3 | Cenário `CASH`: no `.http` 34 (o arquivo abre e fecha o próprio turno, e confere 50,00 + 20,00 no esperado) e em `TabClosingCashIntegrationTest` (caixa obrigatório sem turno → `CASH_DRAWER_SESSION_NOT_OPEN`; com turno, pago e contado). Teste novo de prato por peso em comanda de mesa na base da taxa (453 g × 59,90 = 27,13 → 2,71). Cortados `shouldTellWhetherTheSplitIsPossibleWithoutThrowing` e os dois de `NullPointerException` do `currentRate` | implementado |
 | D24 | 2 | Testes de unidade do agente de teste incorporados (merge de `task/3.2-tab-closing-tests`, 136 testes). Removido o caso `shouldRefuseTheCancellationWithoutBillingOnATabThatHasAFolio`, que provava a `IllegalStateException` da D2, revertida pela D21; os demais 135 passam sem mudança de produção | implementado |
 
 Valores de status: `pendente` · `implementado` · `revertida pela #n`
@@ -94,7 +101,7 @@ Valores de status: `pendente` · `implementado` · `revertida pela #n`
 - [x] Spec final e este registro antes do código
 - [x] §11.1 e §13 do `docs/schema-banco-de-dados.md` (F6)
 - [x] `V9__tab_closing.sql` com seed do `Setting` (G1, G3)
-- [x] `DevUserSeeder` grava `restaurant.service_charge_percent` ao criar a propriedade (G3)
+- [x] `DevUserSeeder` grava `restaurant.service-charge-percent` ao criar a propriedade (G3)
 - [x] `TabStatus`, `TabDestination`, `TabItem` e `Tab` com o bloco de fechamento
 - [x] Taxa de serviço: comanda e item, calculada sobre a soma, congelada no `startClosing` (F1–F3)
 - [x] Divisão igual e por item, rateio da taxa, `guestCount` (F4, F5, F8)
@@ -115,7 +122,7 @@ Valores de status: `pendente` · `implementado` · `revertida pela #n`
 
 | Item | Vai para | Motivo | Quem aprovou |
 |---|---|---|---|
-| Cenário `CASH` no `.http` e na integração | depois do rebase sobre a 2.4 | a regra do turno de caixa entra com a 2.4 | orquestrador do lote 2, na instrução da task |
+| Cenário `CASH` no `.http` e na integração | depois do rebase sobre a 2.4 — **feito na rodada 3 (D30)** | a regra do turno de caixa entra com a 2.4 | orquestrador do lote 2, na instrução da task |
 
 ---
 
@@ -133,6 +140,9 @@ Especificado em `docs/task-3.2-tab-closing.md`, seções 5 e 6.
 | Reabrir com pagamento e depois cancelar itens pode deixar o folio com crédito maior que o novo total: o saldo fica negativo e a comanda não fecha | Consequência de F10 com 1.3 #1/#22 | `ADMIN` estorna o pagamento (`refund`) na rota da 1.3 |
 | Total zero no `startClosing` = `INVALID_CHARGE_AMOUNT` (D16) | Caso só possível com item por peso de centavo zero | Se aparecer, decidir se comanda zero fecha sem lançamento |
 | `guestCount` acima de 99 não gera divisão padrão (D11) | O limite de partes é 99 | Front informa `parts` |
+| Retry de um pagamento depois do `reopen` responde `TAB_NOT_CLOSING`, não o replay | O agregado recusa pagamento em `OPEN` antes de chegar ao folio | O front não repete pagamento depois de reabrir; se precisar, consulta o folio |
+| `GET /tabs` inteira responde 422 (`MONEY_OUT_OF_RANGE`) se uma comanda estourar `Money` no total ao vivo; num lançamento, o item fica gravado e a resposta falha | Valor fora de `NUMERIC(12,2)`, irreal no restaurante | Checar o total dentro da transação se aparecer |
+| Propriedade criada fora de `dev` não ganha `restaurant.*` | Não existe ainda fluxo de criar propriedade em produção | A task que criar a propriedade grava as chaves |
 
 ---
 

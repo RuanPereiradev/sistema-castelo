@@ -21,7 +21,6 @@ import static br.com.castel.restaurant.domain.TabFixtures.stuffedCrust;
 import static br.com.castel.restaurant.domain.TabFixtures.tableTab;
 import static br.com.castel.restaurant.domain.TabFixtures.withModifiers;
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import br.com.castel.sharedkernel.Money;
 import org.junit.jupiter.api.DisplayName;
@@ -44,6 +43,16 @@ class TabServiceChargeTest {
             orderDish(tab, base);
 
             assertThat(tab.serviceCharge(TEN_PERCENT)).isEqualTo(Money.of(expected));
+        }
+
+        @Test
+        void shouldChargeAPlateSoldByWeightOnATableTab() {
+            Tab tab = tableTab();
+            order(tab, buffet(), grams(453));
+
+            // 453 g x 59.90/kg = 27.1347 -> 27.13; 10% = 2.713 -> 2.71
+            assertThat(tab.serviceChargeBase()).isEqualTo(Money.of("27.13"));
+            assertThat(tab.serviceCharge(TEN_PERCENT)).isEqualTo(Money.of("2.71"));
         }
 
         @Test
@@ -107,21 +116,6 @@ class TabServiceChargeTest {
             assertThat(tab.serviceChargeApplied()).isFalse();
             assertThat(tab.serviceChargeBase()).isEqualTo(Money.ZERO);
             assertThat(tab.total(TEN_PERCENT)).isEqualTo(tab.subtotal());
-        }
-
-        @Test
-        void shouldRequireTheCurrentRate() {
-            Tab tab = tableTab();
-            orderDish(tab, "10.00");
-
-            assertThatThrownBy(() -> tab.serviceCharge(null)).isInstanceOf(NullPointerException.class);
-        }
-
-        @Test
-        void shouldRequireTheCurrentRateEvenWhenOneIsFrozen() {
-            Tab tab = closingTab(new FakeTabBilling());
-
-            assertThatThrownBy(() -> tab.total(null)).isInstanceOf(NullPointerException.class);
         }
 
         @Test

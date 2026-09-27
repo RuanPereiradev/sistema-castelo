@@ -60,7 +60,8 @@ public class TabController {
         DiningTableId diningTableId = request.getDiningTableId() == null
                 ? null
                 : DiningTableId.of(request.getDiningTableId());
-        return respond(tabs.open(request.getOrigin(), diningTableId, request.getCardNumber()));
+        Percentage currentRate = closing.currentServiceChargeRate();
+        return respond(tabs.open(request.getOrigin(), diningTableId, request.getCardNumber()), currentRate);
     }
 
     /** Only {@code OPEN} and {@code CLOSING} tabs, by the moment they opened. */
@@ -81,13 +82,15 @@ public class TabController {
 
     @GetMapping("/{tabId}")
     public TabResponse getTab(@PathVariable("tabId") String tabId) {
-        return respond(tabs.find(TabId.of(tabId)));
+        Percentage currentRate = closing.currentServiceChargeRate();
+        return respond(tabs.find(TabId.of(tabId)), currentRate);
     }
 
     @PostMapping("/{tabId}/items")
     @ResponseStatus(HttpStatus.CREATED)
     public TabResponse addItem(@PathVariable("tabId") String tabId, @Valid @RequestBody AddTabItemRequest request) {
-        return respond(tabs.addItem(TabId.of(tabId), commandFrom(request)));
+        Percentage currentRate = closing.currentServiceChargeRate();
+        return respond(tabs.addItem(TabId.of(tabId), commandFrom(request)), currentRate);
     }
 
     @PostMapping("/{tabId}/items/{itemId}/cancel")
@@ -95,19 +98,25 @@ public class TabController {
             @PathVariable("tabId") String tabId,
             @PathVariable("itemId") String itemId,
             @RequestBody CancellationRequest request) {
-        return respond(tabs.cancelItem(TabId.of(tabId), TabItemId.of(itemId), request.getReason()));
+        Percentage currentRate = closing.currentServiceChargeRate();
+        return respond(tabs.cancelItem(TabId.of(tabId), TabItemId.of(itemId), request.getReason()), currentRate);
     }
 
     @PostMapping("/{tabId}/cancel")
     public TabResponse cancelTab(@PathVariable("tabId") String tabId, @RequestBody CancellationRequest request) {
-        return respond(tabs.cancel(TabId.of(tabId), request.getReason()));
+        Percentage currentRate = closing.currentServiceChargeRate();
+        return respond(tabs.cancel(TabId.of(tabId), request.getReason()), currentRate);
     }
 
-    private TabResponse respond(Tab tab) {
+    /**
+     * The rate is read by the caller before the write, so a missing setting refuses the request
+     * before anything commits and a retry never repeats a write (review of task 3.2).
+     */
+    private TabResponse respond(Tab tab, Percentage currentRate) {
         String diningTableLabel = tab.diningTableId()
                 .map(id -> diningTables.find(id).label())
                 .orElse(null);
-        return TabResponse.from(tab, diningTableLabel, closing.currentServiceChargeRate());
+        return TabResponse.from(tab, diningTableLabel, currentRate);
     }
 
     private static AddTabItemCommand commandFrom(AddTabItemRequest request) {

@@ -43,9 +43,10 @@ import org.hibernate.annotations.FetchMode;
  * in {@code tab_item} but are not mapped yet, except {@code delivered_at}: an item sold by weight is
  * born delivered (decision #9).
  *
- * <p>Updated column by column ({@code @DynamicUpdate}, decision D9 of task 3.2): the split group, the
- * waived service charge, a cancellation and the kitchen display all write one item under the shared
- * lock of the tab, and none of them rewrites the columns of another.
+ * <p>Updated column by column ({@code @DynamicUpdate}, decision D9 of task 3.2): moving the item to a
+ * split group or waiving its service charge writes only those columns, so it never rewrites the
+ * status another transaction just changed. Two writers of the status itself — a cancellation and the
+ * kitchen display — are kept apart by the {@code FOR UPDATE} lock on the item's row, not by this.
  */
 @Entity
 @Table(name = "tab_item")

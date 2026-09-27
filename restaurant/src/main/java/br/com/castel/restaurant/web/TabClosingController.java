@@ -6,6 +6,7 @@ import br.com.castel.restaurant.domain.Tab;
 import br.com.castel.restaurant.domain.TabId;
 import br.com.castel.restaurant.domain.TabItemId;
 import br.com.castel.sharedkernel.Money;
+import br.com.castel.sharedkernel.Percentage;
 import jakarta.validation.Valid;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -114,18 +115,21 @@ public class TabClosingController {
 
     @PostMapping("/{tabId}/reopen")
     public TabResponse reopen(@PathVariable("tabId") String tabId, @RequestBody ReopeningRequest request) {
-        return respond(closing.reopen(TabId.of(tabId), request.getReason()));
+        Percentage currentRate = closing.currentServiceChargeRate();
+        return respond(closing.reopen(TabId.of(tabId), request.getReason()), currentRate);
     }
 
     @PostMapping("/{tabId}/close")
     public TabResponse close(@PathVariable("tabId") String tabId) {
-        return respond(closing.close(TabId.of(tabId)));
+        Percentage currentRate = closing.currentServiceChargeRate();
+        return respond(closing.close(TabId.of(tabId)), currentRate);
     }
 
-    private TabResponse respond(Tab tab) {
+    /** The rate comes read before the write, as in {@link TabController}. */
+    private TabResponse respond(Tab tab, Percentage currentRate) {
         String diningTableLabel = tab.diningTableId()
                 .map(id -> diningTables.find(id).label())
                 .orElse(null);
-        return TabResponse.from(tab, diningTableLabel, closing.currentServiceChargeRate());
+        return TabResponse.from(tab, diningTableLabel, currentRate);
     }
 }

@@ -25,10 +25,6 @@ import org.springframework.transaction.annotation.Transactional;
  * {@code app_user}'s foreign key, together with the settings a migration could not seed because no
  * property existed when it ran (decision G3 of lot 2). Restricted to the {@code dev} profile and to
  * {@code castel.dev.seed-enabled=true}; it must never run in {@code prod}.
- *
- * <p>The settings a migration seeds for the properties that already exist are seeded here too, because
- * on an empty {@code dev} database the property is born after Flyway (decision G3 of lot 2). A key
- * already there is left untouched.
  */
 @Component
 @Profile("dev")
@@ -55,8 +51,6 @@ public class DevUserSeeder implements ApplicationRunner {
     @Transactional
     public void run(ApplicationArguments args) {
         UUID propertyId = findOrCreateProperty();
-        seedSetting(propertyId, "restaurant.service_charge_percent", "10.00", "DECIMAL",
-                "Service charge on table-service tabs, in percent points");
         seedActiveUser(propertyId, "admin", "Dev Admin", Role.ADMIN);
         seedActiveUser(propertyId, "recepcao", "Dev Front Desk", Role.FRONT_DESK);
         seedActiveUser(propertyId, "garcom", "Dev Waiter", Role.WAITER);
@@ -84,18 +78,6 @@ public class DevUserSeeder implements ApplicationRunner {
         return User.create(propertyId, username, fullName, seedPassword, Set.of(role), passwordEncoder);
     }
 
-    private void seedSetting(UUID propertyId, String key, String value, String valueType, String description) {
-        jdbcTemplate.update(
-                "INSERT INTO setting (id, property_id, setting_key, setting_value, value_type, description) "
-                        + "VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT (property_id, setting_key) DO NOTHING",
-                UUID.randomUUID(),
-                propertyId,
-                key,
-                value,
-                valueType,
-                description);
-    }
-
     private UUID findOrCreateProperty() {
         var existing = jdbcTemplate.queryForList("SELECT id FROM property LIMIT 1", UUID.class);
         if (!existing.isEmpty()) {
@@ -119,6 +101,8 @@ public class DevUserSeeder implements ApplicationRunner {
     private void seedSettings(UUID propertyId) {
         seedSetting(propertyId, "billing.cash-drawer.required", "false", "BOOLEAN",
                 "CASH payments require an open cash drawer session");
+        seedSetting(propertyId, "restaurant.service-charge-percent", "10.00", "DECIMAL",
+                "Service charge on table-service tabs, in percent points");
     }
 
     private void seedSetting(UUID propertyId, String key, String value, String valueType, String description) {

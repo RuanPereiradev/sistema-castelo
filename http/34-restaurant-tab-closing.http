@@ -3,13 +3,13 @@
 ### + http-client.private.env.json (copie o .example). Ver http/README.md.
 ###
 ### Pre-requisito: aplicacao rodando no perfil "dev" com o seed habilitado
-### (usuarios admin, garcom e cozinha; o seed grava restaurant.service_charge_percent
+### (usuarios admin, garcom e cozinha; o seed grava restaurant.service-charge-percent
 ### = 10.00). Rode o arquivo inteiro, em ordem: a preparacao e o caminho feliz
 ### salvam os ids que os cenarios negativos usam.
 ###
 ### Valores: pizza 40,00 e refrigerante 6,00 com taxa; couvert 12,00 sem taxa;
 ### pudim 10,00 com taxa. Taxa de 10% calculada uma vez sobre a soma.
-### Pagamentos em PIX e cartao; o cenario em dinheiro (CASH) entra depois da 2.4.
+### Pagamentos em PIX, dinheiro (num turno de caixa aberto aqui) e cartao.
 ### No fim, a segunda comanda e reaberta e cancelada (o folio fecha junto) e a
 ### mesa fica livre.
 
@@ -69,6 +69,53 @@ Content-Type: application/json
         client.assert(response.status === 200, "esperado 200, recebido " + response.status);
     });
     client.global.set("kitchenToken", response.body.accessToken);
+%}
+
+
+### 2a. Procura um turno de caixa esquecido aberto (200 ou 404)
+GET {{host}}/api/billing/cash-sessions/current
+Authorization: Bearer {{adminToken}}
+
+> {%
+    client.test("turno atual: 200 ou 404", function() {
+        client.assert(response.status === 200 || response.status === 404, "esperado 200 ou 404, recebido " + response.status);
+    });
+    client.global.set("staleSessionId",
+        response.status === 200 ? response.body.id : "00000000-0000-7000-8000-000000000000");
+%}
+
+
+### 2b. Fecha o turno esquecido, se houver (200 ou 404)
+POST {{host}}/api/billing/cash-sessions/{{staleSessionId}}/close
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "countedAmount": "0.00",
+  "note": "Fechado pela bancada .http"
+}
+
+> {%
+    client.test("turno esquecido fechado, ou nenhum", function() {
+        client.assert(response.status === 200 || response.status === 404, "esperado 200 ou 404, recebido " + response.status);
+    });
+%}
+
+
+### 2c. Abre o turno de caixa com fundo de 50,00 (o dinheiro da comanda entra nele)
+POST {{host}}/api/billing/cash-sessions
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "openingFloat": "50.00"
+}
+
+> {%
+    client.test("turno aberto", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+    });
+    client.global.set("cashSessionId", response.body.id);
 %}
 
 
@@ -688,6 +735,26 @@ Authorization: Bearer {{waiterToken}}
 %}
 
 
+### 36a. Paga 20,00 em dinheiro, no turno aberto
+POST {{host}}/api/restaurant/tabs/{{tabId}}/payments
+Authorization: Bearer {{waiterToken}}
+Idempotency-Key: {{keyPrefix}}-cash
+Content-Type: application/json
+
+{
+  "method": "CASH",
+  "amount": "20.00"
+}
+
+> {%
+    client.test("dinheiro registrado, saldo 29,00", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+        client.assert(response.body.method === "CASH", "metodo " + response.body.method);
+        client.assert(response.body.bill.balance === "29.00", "saldo " + response.body.bill.balance);
+    });
+%}
+
+
 ### 36. Paga o resto no cartao de credito
 POST {{host}}/api/restaurant/tabs/{{tabId}}/payments
 Authorization: Bearer {{waiterToken}}
@@ -696,7 +763,7 @@ Content-Type: application/json
 
 {
   "method": "CREDIT_CARD",
-  "amount": "49.00"
+  "amount": "29.00"
 }
 
 > {%
@@ -1120,5 +1187,34 @@ Authorization: Bearer {{adminToken}}
     client.test("folio fechado junto com o cancelamento", function() {
         client.assert(response.status === 200, "esperado 200, recebido " + response.status);
         client.assert(response.body.status === "CLOSED", "status " + response.body.status);
+    });
+%}
+
+
+### 63. O turno de caixa espera o fundo mais o dinheiro da comanda: 70,00
+GET {{host}}/api/billing/cash-sessions/{{cashSessionId}}
+Authorization: Bearer {{adminToken}}
+
+> {%
+    client.test("esperado no caixa: 50,00 + 20,00", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        client.assert(response.body.expectedAmount === "70.00", "esperado " + response.body.expectedAmount);
+    });
+%}
+
+
+### 64. Fecha o turno de caixa com a contagem certa
+POST {{host}}/api/billing/cash-sessions/{{cashSessionId}}/close
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "countedAmount": "70.00"
+}
+
+> {%
+    client.test("turno fechado sem quebra", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        client.assert(response.body.difference === "0.00", "diferenca " + response.body.difference);
     });
 %}

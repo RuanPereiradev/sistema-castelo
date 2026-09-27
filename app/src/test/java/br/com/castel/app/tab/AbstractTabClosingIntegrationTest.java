@@ -75,7 +75,7 @@ abstract class AbstractTabClosingIntegrationTest extends AbstractIntegrationTest
 
     @BeforeEach
     void prepare() {
-        settingRepository.save(Setting.of("restaurant.service_charge_percent", "10.00", SettingValueType.DECIMAL));
+        settingRepository.save(Setting.of("restaurant.service-charge-percent", "10.00", SettingValueType.DECIMAL));
         adminToken = accessTokenFor(createUser(Role.ADMIN));
         waiterToken = accessTokenFor(createUser(Role.WAITER));
         suffix = UUID.randomUUID().toString().substring(0, 8);

@@ -40,7 +40,7 @@ CREATE INDEX idx_tab_folio ON tab (folio_id) WHERE folio_id IS NOT NULL;
 
 -- Properties created after this migration get the key from their own seeder (decision G3).
 INSERT INTO setting (id, property_id, setting_key, setting_value, value_type, description)
-SELECT gen_random_uuid(), p.id, 'restaurant.service_charge_percent', '10.00', 'DECIMAL',
+SELECT gen_random_uuid(), p.id, 'restaurant.service-charge-percent', '10.00', 'DECIMAL',
        'Service charge on table-service tabs, in percent points'
   FROM property p
 ON CONFLICT (property_id, setting_key) DO NOTHING;

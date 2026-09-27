@@ -37,7 +37,7 @@ concorrência no fechamento. Teste denso nesses três pontos.
 **Dentro**
 - `TabStatus`: `OPEN → CLOSING` (`startClosing`), `CLOSING → OPEN` (`reopen`) e `CLOSING → CLOSED` (`close`).
 - Taxa de serviço:
-  - percentual lido do `Setting` `restaurant.service_charge_percent` (padrão 10,00) e congelado em `startClosing` (F1);
+  - percentual lido do `Setting` `restaurant.service-charge-percent` (padrão 10,00) e congelado em `startClosing` (F1);
   - desligar e religar na comanda inteira (`serviceChargeApplied`) e item a item (`serviceChargeWaived`), só em `OPEN`, sem motivo (F2), só o que nasceu com taxa (F3).
 - Valores calculados: `serviceChargeBase()`, `serviceCharge(rate)`, `total(rate)`, `bill(rate)`.
 - Divisão (F5):
@@ -57,7 +57,7 @@ concorrência no fechamento. Teste denso nesses três pontos.
 - KDS e transições de `TabItemStatus`: 3.5. O KDS continua avançando item em comanda `CLOSING`/`CLOSED` (F12): a 3.2 não bloqueia.
 - Transferência e junção: 3.6.
 - Nota fiscal (1.4 #1), `PaymentIntent`/QR e o job que devolve `CLOSING → OPEN` (v1.1).
-- Turno de caixa: 2.4. A 3.2 herda o que o `FolioService.receivePayment` fizer com `CASH` (C2). O cenário `CASH` entra depois do rebase sobre a 2.4.
+- Turno de caixa: 2.4. A 3.2 herda o que o `FolioService.receivePayment` faz com `CASH` (C2): com o caixa obrigatório e sem turno, `CASH_DRAWER_SESSION_NOT_OPEN`.
 - Desconto: `AdjustmentCharge` do `ADMIN` na rota da 1.3 (F15). Gorjeta além da taxa (F14). Reabrir `CLOSED` (F11). "Grupo já pagou" (F7). Eventos de domínio.
 
 ---
@@ -108,7 +108,7 @@ ALTER TABLE tab_item
 CREATE INDEX idx_tab_folio ON tab (folio_id) WHERE folio_id IS NOT NULL;
 
 INSERT INTO setting (id, property_id, setting_key, setting_value, value_type, description)
-SELECT gen_random_uuid(), p.id, 'restaurant.service_charge_percent', '10.00', 'DECIMAL',
+SELECT gen_random_uuid(), p.id, 'restaurant.service-charge-percent', '10.00', 'DECIMAL',
        'Service charge on table-service tabs, in percent points'
   FROM property p
 ON CONFLICT (property_id, setting_key) DO NOTHING;
@@ -187,6 +187,9 @@ Notas:
 16. `CLOSED` é final na v1 (F11).
 17. `cancel(reason, billing, by, at)`: as regras do `cancel` da 2.2 (status → item ativo → motivo) e, se há `folio_id` (comanda reaberta), `billing.closeFolio(folio)` antes de ir a `CANCELLED`; com saldo ≠ 0, `FOLIO_BALANCE_NOT_ZERO`. A rota `POST /tabs/{id}/cancel` (`TabService.cancel`) usa esta forma (D21). O `cancel(reason, by, at)` da 2.2 fica para comanda sem folio, sem caminho de produção que o chame.
 
+**Folio da comanda no balcão (R1, decisão do Ruan, 2026-09-27)**
+19. Pelas rotas do `FolioController`, o folio cujo dono é `OwnerType.TAB` recusa **estorno de lançamento** e **fechamento** com `FOLIO_OWNED_BY_TAB` (409), para todos os perfis. Quem estorna e fecha é a comanda (`reopen`, `close`, `cancel`) pela fachada. Pagamento, estorno de pagamento (`refund`) e ajuste do `ADMIN` continuam liberados. A regra mora em `Folio.requireManagedByCounter()`, chamada só pelo caminho das rotas.
+
 **Porta**
 18. `TabBilling`, interface em `restaurant.domain`, implementada em `restaurant.infra` sobre o `FolioFacade`:
     - `FolioId openFolio(TabId)`;
@@ -255,7 +258,7 @@ record TabBill(Money subtotal, Money serviceChargeBase, Percentage serviceCharge
   - `FOR UPDATE` (`findByIdForStatusChange`, já existe): `startClosing`, `reopen`, `close`, `cancel`;
   - `FOR KEY SHARE` (`findByIdForItemEntry`, já existe): taxa, grupos, `guestCount`, pagamento.
 - `Tab` e `TabItem` com `@DynamicUpdate`: quem escreve sob `FOR KEY SHARE` (grupo, taxa do item, KDS da 3.5, cancelamento de item) só grava as colunas que mudou, e um não desfaz o outro (decisão #D9).
-- O percentual vem de `Settings.asPercentage("restaurant.service_charge_percent")`.
+- O percentual vem de `Settings.asPercentage("restaurant.service-charge-percent")`.
 
 ---
 
@@ -270,6 +273,7 @@ record TabBill(Money subtotal, Money serviceChargeBase, Percentage serviceCharge
 | `INVALID_SPLIT_PARTS` | 422 | Partes fora de 1 a 99, ou mais partes que centavos |
 | `INVALID_GUEST_COUNT` | 422 | Pessoas fora de 1 a 999 |
 | `INVALID_REOPENING_REASON` | 422 | Motivo de reabertura ausente, em branco ou acima de 500 |
+| `FOLIO_OWNED_BY_TAB` | 409 | Estornar lançamento ou fechar, pelas rotas do billing, o folio de uma comanda — qualquer perfil, `ADMIN` inclusive (R1) |
 
 Reaproveitados: `TAB_NOT_FOUND`, `TAB_ITEM_NOT_FOUND`, `TAB_NOT_OPEN` (também
 para grupo e `guestCount` em `CLOSED`/`CANCELLED`/`MERGED`, #D8); do `billing`:
@@ -297,7 +301,9 @@ POST /api/restaurant/tabs/{tabId}/close                                         
 ```
 
 - Diverge da §8 do plano (um `POST .../close` só): o fechamento tem três passos — pré-conta, pagamentos, fecha (F9).
-- **`TabBillResponse`:** `{tabId, status, guestCount, serviceChargeApplied, subtotal, serviceChargeBase, serviceChargeRate ("10.00", em pontos percentuais), serviceCharge, total, paid, balance, groups:[{splitGroup, subtotal, serviceChargeBase, serviceCharge, total, itemIds}], evenSplitParts, evenSplit, balanceEvenSplit}`.
+- **`TabBillResponse`:** `{tabId, status, guestCount, serviceChargeApplied, subtotal, serviceChargeBase, serviceChargeRate ("10.00", em pontos percentuais), serviceCharge, total, paid, balance, groups:[{splitGroup, subtotal, serviceChargeBase, serviceCharge, total, itemIds}], evenSplitParts, evenSplitGroup, evenSplit, balanceEvenSplit}`.
+  - `evenSplitParts`: as partes usadas (pedidas ou o `guestCount`), `null` sem divisão; `evenSplitGroup`: o grupo redividido, `null` para a comanda inteira.
+  - A regra da divisão padrão mora em `TabClosingView.evenSplit(parts, splitGroup)`, não no DTO (D11).
   - `paid` e `balance` são `null` enquanto não há folio.
   - `evenSplit`: com `parts`, divide o total (ou o total do grupo, com `splitGroup`), e parte inválida é 422; sem `parts`, usa `guestCount` quando a divisão é possível, senão `null` (#D11).
   - `balanceEvenSplit`: a mesma divisão sobre o saldo, quando há folio, o saldo é positivo e a divisão é possível; senão `null`. Não se aplica com `splitGroup`.
@@ -338,7 +344,8 @@ POST /api/restaurant/tabs/{tabId}/close                                         
 - **Preparação:** logins, mesa aleatória, itens (um com `serviceChargeEligible = false`), cartão aleatório.
 - **Caminho feliz:** o da fatia, mais a reabertura.
 - **Negativos:** um por código da seção 5, mais `PAYMENT_EXCEEDS_BALANCE`, `PAYMENT_METHOD_NOT_ACCEPTED` (`ROOM_ACCOUNT`), `IDEMPOTENCY_KEY_REUSED`, `FOLIO_BALANCE_NOT_ZERO` no `close`, lançar em `CLOSING` (`TAB_NOT_OPEN`), desativar mesa em `CLOSING` (`DINING_TABLE_HAS_OPEN_TAB`), 401 e o 403 da cozinha.
-- Pagamentos em PIX/cartão; o cenário `CASH` entra depois do rebase sobre a 2.4.
+- Pagamentos em PIX, cartão e `CASH` (o arquivo abre e fecha o próprio turno de caixa).
+- No `40`: fechar e estornar o folio de comanda pelo balcão → `FOLIO_OWNED_BY_TAB` (R1).
 - **Cancelar comanda reaberta:** com crédito no folio → `FOLIO_BALANCE_NOT_ZERO`; depois do `refund` pelo `ADMIN` → `CANCELLED` com o folio fechado.
 - **No fim:** fecha ou cancela o que ficou aberto.
 - A limitação da 1.3 (`FOLIO_ALREADY_OPENED_FOR_OWNER` sem cenário) **continua**: com o folio reaproveitado, a rota da comanda nunca produz esse erro.

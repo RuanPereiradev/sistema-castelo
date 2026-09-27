@@ -37,7 +37,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class TabClosingService {
 
     /** Percent points, {@code 10.00} for ten percent (decision F1). */
-    public static final String SERVICE_CHARGE_PERCENT_SETTING = "restaurant.service_charge_percent";
+    public static final String SERVICE_CHARGE_PERCENT_SETTING = "restaurant.service-charge-percent";
 
     private final TabRepository tabs;
     private final TabBilling billing;

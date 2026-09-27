@@ -87,8 +87,8 @@ a URL, o privado com a senha.
 | `31-restaurant-menu-variants-modifiers.http` | 1.2 | Variações, adicionais, esgotar variação, cardápio público com "a partir de" |
 | `32-restaurant-dining-tables.http` | 1.5 | Cadastro de mesas, ordem natural da lista, leitura pelo garçom, inativas |
 | `33-restaurant-tabs.http` | 2.2 | Comanda: abrir em mesa e cartão, lançar por unidade e por peso, cancelar item e comanda |
-| `34-restaurant-tab-closing.http` | 3.2 | Fechamento da comanda: taxa de serviço, divisão igual e por item, pré-conta, pagamentos PIX/cartão, reabertura, fechamento com saldo zero |
-| `40-billing-folios.http` | 1.3 | Folio: lançamentos, estorno, pagamentos, estorno de pagamento, fechamento com saldo zero |
+| `34-restaurant-tab-closing.http` | 3.2 | Fechamento da comanda: taxa de serviço, divisão igual e por item, pré-conta, pagamentos PIX/dinheiro/cartão, reabertura, fechamento com saldo zero, cancelar comanda reaberta |
+| `40-billing-folios.http` | 1.3 | Folio: lançamentos, estorno, pagamentos, estorno de pagamento, fechamento com saldo zero; folio de comanda recusa estorno e fechamento pelo balcão (3.2) |
 | `41-billing-cash-sessions.http` | 2.4 | Caixa: abertura de turno, suprimento, dinheiro do folio no turno, sangria, fechamento cego com quebra |
 
 Numeração em ordem de execução sugerida. Cada task nova acrescenta o próximo
