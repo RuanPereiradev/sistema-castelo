@@ -8,6 +8,7 @@ import br.com.castel.billing.api.ChargeSource;
 import br.com.castel.billing.api.ChargeSourceType;
 import br.com.castel.billing.api.FolioOwner;
 import br.com.castel.billing.api.FolioReference;
+import br.com.castel.billing.api.PaymentMethod;
 import br.com.castel.sharedkernel.DomainException;
 import br.com.castel.sharedkernel.Money;
 import java.time.Instant;

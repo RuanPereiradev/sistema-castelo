@@ -1,5 +1,7 @@
 package br.com.castel.billing.domain;
 
+import br.com.castel.billing.api.PaymentId;
+import br.com.castel.billing.api.PaymentMethod;
 import br.com.castel.sharedkernel.AuditedEntity;
 import br.com.castel.sharedkernel.Money;
 import jakarta.persistence.Column;

@@ -8,6 +8,8 @@ import br.com.castel.billing.api.FolioReference;
 import br.com.castel.billing.api.FolioStatus;
 import br.com.castel.billing.api.FolioType;
 import br.com.castel.billing.api.OwnerType;
+import br.com.castel.billing.api.PaymentId;
+import br.com.castel.billing.api.PaymentMethod;
 import br.com.castel.sharedkernel.AuditedEntity;
 import br.com.castel.sharedkernel.Money;
 import jakarta.persistence.CascadeType;

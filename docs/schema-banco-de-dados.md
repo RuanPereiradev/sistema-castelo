@@ -136,13 +136,18 @@ cash_drawer_session 1──N payment
 | V6 | `V6__billing.sql` | 1.3 | `folio`, `charge`, `payment`, `payment_intent` |
 | V7 | `V7__tab.sql` | 2.2 | `tab`, `tab_item`, `tab_item_modifier` |
 | V8 | `V8__cash.sql` | 2.4 | `cash_drawer_session`, `cash_movement` + FK em `payment` |
-| V9 | `V9__hotel_inventory.sql` | 1.1 | `room_type`, `room`, `rate_plan` |
-| V10 | `V10__reservation.sql` | 2.1 | `guest`, `daily_inventory`, `reservation`, `reservation_child`, `room_night` |
-| V11 | `V11__tab_closing.sql` | 3.2 | altera `tab` (`folio_id`, fechamento, destino, taxa de serviço, `guest_count`) e `tab_item` (`split_group`) |
+| V9 | `V9__tab_closing.sql` | 3.2 | altera `tab` (`folio_id`, `tab_charge_id`, fechamento, destino, taxa de serviço, `guest_count`) e `tab_item` (`split_group`, `service_charge_waived`) |
+| V10 | `V10__kitchen_queue_ready.sql` | 3.5 | recria `idx_kds_queue` incluindo `READY` |
+| V11 | `V11__hotel_inventory.sql` | 1.1 | `room_type`, `room`, `rate_plan` |
+| V12 | `V12__reservation.sql` | 2.1 | `guest`, `daily_inventory`, `reservation`, `reservation_child`, `room_night` |
 
 Renumerada em 2026-09-24 (decisão #5 da task 1.2): o restaurante é construído
 antes do hotel, e a versão segue a ordem de execução. Com o hotel no meio, o
 Flyway recusaria V5/V7 depois de V6/V8 já aplicadas em qualquer banco.
+
+Renumerada de novo em 2026-09-26 (lote 2, aprovado pelo Ruan): a 3.2 passa de
+V11 para V9, a 3.5 ganha a V10, e o hotel vai para V11/V12. Mesma razão: a
+versão segue a ordem de execução.
 
 ---
 
@@ -534,7 +539,7 @@ nulável: pagamento por QR code não tem operador, e a constraint
 
 ---
 
-## 8. V9 — inventário do hotel
+## 8. V11 — inventário do hotel
 
 ```sql
 CREATE TABLE room_type (
@@ -624,7 +629,7 @@ CREATE TABLE dining_table (
 
 ---
 
-## 10. V10 — reservas
+## 10. V12 — reservas
 
 ```sql
 CREATE TABLE guest (
@@ -758,7 +763,7 @@ CREATE INDEX idx_reservation_expiring
 
 Escrita pela task 2.2 (`docs/task-2.2-tab.md`, decisões #1, #2, #9, #10, #12).
 Fechamento, destino, taxa de serviço, `folio_id`, `guest_count` e `split_group`
-**não** estão na V7: chegam com a `V11__tab_closing.sql` da task 3.2 (seção 11.1).
+**não** estão na V7: chegam com a `V9__tab_closing.sql` da task 3.2 (ex-V11, renumerada no lote 2) (seção 11.1).
 As colunas do KDS (3.5) e de transferência e junção (3.6) já nascem aqui, sem
 mapeamento até a task delas, para evitar `ALTER` concorrente na Onda 3. A exceção
 é `delivered_at`: o item vendido por peso nasce `DELIVERED` (#9) e a 2.2 já o grava.
@@ -918,9 +923,9 @@ explicar por que a mesa 4 fechou com menos do que foi lançado nela.
 some do salão porque o índice único parcial só considera `OPEN` e `CLOSING`, mas
 o histórico permanece.
 
-### 11.1 V11 — fechamento da comanda (task 3.2)
+### 11.1 V9 — fechamento da comanda (task 3.2)
 
-O que saiu da V7 e entra na `V11__tab_closing.sql`, desenho original a revisar
+O que saiu da V7 e entra na `V9__tab_closing.sql`, desenho original a revisar
 na spec da 3.2:
 
 ```sql

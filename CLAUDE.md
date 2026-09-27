@@ -68,6 +68,15 @@ aqui, **pergunte antes de nomear**.
 | Observação do pedido | `specialInstructions` |
 | Pedido de um item na comanda | `TabItemOrder` |
 | Adicional escolhido no pedido | `ModifierChoice` (com `quantity`) |
+| Pré-conta | `TabBill` |
+| Número de pessoas da comanda | `guestCount` |
+| Grupo da divisão por item | `splitGroup` |
+| Taxa de serviço dispensada no item | `serviceChargeWaived` |
+| Reabrir comanda em fechamento | `reopen` |
+| Porta da comanda para o billing | `TabBilling` |
+| Ficha do item na tela da cozinha | `KitchenTicket` |
+| Fila de um setor na cozinha | `KitchenQueue` |
+| Eventos do item | `TabItemOrdered` · `TabItemStatusChanged` · `TabItemCancelled` |
 | Setor de preparo | `PrepStation` |
 | Janela de horário | `AvailabilityWindow` |
 | Taxa de serviço | `serviceCharge` |
@@ -116,12 +125,14 @@ RoomStatus         AVAILABLE · OCCUPIED · MAINTENANCE
 TabStatus          OPEN · CLOSING · CLOSED · CANCELLED · MERGED
 TabOrigin          TABLE_SERVICE · SELF_SERVICE
 TabItemStatus      PENDING · IN_PREPARATION · READY · DELIVERED · CANCELLED
+TabDestination     DIRECT_PAYMENT · ROOM_ACCOUNT
 PrepStation        KITCHEN · PIZZA · BAR
 FolioType          STAY · TAB
 FolioStatus        OPEN · CLOSED
 PaymentStatus      PENDING · CONFIRMED · FAILED · REFUNDED
 PaymentMethod      CASH · PIX · CREDIT_CARD · DEBIT_CARD · ROOM_ACCOUNT
-CashMovementType   OPENING_FLOAT · CASH_DROP · CASH_SUPPLY · CLOSING_COUNT
+CashDrawerSessionStatus  OPEN · CLOSED
+CashMovementType   CASH_DROP · CASH_SUPPLY
 Role               ADMIN · FRONT_DESK · WAITER · KITCHEN
 ```
 

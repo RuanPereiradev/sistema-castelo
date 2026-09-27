@@ -8,6 +8,9 @@ import br.com.castel.billing.api.FolioId;
 import br.com.castel.billing.api.FolioOwner;
 import br.com.castel.billing.api.FolioReference;
 import br.com.castel.billing.api.FolioView;
+import br.com.castel.billing.api.PaymentId;
+import br.com.castel.billing.api.PaymentMethod;
+import br.com.castel.billing.api.ReceivedPaymentView;
 import br.com.castel.billing.domain.Charge;
 import br.com.castel.billing.domain.Folio;
 import br.com.castel.billing.domain.FolioAlreadyOpenedForOwnerException;
@@ -16,8 +19,6 @@ import br.com.castel.billing.domain.FolioReferenceAlreadyInUseException;
 import br.com.castel.billing.domain.FolioRepository;
 import br.com.castel.billing.domain.IdempotencyKeyReusedException;
 import br.com.castel.billing.domain.Payment;
-import br.com.castel.billing.domain.PaymentId;
-import br.com.castel.billing.domain.PaymentMethod;
 import br.com.castel.sharedkernel.AuditorAware;
 import br.com.castel.sharedkernel.CurrentProperty;
 import br.com.castel.sharedkernel.Money;
@@ -129,6 +130,20 @@ public class FolioService implements FolioFacade {
         closeFolio(folioId);
     }
 
+    /**
+     * The payment of another module (task 3.2) takes the path of the counter, so it keeps every rule
+     * the counter keeps.
+     */
+    @Override
+    @Transactional
+    public ReceivedPaymentView receivePayment(
+            FolioId folioId, PaymentMethod method, Money amount, String idempotencyKey) {
+        ReceivedPayment received = registerPayment(folioId, method, amount, idempotencyKey);
+        Payment payment = received.payment();
+        return new ReceivedPaymentView(
+                payment.id(), payment.method(), payment.amount(), payment.paidAt(), received.balance());
+    }
+
     // ------------------------------------------------------------------ front desk
 
     /** @throws FolioNotFoundException if the folio does not exist */
@@ -147,12 +162,13 @@ public class FolioService implements FolioFacade {
     /**
      * Registers a payment at the counter, or answers the one already registered under the key when
      * this is a retry (decision #5 of task 1.3). The key is checked against other folios here; a
-     * retry on the same folio is recognised by the folio itself.
+     * retry on the same folio is recognised by the folio itself. Every payment passes here, the one
+     * of {@link #receivePayment} included.
      *
      * @throws IdempotencyKeyReusedException if another folio holds the key
      */
     @Transactional
-    public ReceivedPayment receivePayment(FolioId folioId, PaymentMethod method, Money amount, String idempotencyKey) {
+    public ReceivedPayment registerPayment(FolioId folioId, PaymentMethod method, Money amount, String idempotencyKey) {
         String key = Payment.requireValidIdempotencyKey(idempotencyKey);
         Folio folio = loadForUpdate(folioId);
         rejectKeyHeldByAnother(key, folio);

@@ -9,6 +9,7 @@ import static br.com.castel.billing.domain.FolioFixtures.stayFolio;
 import static br.com.castel.billing.domain.FolioFixtures.tabFolio;
 import static org.assertj.core.api.Assertions.assertThat;
 
+import br.com.castel.billing.api.PaymentMethod;
 import br.com.castel.sharedkernel.Money;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;

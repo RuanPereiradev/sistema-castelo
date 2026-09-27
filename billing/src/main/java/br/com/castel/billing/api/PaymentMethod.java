@@ -1,4 +1,4 @@
-package br.com.castel.billing.domain;
+package br.com.castel.billing.api;
 
 /** How a payment was made. */
 public enum PaymentMethod {

@@ -11,8 +11,8 @@ import br.com.castel.billing.api.FolioId;
 import br.com.castel.billing.api.FolioOwner;
 import br.com.castel.billing.api.FolioStatus;
 import br.com.castel.billing.api.FolioView;
+import br.com.castel.billing.api.PaymentMethod;
 import br.com.castel.billing.application.FolioService;
-import br.com.castel.billing.domain.PaymentMethod;
 import br.com.castel.identity.api.Role;
 import br.com.castel.identity.domain.User;
 import br.com.castel.identity.domain.UserRepository;
@@ -144,7 +144,7 @@ class FolioConcurrencyIntegrationTest extends AbstractIntegrationTest {
     void shouldNeverLeaveAClosedFolioWithABalanceWhenAChargeRacesTheClosing() throws Exception {
         for (int round = 0; round < ROUNDS; round++) {
             FolioId folioId = tabFolioOwing("100.00");
-            folioService.receivePayment(folioId, PaymentMethod.CASH, Money.of("100.00"), "key-" + UUID.randomUUID());
+            folioService.registerPayment(folioId, PaymentMethod.CASH, Money.of("100.00"), "key-" + UUID.randomUUID());
             Callable<Boolean> posting = () -> succeeds(() -> folioFacade.post(folioId, tabCharge("30.00")));
             Callable<Boolean> closing = () -> succeeds(() -> folioFacade.close(folioId));
 
@@ -170,7 +170,7 @@ class FolioConcurrencyIntegrationTest extends AbstractIntegrationTest {
     @Test
     void shouldRefuseClosingWhenAChargeWasCommittedAfterTheSameTransactionReadTheFolio() {
         FolioId folioId = tabFolioOwing("100.00");
-        folioService.receivePayment(folioId, PaymentMethod.CASH, Money.of("100.00"), "key-" + UUID.randomUUID());
+        folioService.registerPayment(folioId, PaymentMethod.CASH, Money.of("100.00"), "key-" + UUID.randomUUID());
 
         assertThatThrownBy(() -> new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
                     assertThat(folioFacade.balanceOf(folioId)).isEqualTo(Money.ZERO);
