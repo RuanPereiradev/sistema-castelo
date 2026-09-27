@@ -19,7 +19,8 @@ import org.springframework.security.core.AuthenticationException;
  *       {@code SESSION_SUPERSEDED}, {@code USER_INACTIVE})
  *   <li>no token on {@code CONNECT}, or a frame the protocol refuses on a session that is not
  *       connected (a frame before {@code CONNECT}, a second {@code CONNECT}), which Spring raises as
- *       {@link IllegalStateException}: {@code AUTHENTICATION_REQUIRED}
+ *       {@link IllegalStateException}: {@code AUTHENTICATION_REQUIRED}. The same exception on a
+ *       session that carries a user is a failure of ours, and answers {@code INTERNAL_ERROR}
  *   <li>a subscription or a {@code SEND} the user may not make: {@code ACCESS_DENIED}
  *   <li>a frame that does not parse: {@code MALFORMED_REQUEST}; anything else: {@code INTERNAL_ERROR}
  * </ul>
@@ -32,11 +33,12 @@ class StompErrorCodeHandler extends StompSubProtocolErrorHandler {
             byte[] errorPayload,
             @Nullable Throwable cause,
             @Nullable StompHeaderAccessor clientHeaderAccessor) {
-        errorHeaderAccessor.setMessage(codeOf(cause));
+        boolean connected = clientHeaderAccessor != null && clientHeaderAccessor.getUser() != null;
+        errorHeaderAccessor.setMessage(codeOf(cause, connected));
         return super.handleInternal(errorHeaderAccessor, errorPayload, cause, clientHeaderAccessor);
     }
 
-    private static String codeOf(@Nullable Throwable failure) {
+    private static String codeOf(@Nullable Throwable failure, boolean connected) {
         for (Throwable cause = failure; cause != null; cause = cause.getCause()) {
             if (cause instanceof DomainException domainException) {
                 return domainException.code();
@@ -44,7 +46,10 @@ class StompErrorCodeHandler extends StompSubProtocolErrorHandler {
             if (cause instanceof AccessDeniedException) {
                 return ApiErrorCode.ACCESS_DENIED.code();
             }
-            if (cause instanceof AuthenticationException || cause instanceof IllegalStateException) {
+            if (cause instanceof AuthenticationException) {
+                return ApiErrorCode.AUTHENTICATION_REQUIRED.code();
+            }
+            if (cause instanceof IllegalStateException && !connected) {
                 return ApiErrorCode.AUTHENTICATION_REQUIRED.code();
             }
             if (cause instanceof StompConversionException) {

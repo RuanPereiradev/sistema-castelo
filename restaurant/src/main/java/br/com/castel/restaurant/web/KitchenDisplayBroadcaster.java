@@ -33,12 +33,16 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
  *       cancellation, for the waiters (K10)
  * </ul>
  *
- * <p>Nothing here ever fails the request. A failure reading the ticket is logged and nothing is
- * sent; a failure sending is caught too, because an exception thrown from {@code afterCommit} reaches
- * the caller of the commit and would answer 500 for a change already committed. The ticket is read
- * through the {@link KitchenQueue} port, not a transactional service: a failure caught inside a
- * participating {@code @Transactional} call would still mark the order rollback-only. The screen corrects
- * itself on the next reconnection, which reloads the queue (K13).
+ * <p>A failure reading the ticket <b>fails the request</b> (review, round 3): it propagates out of the
+ * commit, the transaction is rolled back and the waiter repeats the order. It is never swallowed,
+ * because on PostgreSQL an SQL error aborts the transaction and the commit that follows rolls back in
+ * silence: swallowing it answered 201 for an order that was never stored. The port flushes the
+ * pending writes before it reads, so a violation of the order's own write surfaces with its own
+ * cause, not as a failed read.
+ *
+ * <p>A failure <em>sending</em> is caught and logged: by then the change is committed, and an exception
+ * thrown from {@code afterCommit} reaches the caller of the commit and would answer 500 for it. The
+ * screen corrects itself on the next reconnection, which reloads the queue (K13).
  */
 @Component
 public class KitchenDisplayBroadcaster {
@@ -88,15 +92,12 @@ public class KitchenDisplayBroadcaster {
         });
     }
 
-    /** Reads the ticket now, inside the transaction, and sends it once the transaction commits. */
+    /**
+     * Reads the ticket now, inside the transaction, and sends it once the transaction commits. A
+     * failure of the read propagates and rolls the change back.
+     */
     private void sendAfterCommit(TabItemId itemId, Consumer<KitchenTicketResponse> send) {
-        KitchenTicketResponse ticket;
-        try {
-            ticket = kitchenQueue.ticket(itemId).map(KitchenTicketResponse::from).orElse(null);
-        } catch (RuntimeException failure) {
-            LOGGER.warn("Could not read the kitchen ticket of item {}", itemId.value(), failure);
-            return;
-        }
+        KitchenTicketResponse ticket = kitchenQueue.ticket(itemId).map(KitchenTicketResponse::from).orElse(null);
         if (ticket == null) {
             return;
         }

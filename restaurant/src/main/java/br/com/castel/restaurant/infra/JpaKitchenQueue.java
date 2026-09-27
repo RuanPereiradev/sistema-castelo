@@ -26,7 +26,8 @@ import org.springframework.stereotype.Repository;
  * is locked: reading the queue never waits for a waiter or for the kitchen.
  *
  * <p>Each read flushes the persistence context first, the way Hibernate flushes before its own
- * queries: a transition answers the ticket it just wrote, read in the same transaction.
+ * queries: a transition answers the ticket it just wrote, read in the same transaction, and a
+ * violation of that write surfaces from the flush with its own cause, before any read runs.
  */
 @Repository
 class JpaKitchenQueue implements KitchenQueue {

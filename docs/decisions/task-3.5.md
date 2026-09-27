@@ -17,10 +17,10 @@ chegar à `main` depois da V9 da 3.2 (G1).
 | | |
 |---|---|
 | Branch | `task/3.5-kds`, rebaseada sobre `task/3.2-tab-closing` (que já inclui a 2.4) na rodada 3 |
-| Rodada atual | 3 — rebase sobre a 3.2; testes de unidade com o fechamento real; KDS em comanda `CLOSING`/`CLOSED` pela rota. Entra na `main` depois da 3.2 (V9) |
-| Build | `./mvnw -Dmaven.repo.local=<scratchpad>/m2repo-35 clean install` **verde** — 1727 testes, 0 falhas, ArchUnit incluído (rodada 3, depois do rebase) |
-| `.http` | Rodada 3, instância isolada com banco zerado: `33` 81/0, `34` 69/0, `35` 41/0, `40` 56/0, `41` 30/0 (requisições/falhas) |
-| Testes | 94 de unidade (agente de teste) + 12 de integração (fatia REST, comanda em fechamento, concorrência, WebSocket real, pool pequeno) |
+| Rodada atual | 4 — última rodada de review: leitura do ticket propaga a falha; squash do commit que não compilava. Entra na `main` depois da 3.2 (V9) |
+| Build | `./mvnw -Dmaven.repo.local=<scratchpad>/m2repo-35 clean install` **verde** — 1728 testes, 0 falhas, ArchUnit incluído (rodada 4) |
+| `.http` | Rodada 3, instância isolada com banco zerado: `33` 81/0, `34` 69/0, `35` 41/0, `40` 56/0, `41` 30/0 (requisições/falhas). Rodada 4: `33` 81/0, `35` 41/0 |
+| Testes | 94 de unidade (agente de teste) + 13 de integração (fatia REST, comanda em fechamento, concorrência, WebSocket real, pool pequeno, falha na leitura do ticket) |
 
 ---
 
@@ -62,7 +62,7 @@ chegar à `main` depois da V9 da 3.2 (G1).
 | 32 | 1 | DEV: a entrega pelo garçom trava pelo método novo `findByIdForItemChange(tabId, itemId)`, que reaproveita a trava do cancelamento de item (comanda `FOR KEY SHARE` → item `FOR UPDATE`); `findByItemIdForItemChange` lê o `tab_id` sem lock e cai no mesmo caminho | implementado |
 | 33 | 1 | DEV: o teste de WebSocket espera a assinatura ficar ativa mandando uma sonda pelo próprio broker (o broker simples não devolve `RECEIPT` para `SUBSCRIBE`); a sonda nunca chega à fila do teste | implementado |
 | 34 | 1 | Orquestrador: todo Maven desta task roda com repositório local próprio (`-Dmaven.repo.local=...`), porque o `~/.m2` é compartilhado com as worktrees da 2.4 e da 3.2. Da rodada 2 em diante, fora da worktree (scratchpad), para não haver nada a ignorar no git | implementado |
-| 35 | 2 | Review (bloqueante): **o push não toca o banco depois do commit.** O ouvinte `AFTER_COMMIT` + `REQUIRES_NEW` pedia uma 2ª conexão enquanto a da requisição não tinha voltado ao pool (no Spring 7 o `AFTER_COMMIT` roda em `afterCompletion`, antes do `cleanupAfterCompletion`); com pool 2 e 6 lançamentos simultâneos, 4 davam 500 — reproduzido aqui antes da correção. Agora o ouvinte é `BEFORE_COMMIT`: lê o ticket pela porta `KitchenQueue` na conexão da transação e registra um `afterCommit` que só envia. Ordem preservada (callbacks na ordem dos commits, sem `@Async`). Lê pela porta, não pelo serviço `@Transactional`, porque uma exceção capturada numa chamada transacional participante marcaria o lançamento rollback-only; por isso `KitchenDisplayService.ticket` saiu. Exceção no `afterCommit` chega a quem comita (viraria 500 numa mudança já gravada), por isso o envio é capturado e logado. Provado por `KitchenDisplaySmallPoolIntegrationTest` (pool 2, 6 lançamentos: 6×201 e 6 mensagens) | implementado |
+| 35 | 2 | Review (bloqueante): **o push não toca o banco depois do commit.** (A parte "falha na leitura é logada e nada é enviado" foi **revertida pela #47**.) O ouvinte `AFTER_COMMIT` + `REQUIRES_NEW` pedia uma 2ª conexão enquanto a da requisição não tinha voltado ao pool (no Spring 7 o `AFTER_COMMIT` roda em `afterCompletion`, antes do `cleanupAfterCompletion`); com pool 2 e 6 lançamentos simultâneos, 4 davam 500 — reproduzido aqui antes da correção. Agora o ouvinte é `BEFORE_COMMIT`: lê o ticket pela porta `KitchenQueue` na conexão da transação e registra um `afterCommit` que só envia. Ordem preservada (callbacks na ordem dos commits, sem `@Async`). Lê pela porta, não pelo serviço `@Transactional`, porque uma exceção capturada numa chamada transacional participante marcaria o lançamento rollback-only; por isso `KitchenDisplayService.ticket` saiu. Exceção no `afterCommit` chega a quem comita (viraria 500 numa mudança já gravada), por isso o envio é capturado e logado. Provado por `KitchenDisplaySmallPoolIntegrationTest` (pool 2, 6 lançamentos: 6×201 e 6 mensagens) | implementado |
 | 36 | 2 | Review: um teste por regra de autorização STOMP — `SEND` do cliente recusado, `KITCHEN` assinando `/topic/restaurant/ready-items` recusado, handshake com query string = 400 | implementado |
 | 37 | 2 | Review: o nome do principal STOMP é o id do usuário (`AccessTokenAuthentication`, em `identity.infra`), não o `toString()` do record; o interceptor trata `CONNECT` e `STOMP` pelo tipo `SimpMessageType.CONNECT`; `IllegalStateException` de protocolo (frame antes do `CONNECT`, `CONNECT` duplicado) vira `AUTHENTICATION_REQUIRED` no frame `ERROR`, com um teste de frame cru antes do `CONNECT` | implementado |
 | 38 | 2 | Review: o destino do desfazer vira comportamento do enum — `TabItemStatus.undoneTo(preparationStarted)` e `carriesPreparationStart()`; `TabItem.undoLastStep` não compara status | implementado |
@@ -74,6 +74,9 @@ chegar à `main` depois da V9 da 3.2 (G1).
 | 44 | 3 | Orquestrador: um teste de integração do KDS numa comanda em fechamento pela rota real — inicia o preparo em `CLOSING`, marca pronto e entrega depois de `CLOSED` | implementado |
 | 45 | 3 | Conferido: as transições do KDS (comanda `FOR KEY SHARE` → item `FOR UPDATE`) esperam o `FOR UPDATE` da comanda no fechamento, reabertura e cancelamento da 3.2, e vice-versa; divisão e dispensa de taxa da 3.2 travam `FOR KEY SHARE`, e o `@DynamicUpdate` faz cada lado gravar só as suas colunas (split/taxa × status/instantes), então nada é regravado. Nenhuma trava toma o item antes da comanda | implementado |
 | 46 | 3 | Conferido: a V10 vem depois da V8 (2.4) e da V9 (3.2); o Flyway aplica V1..V10 num banco zerado (container dos testes e instância isolada do `.http`) | implementado |
+| 47 | 4 | Orquestrador (bloqueante): **falha na leitura do ticket propaga.** O `try/catch` do `BEFORE_COMMIT` engolia erro de SQL; no Postgres o erro aborta a transação e o `commit()` do pgjdbc depois disso não lança, o servidor faz `ROLLBACK` em silêncio: o garçom recebia 201 com um item que não foi gravado. Agora a falha sai do commit, a transação é desfeita, a rota responde erro e o garçom repete. A porta `KitchenQueue` dá `flush` antes de ler, então uma violação da própria escrita aparece com a causa dela. O envio no `afterCommit` continua com a falha capturada, porque ali o dado já está gravado. Provado por `KitchenDisplayReadFailureIntegrationTest` (porta que lança: rota não responde 2xx, item não está no banco) | implementado |
+| 48 | 4 | Review: `IllegalStateException` vira `AUTHENTICATION_REQUIRED` só quando a sessão não está conectada (sem usuário); numa sessão com usuário é falha nossa e responde `INTERNAL_ERROR`. Refina a #37 | implementado |
+| 49 | 4 | Orquestrador: o commit de feature rebaseado não compilava sozinho; a correção do `TabItemDeliveryController` foi levada para dentro dele e os commits seguintes reaplicados, sem `rebase -i`. A árvore final é idêntica à de antes (diff vazio) | implementado |
 
 Valores de status: `pendente` · `implementado` · `revertida pela #n`
 
@@ -99,6 +102,7 @@ Valores de status: `pendente` · `implementado` · `revertida pela #n`
 - [x] `./mvnw clean install` verde, ArchUnit incluído
 - [x] Rodada 2: push sem segunda conexão (#35), autorização STOMP (#36), sugestões (#37–#39)
 - [x] Rodada 3: rebase sobre a 3.2 (#42), fechamento real nos testes de unidade (#43), KDS em comanda em fechamento pela rota (#44), travas e Flyway conferidos (#45, #46)
+- [x] Rodada 4: falha na leitura do ticket propaga (#47), `IllegalStateException` só sem sessão (#48), squash (#49)
 
 ### Fora do escopo
 
@@ -148,7 +152,8 @@ Especificado em `docs/task-3.5-kds.md`, seções 5 a 8.
 | Mensagem perdida (queda de rede, falha no envio) não é reenviada | A fila REST é a verdade; a tela recarrega na reconexão (K13) | — |
 | Item de comanda fechada que ninguém avançou fica na fila | F12: o KDS segue mostrando; o front esconde depois de N minutos | Ação de limpeza, se aparecer |
 | O teste "lançamento recusado não gera mensagem" não distingue o envio em `afterCommit` de um envio síncrono: o lançamento recusado falha antes de publicar | Não há, no fluxo real, lançamento que publique e depois desfaça; provar exigiria um gancho só de teste | — |
-| Uma falha de SQL ao ler o ticket em `BEFORE_COMMIT` aborta a transação no Postgres e o lançamento falha | É uma falha real do banco, que a própria gravação sofreria no commit; o ticket é um `SELECT` simples | — |
+| ~~Uma falha de SQL ao ler o ticket em `BEFORE_COMMIT` aborta a transação no Postgres e o lançamento falha~~ — **revertida pela #47**: o texto estava errado, o código engolia a falha e o lançamento respondia 201 sem ter sido gravado | — | — |
+| Uma falha ao ler o ticket antes do commit desfaz o lançamento, a transição ou o cancelamento: a rota responde erro (500) e o operador repete (#47) | Nada é confirmado sem estar gravado; o ticket é um `SELECT` simples na conexão que a transação já tem | — |
 | Banco zerado no `dev`: o primeiro boot resolve a propriedade antes de o seed criá-la, e as rotas que escrevem respondem 500 até reiniciar | Comportamento anterior à 3.5 (`SinglePropertyId`, decisão #27 da 0.5b), visto ao rodar o `.http` num banco novo | Resolver a propriedade de forma preguiçosa, fora desta task |
 | Transição da cozinha lê o `tab_id` do item sem lock; se a 3.6 transferir o item nesse intervalo, a transição responde `TAB_ITEM_NOT_FOUND` | A 3.6 ainda não existe; o operador repete o toque | Revisar na 3.6 |
 

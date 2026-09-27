@@ -225,8 +225,13 @@ cancelado).
   travariam até o timeout (review, rodada 1). Os `afterCommit` rodam na ordem dos
   commits, o que preserva a ordem das mensagens; nada de `@Async`.
 - **Consequências:** lançamento recusado ou transação desfeita não chega ao
-  `afterCommit` e não empurra nada. Falha na leitura ou no envio fica em log e não
-  vira erro na resposta; a tela se corrige na próxima reconexão (K13).
+  `afterCommit` e não empurra nada. **Falha na leitura do ticket propaga:** a
+  transação é desfeita e a rota responde erro, e o operador repete. Nada é
+  confirmado sem estar gravado: no Postgres um erro de SQL aborta a transação e o
+  commit que vem depois desfaz tudo em silêncio. A porta dá `flush` antes de ler,
+  para uma violação da própria escrita aparecer com a sua causa. Falha no **envio**
+  fica só em log (o dado já está gravado); a tela se corrige na próxima reconexão
+  (K13).
 
 **Destinos**
 
@@ -288,8 +293,8 @@ O mesmo formato na fila REST, na resposta das transições e na mensagem STOMP
   na sessão; o nome do principal é o id do usuário. O comando `STOMP`, sinônimo de
   `CONNECT`, passa pelo mesmo caminho. Falha: frame `ERROR` com `message` igual ao
   código — `AUTHENTICATION_REQUIRED` (sem cabeçalho, ou frame que o protocolo
-  recusa numa sessão não conectada, como frame antes do `CONNECT` ou `CONNECT`
-  duplicado), `TOKEN_EXPIRED`, `INVALID_TOKEN`, `SESSION_SUPERSEDED`,
+  recusa numa sessão ainda sem usuário, como frame antes do `CONNECT` ou `CONNECT`
+  duplicado; numa sessão com usuário o mesmo erro é `INTERNAL_ERROR`), `TOKEN_EXPIRED`, `INVALID_TOKEN`, `SESSION_SUPERSEDED`,
   `USER_INACTIVE` — e a sessão fecha.
 - **Autorização:** manual, sem `@EnableWebSocketSecurity` (o CSRF obrigatório no
   CONNECT não faz sentido com bearer): interceptor JWT →
@@ -415,3 +420,5 @@ fechamento real da 3.2; o evento devolvido com `from` e `to` corretos.
   `ORDERED` só no setor certo; `CANCELLED`; lançamento recusado não gera mensagem.
 - Pool pequeno: com `maximum-pool-size=2`, seis lançamentos simultâneos respondem
   201 e as seis mensagens chegam.
+- Falha na leitura do ticket: com a porta `KitchenQueue` lançando, o lançamento não
+  responde 2xx e o item não está no banco.
