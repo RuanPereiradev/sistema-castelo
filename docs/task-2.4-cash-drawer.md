@@ -27,7 +27,7 @@ diferença, transição e na corrida entre pagamento e fechamento.
 - Abrir turno com `openingFloat`; no máximo um turno aberto por propriedade (C1)
 - Sangria e suprimento com valor, motivo e `Idempotency-Key` (C9)
 - Fechar com `countedAmount`: calcula e congela `expectedAmount`; a diferença é
-  derivada; nunca bloqueia por quebra (C6)
+  derivada; nunca bloqueia por quebra (C6) e nunca exige nota (decisão #22)
 - Vincular pagamento `CASH` ao turno aberto **dentro de
   `FolioService.registerPayment`**, o caminho único de todo pagamento (G2), com
   a configuração `billing.cash-drawer.required` (C2)
@@ -60,7 +60,7 @@ diferença, transição e na corrida entre pagamento e fechamento.
 | `cash_drawer_session` | `opened_by`/`closed_by` **sem FK** para `app_user` | Padrão do billing (`payment.received_by`); a FK cruzaria o módulo identity |
 | `cash_drawer_session` | − `difference` | Derivado: `counted − expected`, calculado |
 | `cash_drawer_session` | `expected_amount` congelado no fechamento, exigido pelo `CHECK` | A conferência é um fato histórico: estorno posterior não reescreve o turno fechado (C8) |
-| `cash_drawer_session` | + `closing_note TEXT` | Justificativa da quebra (C6) |
+| `cash_drawer_session` | + `closing_note TEXT` | Observação opcional do fechamento (C6, #22) |
 | `cash_drawer_session` | `CHECK counted_amount >= 0` | |
 | `cash_movement` | só `CASH_DROP` e `CASH_SUPPLY` no `CHECK` | C3: fundo e contagem são colunas do turno |
 | `cash_movement` | − `ON DELETE CASCADE`; + `updated_*`; `reason NOT NULL` | Nada é apagado; auditoria; motivo obrigatório |
@@ -124,15 +124,19 @@ Ordem: chave válida → replay/chave reusada → turno fechado → valor → mo
 11. `difference()` = `countedAmount − expectedAmount`: positiva é sobra,
     negativa é falta. Calculada, vazia enquanto `OPEN`
 12. Contagem ≥ 0 (`INVALID_COUNTED_AMOUNT`, também quando nula)
-13. Com diferença ≠ 0, `closingNote` é obrigatória, aparada, de 1 a 500
-    (`CASH_CLOSING_NOTE_REQUIRED`), sem tolerância. Com diferença zero, é
-    opcional: em branco vira ausente; acima de 500, o mesmo código
+13. **O fechamento é sempre aceito, e `closingNote` é opcional para todos, com
+    diferença zero ou não** (decisão do Ruan de 2026-09-27, #22, que reverte a
+    parte da C6 que exigia justificativa na quebra). Exigir nota só quando a
+    contagem difere vazaria o esperado do fechamento cego: a recepção testaria
+    valores até o sistema aceitar sem nota. A diferença fica congelada e o
+    `ADMIN` confere depois. A nota é aparada; em branco vira ausente; acima de
+    500 caracteres é `INVALID_CASH_CLOSING_NOTE` (#23)
 14. Turno `CLOSED` recusa sangria, suprimento e fechar de novo
     (`CASH_DRAWER_SESSION_CLOSED`)
 15. Quem fecha: quem abriu, ou `ADMIN` (`CASH_DRAWER_SESSION_NOT_OWNED`, 409)
 16. Fechar é sempre explícito; o turno pode atravessar o dia (C10)
 
-Ordem no fechamento: turno existe → fechado → dono → contagem → justificativa.
+Ordem no fechamento: turno existe → fechado → dono → contagem → tamanho da nota.
 
 ### Leitura
 17. `frozenExpectedAmount()`: o esperado congelado, vazio enquanto `OPEN`
@@ -284,7 +288,7 @@ transação. A 3.2 respeita a ordem de travas comanda → folio → turno.
 | `INVALID_CASH_MOVEMENT_AMOUNT` | 422 | Movimento ≤ 0 |
 | `INVALID_CASH_MOVEMENT_REASON` | 422 | Motivo em branco ou acima de 500 |
 | `INVALID_COUNTED_AMOUNT` | 422 | Contagem < 0 |
-| `CASH_CLOSING_NOTE_REQUIRED` | 422 | Diferença ≠ 0 sem justificativa, ou justificativa acima de 500 |
+| `INVALID_CASH_CLOSING_NOTE` | 422 | Nota do fechamento acima de 500 caracteres (a nota é opcional, #22) |
 | `INVALID_IDEMPOTENCY_KEY` | 422 | Reusado da 1.3 |
 | `MONEY_OUT_OF_RANGE` | 422 | Do shared-kernel: sangria, suprimento ou pagamento `CASH` que tornaria o esperado ou um total do turno irrepresentável (18a) |
 
@@ -330,8 +334,8 @@ pagamento × fechamento. Enxuto em texto e validação (uma borda por limite).
 **Unidade (agente de teste), densa:**
 - Valor esperado: só fundo; fundo zero; + `CASH`; + suprimento − sangria;
   centavos (0,01); negativo com sangria acima do esperado
-- Diferença: +0,01, −0,01 e 0; congelada depois do fechamento; nota
-  obrigatória com ≠ 0 e opcional com 0
+- Diferença: +0,01, −0,01 e 0; congelada depois do fechamento; fecha sem
+  nota com diferença ≠ 0; nota acima de 500 recusada
 - Transições: cada escrita em turno `CLOSED` recusada; fechar duas vezes
 - Idempotência de movimento: replay, chave reusada com outro valor ou tipo,
   replay em turno fechado
@@ -344,7 +348,7 @@ pagamento × fechamento. Enxuto em texto e validação (uma borda por limite).
 
 **Integração (DEV), `app/src/test/.../billing/`:**
 1. Fatia: abre → suprimento → `CASH` num folio `TAB` vinculado, PIX sem vínculo
-   → sangria (com replay) → fecha com falta e nota → GET mostra os valores
+   → sangria (com replay) → fecha com falta (nota de 501 recusada) → GET mostra os valores
    congelados; cego para a recepção com o turno aberto. 403 do `WAITER` e do
    `KITCHEN`
 2. Controle ligado: `CASH` sem turno dá 409, PIX passa; retry do `CASH` depois

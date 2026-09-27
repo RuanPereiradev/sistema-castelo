@@ -140,8 +140,8 @@ class CashDrawerSessionHttpIntegrationTest extends AbstractIntegrationTest {
         assertThat(replayed.get("totalDrops").asString()).isEqualTo("200.00");
         assertThat(codeOf(send(close(sessionPath, otherFrontDeskToken, "99.50", "Counted"), 409)))
                 .isEqualTo("CASH_DRAWER_SESSION_NOT_OWNED");
-        assertThat(codeOf(send(close(sessionPath, frontDeskToken, "99.50", null), 422)))
-                .isEqualTo("CASH_CLOSING_NOTE_REQUIRED");
+        assertThat(codeOf(send(close(sessionPath, frontDeskToken, "99.50", "x".repeat(501)), 422)))
+                .isEqualTo("INVALID_CASH_CLOSING_NOTE");
 
         JsonNode closed = send(close(sessionPath, frontDeskToken, "99.50", "Fifty cents short"), 200);
 

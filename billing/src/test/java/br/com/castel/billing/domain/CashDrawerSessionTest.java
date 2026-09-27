@@ -23,7 +23,7 @@ class CashDrawerSessionTest {
     private static final String INVALID_CASH_MOVEMENT_AMOUNT = "INVALID_CASH_MOVEMENT_AMOUNT";
     private static final String INVALID_CASH_MOVEMENT_REASON = "INVALID_CASH_MOVEMENT_REASON";
     private static final String INVALID_COUNTED_AMOUNT = "INVALID_COUNTED_AMOUNT";
-    private static final String CASH_CLOSING_NOTE_REQUIRED = "CASH_CLOSING_NOTE_REQUIRED";
+    private static final String INVALID_CASH_CLOSING_NOTE = "INVALID_CASH_CLOSING_NOTE";
     private static final String CASH_DRAWER_SESSION_CLOSED = "CASH_DRAWER_SESSION_CLOSED";
     private static final String CASH_DRAWER_SESSION_NOT_OWNED = "CASH_DRAWER_SESSION_NOT_OWNED";
     private static final String INVALID_IDEMPOTENCY_KEY = "INVALID_IDEMPOTENCY_KEY";
@@ -260,25 +260,33 @@ class CashDrawerSessionTest {
                     () -> session.close(null, Money.ZERO, "nota", OPERATOR, false, LATER), INVALID_COUNTED_AMOUNT);
         }
 
+        /** Decision #22: a note required only on a difference would reveal the expected amount of a blind closing. */
         @Test
-        void shouldRequireANoteWhenTheDifferenceIsOneCent() {
+        void shouldCloseWithoutANoteWhenTheDifferenceIsOneCent() {
             CashDrawerSession session = openWith("100.00");
 
-            assertRejectedWith(() -> close(session, "99.99", "0.00", null), CASH_CLOSING_NOTE_REQUIRED);
+            close(session, "99.99", "0.00", null);
+
+            assertThat(session.isOpen()).isFalse();
+            assertThat(session.difference()).contains(money("-0.01"));
+            assertThat(session.closingNote()).isEmpty();
         }
 
         @Test
-        void shouldRejectABlankNoteWhenThereIsADifference() {
+        void shouldTreatABlankNoteAsAbsentWhenThereIsADifference() {
             CashDrawerSession session = openWith("100.00");
 
-            assertRejectedWith(() -> close(session, "100.01", "0.00", "   "), CASH_CLOSING_NOTE_REQUIRED);
+            close(session, "100.01", "0.00", "   ");
+
+            assertThat(session.closingNote()).isEmpty();
+            assertThat(session.difference()).contains(money("0.01"));
         }
 
         @Test
         void shouldStayOpenWhenTheClosingIsRejected() {
             CashDrawerSession session = openWith("100.00");
 
-            assertRejectedWith(() -> close(session, "99.99", "0.00", null), CASH_CLOSING_NOTE_REQUIRED);
+            assertRejectedWith(() -> close(session, "99.99", "0.00", "x".repeat(501)), INVALID_CASH_CLOSING_NOTE);
 
             assertThat(session.isOpen()).isTrue();
             assertThat(session.frozenExpectedAmount()).isEmpty();
@@ -298,7 +306,7 @@ class CashDrawerSessionTest {
         void shouldRejectANoteAboveFiveHundredCharactersEvenWithZeroDifference() {
             CashDrawerSession session = openWith("100.00");
 
-            assertRejectedWith(() -> close(session, "100.00", "0.00", "x".repeat(501)), CASH_CLOSING_NOTE_REQUIRED);
+            assertRejectedWith(() -> close(session, "100.00", "0.00", "x".repeat(501)), INVALID_CASH_CLOSING_NOTE);
         }
 
         @Test
@@ -419,7 +427,7 @@ class CashDrawerSessionTest {
         void shouldCheckTheCountBeforeTheNote() {
             CashDrawerSession session = openWith("100.00");
 
-            assertRejectedWith(() -> close(session, "-1.00", "0.00", null), INVALID_COUNTED_AMOUNT);
+            assertRejectedWith(() -> close(session, "-1.00", "0.00", "x".repeat(501)), INVALID_COUNTED_AMOUNT);
         }
     }
 

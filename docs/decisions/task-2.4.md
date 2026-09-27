@@ -17,7 +17,7 @@ da V9 (3.2) e da V10 (3.5).
 | | |
 |---|---|
 | Branch | `task/2.4-cash-drawer` (a partir de `task/billing-api-payment`) |
-| Rodada atual | 1 — review do orquestrador aplicado (#18 a #21); aguarda revisão do Ruan. Entra na `main` depois do PR #17 e antes da 3.2 |
+| Rodada atual | 2 — decisão do Ruan sobre a nota do fechamento cego aplicada (#22, #23); aguarda revisão do Ruan. Entra na `main` depois do PR #17 e antes da 3.2 |
 | Build | `./mvnw clean install` **verde**, ArchUnit incluído (256 testes no `app`) |
 | Testes | 71 de unidade (agente de teste) + 8 de integração no `app` (5 de fatia, 3 de concorrência). Os testes das corridas fechamento × `CASH` e estorno × fechamento foram provados contra a trava fraca ou ausente: falham sem ela. Rodada 0: 517 linhas de integração para 1.649 de produção. O teste da corrida fechamento × `CASH` foi provado contra a trava fraca: com `FOR NO KEY UPDATE` no fechamento, falha. Unidade do domínio: com o agente de teste, que tem até ~1.600 linhas de orçamento (1,3:1) |
 
@@ -40,7 +40,7 @@ rascunho da spec. Valem sobre o rascunho quando divergem (C5 e C7).
 | 8 | 0 | **C3.** Fundo de troco e contagem são colunas do turno; `cash_movement` só tem `CASH_DROP` e `CASH_SUPPLY`. `OPENING_FLOAT` e `CLOSING_COUNT` saem do glossário | implementado |
 | 9 | 0 | **C4.** Fechamento cego: com o turno `OPEN`, `expectedAmount` e `cashPaymentsTotal` saem `null` para quem não é `ADMIN` | implementado |
 | 10 | 0 | **C5.** Abrir, sangria, suprimento e ler: `ADMIN` e `FRONT_DESK`. Fechar: quem abriu ou `ADMIN`. `WAITER` e `KITCHEN`: 403. A sangria **não** fica restrita ao `ADMIN` | implementado |
-| 11 | 0 | **C6.** Quebra de caixa não bloqueia o fechamento; a diferença fica congelada; diferença ≠ 0 exige justificativa; sem tolerância | implementado |
+| 11 | 0 | **C6.** Quebra de caixa não bloqueia o fechamento; a diferença fica congelada; diferença ≠ 0 exige justificativa; sem tolerância | **parte "diferença ≠ 0 exige justificativa" revertida pela #22**; o resto segue implementado |
 | 12 | 0 | **C7.** Sangria acima do esperado é **aceita** (não existe `CASH_DROP_EXCEEDS_DRAWER_BALANCE`); a quebra aparece no fechamento, coerente com o fechamento cego | implementado |
 | 13 | 0 | **C8.** Estorno de `CASH` com o turno já fechado não muda o turno fechado; a saída física é sangria no turno atual; limitação aceita | implementado |
 | 14 | 0 | **C9.** Sangria e suprimento com `Idempotency-Key`, mesmas regras da 1.3 #5 | implementado |
@@ -52,6 +52,9 @@ rascunho da spec. Valem sobre o rascunho quando divergem (C5 e C7).
 | 19 | 1 | Review: teste de concorrência estorno × fechamento acrescentado; sem o `lockForKeyShare` do estorno, ele falha | implementado |
 | 20 | 1 | Review: **recusada** a sugestão de tratar `billing.cash-drawer.required` ausente como `false`. Sem valor padrão escondido, consistente com `Settings`: a chave ausente continua `SETTING_NOT_FOUND` | recusada |
 | 21 | 1 | Os testes de unidade do agente de teste (`task/2.4-cash-drawer-tests`, 71 testes) entram na branch. A regra da nota no fechamento cego **não** muda nesta rodada: há pergunta aberta ao Ruan | implementado |
+| 22 | 2 | **Decisão do Ruan (2026-09-27): "Fecha sempre, sem exigir nota".** O fechamento é sempre aceito e a nota (`closingNote`) é opcional para todos, com diferença zero ou não. A diferença continua congelada e o `ADMIN` confere depois. Motivo: exigir nota só quando a contagem difere do esperado vaza o esperado no fechamento cego (C4), porque a recepção testaria valores até o sistema aceitar sem nota. Continua o limite de 500 caracteres; nota em branco vira ausente | implementado |
+| 23 | 2 | Decisão do DEV (pedida pelo orquestrador): o código `CASH_CLOSING_NOTE_REQUIRED` passa a `INVALID_CASH_CLOSING_NOTE` (exceção `InvalidCashClosingNoteException`), porque a nota não é mais obrigatória e o único caso que resta é a nota acima de 500 caracteres. Nenhum front consome o código ainda (tela na 4.6) | implementado |
+
 Valores de status: `pendente` · `implementado` · `revertida pela #n`
 
 ---
@@ -113,4 +116,4 @@ Especificado em `docs/task-2.4-cash-drawer.md`, seções 5 e 6.
 
 | # | Pergunta | Desde a rodada |
 |---|---|---|
-| 1 | Regra da nota no fechamento cego (pergunta do orquestrador ao Ruan; nada muda até a resposta) | 1 |
+| | | |

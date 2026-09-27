@@ -427,19 +427,21 @@ Content-Type: application/json
 %}
 
 
-### 22. Fechar com diferenca e sem justificativa -> 422 CASH_CLOSING_NOTE_REQUIRED
+### 22. Justificativa com 501 caracteres -> 422 INVALID_CASH_CLOSING_NOTE
+### A justificativa e opcional, com diferenca ou sem (decisao #22); so o limite de 500 vale.
 POST {{host}}/api/billing/cash-sessions/{{sessionId}}/close
 Authorization: Bearer {{accessToken}}
 Content-Type: application/json
 
 {
-  "countedAmount": "99.50"
+  "countedAmount": "99.50",
+  "note": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
 }
 
 > {%
-    client.test("quebra sem justificativa recusada", function() {
+    client.test("justificativa acima de 500 caracteres recusada", function() {
         client.assert(response.status === 422, "esperado 422, recebido " + response.status);
-        client.assert(response.body.code === "CASH_CLOSING_NOTE_REQUIRED", "code: " + response.body.code);
+        client.assert(response.body.code === "INVALID_CASH_CLOSING_NOTE", "code: " + response.body.code);
     });
 %}
 

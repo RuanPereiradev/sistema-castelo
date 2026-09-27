@@ -34,7 +34,9 @@ import org.hibernate.annotations.FetchMode;
  * {@linkplain #difference() difference} is the count minus the frozen amount, calculated, never
  * stored.
  *
- * <p>A difference never blocks the closing (decision C6); it only requires a note. A drop above the
+ * <p>A difference never blocks the closing (decision C6), and the closing note is optional for
+ * everyone (decision #22): requiring it only when the count differs would reveal the expected amount
+ * of a blind closing to whoever tried counts until one closed without a note. A drop above the
  * expected amount is accepted (decision C7): the shortfall shows at the closing, which is blind for
  * whoever is not an {@code ADMIN} (decision C4, {@link #revealsExpectedAmountTo}).
  *
@@ -190,15 +192,15 @@ public class CashDrawerSession extends AuditedEntity {
 
     /**
      * Closes the session with the count of the drawer, freezing the expected amount. Never refused for
-     * a difference (decision C6 of task 2.4); a difference only requires a note.
+     * a difference (decision C6 of task 2.4), and the note is optional, difference or not (decision #22).
+     * The {@code ADMIN} checks the frozen difference afterwards.
      *
      * @param cashPayments the confirmed cash payments linked to this session, summed after locking it
      * @param closedByAdmin whether whoever closes is an {@code ADMIN}, who closes any session
      * @throws CashDrawerSessionClosedException if the session is already closed
      * @throws CashDrawerSessionNotOwnedException if whoever closes neither opened it nor is an {@code ADMIN}
      * @throws InvalidCountedAmountException if the count is missing or below zero
-     * @throws CashClosingNoteRequiredException if there is a difference and no note, or the note is
-     *     longer than 500 characters
+     * @throws InvalidCashClosingNoteException if the note is longer than 500 characters
      */
     public void close(
             Money countedAmount,
@@ -219,7 +221,7 @@ public class CashDrawerSession extends AuditedEntity {
             throw new InvalidCountedAmountException("The counted amount must not be below zero");
         }
         Money expected = expectedAmount(cashPayments);
-        this.closingNote = validClosingNote(note, countedAmount.minus(expected));
+        this.closingNote = validClosingNote(note);
         this.expectedAmount = expected;
         this.countedAmount = countedAmount;
         this.closedBy = closedBy;
@@ -227,13 +229,13 @@ public class CashDrawerSession extends AuditedEntity {
         this.status = CashDrawerSessionStatus.CLOSED;
     }
 
-    /** Required with a difference; optional without one, where a blank note is no note at all. */
-    private static String validClosingNote(String note, Money difference) {
-        if (difference.isZero() && (note == null || note.isBlank())) {
+    /** Optional, with a difference or without one; a blank note is no note at all. */
+    private static String validClosingNote(String note) {
+        if (note == null || note.isBlank()) {
             return null;
         }
         return BoundedText.require(
-                note, MAXIMUM_CLOSING_NOTE_LENGTH, "closing note", CashClosingNoteRequiredException::new);
+                note, MAXIMUM_CLOSING_NOTE_LENGTH, "closing note", InvalidCashClosingNoteException::new);
     }
 
     // ------------------------------------------------------------------ totals
