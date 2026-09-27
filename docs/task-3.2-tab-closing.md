@@ -165,7 +165,7 @@ Notas:
     2. algum item ativo (`TAB_HAS_NO_ACTIVE_ITEMS`, 409);
     3. congela `currentRate`;
     4. abre o folio `TAB` se `folio_id` é nulo (`billing.openFolio`), senão reaproveita;
-    5. `billing.charge(folio, total, descrição)`; descrição `"Tab card <n>"` ou `"Tab table <diningTableId>"`;
+    5. `billing.charge(folio, id, total, descrição)`; descrição `"Tab card <n>"` ou `"Tab table <diningTableId>"`;
     6. grava `tab_charge_id`, `closing_started_*` e `CLOSING`.
 12. `CLOSING` recusa: lançar item, cancelar item, cancelar a comanda (`TAB_NOT_OPEN`) e mudar a taxa. Aceita: pagamento, grupos, `guestCount`, leitura e o KDS (F12). Mesa e cartão seguem ocupados (`holdsItsPlace`).
 13. `reopen(reason, billing)`, nesta ordem:
@@ -190,7 +190,7 @@ Notas:
 **Porta**
 18. `TabBilling`, interface em `restaurant.domain`, implementada em `restaurant.infra` sobre o `FolioFacade`:
     - `FolioId openFolio(TabId)`;
-    - `ChargeId charge(FolioId, Money, String description)`;
+    - `ChargeId charge(FolioId, TabId, Money, String description)`, com a comanda como origem do lançamento (`ChargeSource.tab`);
     - `void reverse(FolioId, ChargeId, String reason)`;
     - `ReceivedPaymentView receivePayment(FolioId, PaymentMethod, Money, String idempotencyKey)`;
     - `Money balanceOf(FolioId)`;
