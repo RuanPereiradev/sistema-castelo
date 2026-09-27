@@ -28,7 +28,7 @@ do DEV nesta task, pendentes de revisão.
 |---|---|
 | Branch | `task/3.2-tab-closing` (base `origin/task/billing-api-payment`) |
 | Rodada atual | 1 — D20/D21 aplicadas; aguarda testes de unidade (agente de teste) e revisão do Ruan. Conflito esperado com a 3.5 no construtor do `TabService` (resolvido pelo orquestrador no rebase) |
-| Build | `./mvnw -Dmaven.repo.local=<isolado> clean install` **verde** — 1405 testes, 0 falhas, ArchUnit incluído. `.http` 34 rodado duas vezes seguidas em banco isolado (63/63) e o 33 sem regressão (81/81) |
+| Build | `./mvnw -Dmaven.repo.local=<isolado> clean install` **verde** — 1540 testes, 0 falhas, ArchUnit incluído. `.http` 34 rodado duas vezes seguidas em banco isolado (63/63) e o 33 sem regressão (81/81) |
 | Testes | 7 de integração (3 de fluxo, 4 de concorrência), 441 linhas, para ~1.700 de produção (com migration, javadoc e o `.http` fora da conta). Os de unidade do domínio vêm do agente de teste e completam o orçamento |
 
 ---
@@ -83,6 +83,7 @@ do DEV nesta task, pendentes de revisão.
 | D21 | 1 | **Revê a D2** (orquestrador do lote 2): o `TabService` recebe `TabBilling` no construtor e o `cancel` chama `tab.cancel(reason, tabBilling, by, at)`. Comanda reaberta cancelada fecha o folio junto, ou recusa com `FOLIO_BALANCE_NOT_ZERO`. O `IllegalStateException` do `cancel` antigo saiu: nenhuma rota o alcança mais, e o método antigo fica para comanda sem folio (usado pelos testes de unidade da 2.2). O `TabClosingService.cancel` saiu, por ser duplicado | implementado |
 | D22 | 1 | O suporte de teste (`AbstractIntegrationTest`) grava `restaurant.service_charge_percent` junto com a propriedade única, como a V9 faz com as propriedades existentes e o `DevUserSeeder` no `dev`: com a D20, toda leitura de comanda precisa da chave, inclusive nos testes da 2.2 | implementado |
 | D23 | 1 | Maven rodado com repositório local isolado (fora do git), porque o `~/.m2` é compartilhado com as worktrees da 2.4 e da 3.5 | implementado |
+| D24 | 2 | Testes de unidade do agente de teste incorporados (merge de `task/3.2-tab-closing-tests`, 136 testes). Removido o caso `shouldRefuseTheCancellationWithoutBillingOnATabThatHasAFolio`, que provava a `IllegalStateException` da D2, revertida pela D21; os demais 135 passam sem mudança de produção | implementado |
 
 Valores de status: `pendente` · `implementado` · `revertida pela #n`
 

@@ -28,7 +28,6 @@ import static br.com.castel.restaurant.domain.TabFixtures.oneUnit;
 import static br.com.castel.restaurant.domain.TabFixtures.orderDish;
 import static br.com.castel.restaurant.domain.TabFixtures.tableTab;
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import br.com.castel.billing.api.PaymentMethod;
 import br.com.castel.billing.api.ReceivedPaymentView;
@@ -471,15 +470,6 @@ class TabClosingTest {
 
             assertThat(tab.status()).isEqualTo(TabStatus.CANCELLED);
             assertThat(billing.closedFolios).isEmpty();
-        }
-
-        @Test
-        void shouldRefuseTheCancellationWithoutBillingOnATabThatHasAFolio() {
-            Tab tab = reopenedWithoutActiveItems();
-
-            assertThatThrownBy(() -> tab.cancel(CANCELLATION_REASON, WAITER, CANCELLED_AT))
-                    .isInstanceOf(IllegalStateException.class);
-            assertThat(tab.status()).isEqualTo(TabStatus.OPEN);
         }
     }
 }
