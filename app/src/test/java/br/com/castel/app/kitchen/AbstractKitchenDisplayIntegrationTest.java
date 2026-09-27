@@ -13,7 +13,6 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Clock;
-import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.StreamSupport;
@@ -22,15 +21,14 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
-import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
- * What the kitchen display tests share: a real server, users of each role with their tokens, the
- * delay limits of the V10 seeded for the test property (the migration runs before that property
- * exists), and the menu, tables and tabs created through the routes.
+ * What the kitchen display tests share: a real server, users of each role with their tokens, and the
+ * menu, tables and tabs created through the routes. The delay limits of the V10 are seeded for the
+ * test property by {@link AbstractIntegrationTest}, with the other settings of the migrations.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 abstract class AbstractKitchenDisplayIntegrationTest extends AbstractIntegrationTest {
@@ -39,13 +37,6 @@ abstract class AbstractKitchenDisplayIntegrationTest extends AbstractIntegration
     static final String KITCHEN = "/api/kitchen";
 
     private static final String PASSWORD = "kitchen-test-password";
-    private static final Map<String, String> DELAY_LIMITS = Map.of(
-            "restaurant.kitchen-display.kitchen.warning-minutes", "15",
-            "restaurant.kitchen-display.kitchen.late-minutes", "25",
-            "restaurant.kitchen-display.pizza.warning-minutes", "20",
-            "restaurant.kitchen-display.pizza.late-minutes", "30",
-            "restaurant.kitchen-display.bar.warning-minutes", "5",
-            "restaurant.kitchen-display.bar.late-minutes", "10");
 
     @LocalServerPort
     int port;
@@ -60,9 +51,6 @@ abstract class AbstractKitchenDisplayIntegrationTest extends AbstractIntegration
     private PasswordEncoder passwordEncoder;
 
     @Autowired
-    private JdbcClient jdbcClient;
-
-    @Autowired
     Clock clock;
 
     @Value("${app.security.jwt.secret}")
@@ -74,12 +62,7 @@ abstract class AbstractKitchenDisplayIntegrationTest extends AbstractIntegration
     String suffix;
 
     @BeforeEach
-    void prepareUsersAndSettings() {
-        DELAY_LIMITS.forEach((key, value) -> jdbcClient.sql(
-                        "insert into setting (id, property_id, setting_key, setting_value, value_type) "
-                                + "values (?, ?, ?, ?, 'INTEGER') on conflict (property_id, setting_key) do nothing")
-                .params(UUID.randomUUID(), PROPERTY_ID, key, value)
-                .update());
+    void prepareUsers() {
         adminToken = accessTokenFor(createUser(Role.ADMIN));
         waiterToken = accessTokenFor(createUser(Role.WAITER));
         kitchenToken = accessTokenFor(createUser(Role.KITCHEN));

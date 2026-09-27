@@ -398,12 +398,14 @@ client.activate();
 
 **Unidade (agente de teste), densa:** a matriz da §3 inteira, com o instante
 gravado ou apagado em cada transição aceita; `isOnKitchenQueue` por status; item
-por peso fora da fila; transição em comanda que não está `OPEN`; o evento
-devolvido com `from` e `to` corretos.
+por peso fora da fila; transição em comanda `CLOSING` e `CLOSED`, fechada pelo
+fechamento real da 3.2; o evento devolvido com `from` e `to` corretos.
 
 **Integração (`app`):**
 - Fatia REST: lançar, ver na fila, `start`, `ready`, `undo`, entregar, sair da
   fila; 403 dos perfis trocados.
+- Comanda em fechamento (F12): `start` com a comanda em `CLOSING`; `ready` e
+  entrega depois de `CLOSED`.
 - Concorrência: um cancelamento e quatro "pronto" simultâneos no mesmo item:
   nenhum 500, estado final `CANCELLED` com um autor só.
 - WebSocket (`WebSocketStompClient` real): CONNECT sem token e com token expirado

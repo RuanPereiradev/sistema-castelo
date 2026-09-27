@@ -4,6 +4,7 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.DriverManager;
 import java.sql.SQLException;
+import java.util.Map;
 import java.util.UUID;
 import org.flywaydb.core.Flyway;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
@@ -88,5 +89,25 @@ public abstract class AbstractIntegrationTest {
             statement.setString(3, SERVICE_CHARGE_PERCENT_SETTING);
             statement.executeUpdate();
         }
+        // The delay limits of the kitchen display seeded by V10 (task 3.5, K11), in minutes.
+        Map<String, String> kitchenDisplayDelayLimits = Map.of(
+                "restaurant.kitchen-display.kitchen.warning-minutes", "15",
+                "restaurant.kitchen-display.kitchen.late-minutes", "25",
+                "restaurant.kitchen-display.pizza.warning-minutes", "20",
+                "restaurant.kitchen-display.pizza.late-minutes", "30",
+                "restaurant.kitchen-display.bar.warning-minutes", "5",
+                "restaurant.kitchen-display.bar.late-minutes", "10");
+        for (Map.Entry<String, String> limit : kitchenDisplayDelayLimits.entrySet()) {
+            try (PreparedStatement statement = connection.prepareStatement(
+                    "insert into setting (id, property_id, setting_key, setting_value, value_type) "
+                            + "values (?, ?, ?, ?, 'INTEGER') on conflict (property_id, setting_key) do nothing")) {
+                statement.setObject(1, UUID.randomUUID());
+                statement.setObject(2, PROPERTY_ID);
+                statement.setString(3, limit.getKey());
+                statement.setString(4, limit.getValue());
+                statement.executeUpdate();
+            }
+        }
     }
+
 }

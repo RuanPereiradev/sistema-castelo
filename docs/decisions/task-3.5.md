@@ -16,10 +16,11 @@ chegar à `main` depois da V9 da 3.2 (G1).
 
 | | |
 |---|---|
-| Branch | `task/3.5-kds` (a partir de `task/billing-api-payment`) |
-| Rodada atual | 2 — review da rodada 1 aplicado (pool, autorização STOMP, testes de unidade trazidos). Entra na `main` depois da 3.2 (V9) |
-| Build | `./mvnw -Dmaven.repo.local=<scratchpad>/m2repo-35 clean install` **verde** — 1502 testes, 0 falhas, ArchUnit incluído (rodada 2) |
-| Testes | 94 de unidade (agente de teste) + 11 de integração (fatia REST, concorrência, WebSocket real, pool pequeno). `.http` 41 requisições, 0 falhas, duas execuções seguidas |
+| Branch | `task/3.5-kds`, rebaseada sobre `task/3.2-tab-closing` (que já inclui a 2.4) na rodada 3 |
+| Rodada atual | 3 — rebase sobre a 3.2; testes de unidade com o fechamento real; KDS em comanda `CLOSING`/`CLOSED` pela rota. Entra na `main` depois da 3.2 (V9) |
+| Build | `./mvnw -Dmaven.repo.local=<scratchpad>/m2repo-35 clean install` **verde** — 1727 testes, 0 falhas, ArchUnit incluído (rodada 3, depois do rebase) |
+| `.http` | Rodada 3, instância isolada com banco zerado: `33` 81/0, `34` 69/0, `35` 41/0, `40` 56/0, `41` 30/0 (requisições/falhas) |
+| Testes | 94 de unidade (agente de teste) + 12 de integração (fatia REST, comanda em fechamento, concorrência, WebSocket real, pool pequeno) |
 
 ---
 
@@ -67,7 +68,12 @@ chegar à `main` depois da V9 da 3.2 (G1).
 | 38 | 2 | Review: o destino do desfazer vira comportamento do enum — `TabItemStatus.undoneTo(preparationStarted)` e `carriesPreparationStart()`; `TabItem.undoLastStep` não compara status | implementado |
 | 39 | 2 | Review: `.http` com o negativo `undo` de item `PENDING` → 409 `INVALID_TAB_ITEM_TRANSITION`; nota na spec §7: não ligar `DEBUG` do `StompSubProtocolHandler` em produção (o `CONNECT` sai no log com o token) | implementado |
 | 40 | 2 | Orquestrador: convenção de chave de `setting` é kebab-case (as da 3.5 e a `billing.cash-drawer.required` da 2.4); a 3.2 muda a dela. Confirma a #20 | implementado |
-| 41 | 2 | Testes de unidade do agente de teste trazidos por merge de `task/3.5-kds-tests` (94 testes: `TabItemStatusKitchenTest`, `TabItemKitchenTransitionTest`, `TabItemKitchenEventsTest`). Põem `CLOSING`/`CLOSED` por reflexão, porque esta branch não tem o fechamento; o orquestrador troca no rebase sobre a 3.2 | implementado |
+| 41 | 2 | Testes de unidade do agente de teste trazidos por merge de `task/3.5-kds-tests` (94 testes: `TabItemStatusKitchenTest`, `TabItemKitchenTransitionTest`, `TabItemKitchenEventsTest`). Põem `CLOSING`/`CLOSED` por reflexão, porque esta branch não tem o fechamento | implementado; reflexão trocada na #43 |
+| 42 | 3 | Orquestrador: rebase sobre `task/3.2-tab-closing`. Conflitos resolvidos preservando os dois lados: `TabService` injeta `TabBilling` e `ApplicationEventPublisher`; `TabItem` fica com o `@DynamicUpdate` da 3.2 e os instantes do KDS; o `DevUserSeeder` grava as 6 chaves do KDS pelo `seedSetting` da 2.4/3.2 (com descrição, como na V10); as chaves entram no `seedSettingsOf` do `AbstractIntegrationTest` (a semeadura própria do `AbstractKitchenDisplayIntegrationTest` saiu); `TabItemDeliveryController` passa a taxa corrente ao `TabResponse`, como os controllers da 3.2 | implementado |
+| 43 | 3 | Orquestrador: os testes de unidade de comanda `CLOSING`/`CLOSED` usam o fechamento real da 3.2 (`startClosing`, pagamento do total, `close`, com o `FakeTabBilling`), não mais reflexão | implementado |
+| 44 | 3 | Orquestrador: um teste de integração do KDS numa comanda em fechamento pela rota real — inicia o preparo em `CLOSING`, marca pronto e entrega depois de `CLOSED` | implementado |
+| 45 | 3 | Conferido: as transições do KDS (comanda `FOR KEY SHARE` → item `FOR UPDATE`) esperam o `FOR UPDATE` da comanda no fechamento, reabertura e cancelamento da 3.2, e vice-versa; divisão e dispensa de taxa da 3.2 travam `FOR KEY SHARE`, e o `@DynamicUpdate` faz cada lado gravar só as suas colunas (split/taxa × status/instantes), então nada é regravado. Nenhuma trava toma o item antes da comanda | implementado |
+| 46 | 3 | Conferido: a V10 vem depois da V8 (2.4) e da V9 (3.2); o Flyway aplica V1..V10 num banco zerado (container dos testes e instância isolada do `.http`) | implementado |
 
 Valores de status: `pendente` · `implementado` · `revertida pela #n`
 
@@ -92,6 +98,7 @@ Valores de status: `pendente` · `implementado` · `revertida pela #n`
 - [x] Testes de unidade do domínio (matriz da spec §3), escritos pelo agente de teste a partir da spec e trazidos por merge (#41)
 - [x] `./mvnw clean install` verde, ArchUnit incluído
 - [x] Rodada 2: push sem segunda conexão (#35), autorização STOMP (#36), sugestões (#37–#39)
+- [x] Rodada 3: rebase sobre a 3.2 (#42), fechamento real nos testes de unidade (#43), KDS em comanda em fechamento pela rota (#44), travas e Flyway conferidos (#45, #46)
 
 ### Fora do escopo
 

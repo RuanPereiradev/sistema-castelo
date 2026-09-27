@@ -98,6 +98,29 @@ class KitchenDisplayHttpIntegrationTest extends AbstractKitchenDisplayIntegratio
                 .isEqualTo("TAB_ITEM_ALREADY_CANCELLED");
     }
 
+    /** Preparation is operational, closing is financial (F12): the kitchen keeps moving the item. */
+    @Test
+    void shouldMoveTheItemOfATabThatIsClosingAndThenClosed() {
+        String tabId = openTabOnNewTable("Fecha");
+        String pizza = order(tabId, createItem(createCategory(), "Portuguesa", "PIZZA", false));
+        String balance = send(post(TABS + "/" + tabId + "/closing", waiterToken, ""), 200).get("balance").asString();
+
+        assertThat(send(post(KITCHEN + "/items/" + pizza + "/start", kitchenToken, ""), 200).get("status").asString())
+                .isEqualTo("IN_PREPARATION");
+
+        send(post(TABS + "/" + tabId + "/payments", waiterToken,
+                        "{\"method\":\"PIX\",\"amount\":\"%s\"}".formatted(balance))
+                .header("Idempotency-Key", "kds-" + suffix), 201);
+        assertThat(send(post(TABS + "/" + tabId + "/close", waiterToken, ""), 200).get("status").asString())
+                .isEqualTo("CLOSED");
+
+        assertThat(send(post(KITCHEN + "/items/" + pizza + "/ready", kitchenToken, ""), 200).get("status").asString())
+                .isEqualTo("READY");
+        assertThat(send(post(TABS + "/" + tabId + "/items/" + pizza + "/deliver", waiterToken, ""), 200)
+                        .get("items").get(0).get("status").asString())
+                .isEqualTo("DELIVERED");
+    }
+
     /**
      * One cancellation and four "ready" on the same item at once. They queue on the item's row: the
      * cancellation always lands (it is valid from any status, decision #6), at most one "ready" lands

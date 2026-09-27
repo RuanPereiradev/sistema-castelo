@@ -1,8 +1,11 @@
 package br.com.castel.restaurant.domain;
 
 import static br.com.castel.restaurant.domain.TabFixtures.CANCELLED_AT;
+import static br.com.castel.restaurant.domain.TabFixtures.CLOSED_AT;
+import static br.com.castel.restaurant.domain.TabFixtures.CLOSING_AT;
 import static br.com.castel.restaurant.domain.TabFixtures.TAB_ITEM_ALREADY_CANCELLED;
 import static br.com.castel.restaurant.domain.TabFixtures.TAB_ITEM_NOT_FOUND;
+import static br.com.castel.restaurant.domain.TabFixtures.TEN_PERCENT;
 import static br.com.castel.restaurant.domain.TabFixtures.WAITER;
 import static br.com.castel.restaurant.domain.TabFixtures.assertRejectedWith;
 import static br.com.castel.restaurant.domain.TabFixtures.buffet;
@@ -17,6 +20,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.junit.jupiter.params.provider.Arguments.arguments;
 
+import br.com.castel.billing.api.PaymentMethod;
 import br.com.castel.restaurant.api.PrepStation;
 import br.com.castel.sharedkernel.ConflictException;
 import java.time.Instant;
@@ -29,7 +33,6 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
-import org.springframework.test.util.ReflectionTestUtils;
 
 /**
  * Kitchen display transitions of a tab item through the {@link Tab} aggregate, task 3.5 section 3:
@@ -416,21 +419,29 @@ class TabItemKitchenTransitionTest {
                     arguments(status, Path.READY_AFTER_PREPARATION, Operation.DELIVER, TabItemStatus.DELIVERED)));
         }
 
-        /**
-         * Task 2.2 has no way to close a tab and 3.2 is not on this branch, so the status is forced on
-         * the field: the rule under test is that the kitchen transition never reads it.
-         */
+        /** The tab is really closed, by the closing of task 3.2: the kitchen transition never reads it. */
         @ParameterizedTest(name = "tab {0}, {1} {2}")
         @MethodSource("transitionsOnATabThatIsNotOpen")
         void shouldMoveTheItemWhateverTheTabStatus(TabStatus tabStatus, Path path, Operation operation,
                 TabItemStatus expected) {
             Tab tab = tableTab();
             TabItemId itemId = path.walk(tab);
-            ReflectionTestUtils.setField(tab, "status", tabStatus);
+            bringTo(tab, tabStatus);
+            assertThat(tab.status()).isEqualTo(tabStatus);
 
             operation.on(tab, itemId, LATER);
 
             assertThat(tab.item(itemId).status()).isEqualTo(expected);
+        }
+
+        /** CLOSING by the pre-bill; CLOSED once the whole total is paid. */
+        private static void bringTo(Tab tab, TabStatus tabStatus) {
+            FakeTabBilling billing = new FakeTabBilling();
+            tab.startClosing(TEN_PERCENT, billing, WAITER, CLOSING_AT);
+            if (tabStatus == TabStatus.CLOSED) {
+                tab.receivePayment(PaymentMethod.PIX, tab.total(TEN_PERCENT), "kitchen-closed", billing);
+                tab.close(billing, WAITER, CLOSED_AT);
+            }
         }
 
         @Test
