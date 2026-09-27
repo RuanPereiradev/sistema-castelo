@@ -39,9 +39,10 @@ import org.hibernate.annotations.FetchMode;
  * rule before handing validated values here. An item is never removed; a cancelled item stays on the
  * tab with its author, moment and reason.
  *
- * <p>The columns of the kitchen display (task 3.5) and of the transfer between tabs (task 3.6) exist
- * in {@code tab_item} but are not mapped yet, except {@code delivered_at}: an item sold by weight is
- * born delivered (decision #9).
+ * <p>The moments of the kitchen display ({@code preparation_started_at}, {@code ready_at},
+ * {@code delivered_at}) are written by its transitions (task 3.5); an item sold by weight is born
+ * delivered (decision #9). The columns of the transfer between tabs (task 3.6) exist in
+ * {@code tab_item} but are not mapped yet.
  *
  * <p>Updated column by column ({@code @DynamicUpdate}, decision D9 of task 3.2): moving the item to a
  * split group or waiving its service charge writes only those columns, so it never rewrites the
@@ -109,6 +110,13 @@ public class TabItem extends AuditedEntity {
 
     @Column(name = "delivered_at")
     private Instant deliveredAt;
+
+    // ---- kitchen display
+    @Column(name = "preparation_started_at")
+    private Instant preparationStartedAt;
+
+    @Column(name = "ready_at")
+    private Instant readyAt;
 
     @Column(name = "cancelled_at")
     private Instant cancelledAt;
@@ -234,6 +242,93 @@ public class TabItem extends AuditedEntity {
 
     boolean refersTo(TabItemId otherId) {
         return id.equals(otherId);
+    }
+
+    // ---- kitchen display
+
+    /**
+     * @throws TabItemAlreadyCancelledException if the item was cancelled
+     * @throws InvalidTabItemTransitionException if the item is not {@code PENDING}
+     */
+    void startPreparation(Instant at) {
+        requireTransition(status.acceptsPreparationStart(), TabItemStatus.IN_PREPARATION);
+        this.status = TabItemStatus.IN_PREPARATION;
+        this.preparationStartedAt = at;
+    }
+
+    /**
+     * Ready from preparation, or straight from pending (K2), which leaves no preparation start.
+     *
+     * @throws TabItemAlreadyCancelledException if the item was cancelled
+     * @throws InvalidTabItemTransitionException if the item is not {@code PENDING} or {@code IN_PREPARATION}
+     */
+    void markReady(Instant at) {
+        requireTransition(status.acceptsReady(), TabItemStatus.READY);
+        this.status = TabItemStatus.READY;
+        this.readyAt = at;
+    }
+
+    /**
+     * Delivered from any status still on the queue (K4); the moments already recorded stay.
+     *
+     * @throws TabItemAlreadyCancelledException if the item was cancelled
+     * @throws InvalidTabItemTransitionException if the item was already delivered
+     */
+    void deliver(Instant at) {
+        requireTransition(status.acceptsDelivery(), TabItemStatus.DELIVERED);
+        this.status = TabItemStatus.DELIVERED;
+        this.deliveredAt = at;
+    }
+
+    /**
+     * Back to the status before the last tap, erasing its moment (K3): {@code IN_PREPARATION} goes
+     * back to {@code PENDING}; {@code READY} goes back to {@code IN_PREPARATION} when preparation was
+     * started, or to {@code PENDING} when ready skipped it (K2), so an item is never in preparation
+     * without the moment it started.
+     *
+     * @throws TabItemAlreadyCancelledException if the item was cancelled
+     * @throws InvalidTabItemTransitionException if the item is {@code PENDING} or {@code DELIVERED}
+     */
+    void undoLastStep() {
+        requireNotCancelled();
+        if (!status.acceptsUndo()) {
+            throw new InvalidTabItemTransitionException(
+                    "Tab item " + id.value() + " is " + status + " and has no step to undo");
+        }
+        if (status == TabItemStatus.READY) {
+            this.readyAt = null;
+            this.status = preparationStartedAt == null ? TabItemStatus.PENDING : TabItemStatus.IN_PREPARATION;
+        } else {
+            this.preparationStartedAt = null;
+            this.status = TabItemStatus.PENDING;
+        }
+    }
+
+    private void requireTransition(boolean accepted, TabItemStatus target) {
+        requireNotCancelled();
+        if (!accepted) {
+            throw new InvalidTabItemTransitionException(
+                    "Tab item " + id.value() + " cannot go from " + status + " to " + target);
+        }
+    }
+
+    private void requireNotCancelled() {
+        if (!status.isActive()) {
+            throw new TabItemAlreadyCancelledException("Tab item " + id.value() + " is cancelled");
+        }
+    }
+
+    public Optional<Instant> preparationStartedAt() {
+        return Optional.ofNullable(preparationStartedAt);
+    }
+
+    public Optional<Instant> readyAt() {
+        return Optional.ofNullable(readyAt);
+    }
+
+    /** Shown on the kitchen display of its station: pending, in preparation or ready (K5). */
+    public boolean isOnKitchenQueue() {
+        return status.isOnKitchenQueue();
     }
 
     // ------------------------------------------------------------------ reading
