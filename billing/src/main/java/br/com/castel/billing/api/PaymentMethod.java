@@ -15,4 +15,9 @@ public enum PaymentMethod {
     public boolean acceptsManualEntry() {
         return this != ROOM_ACCOUNT;
     }
+
+    /** Whether the money lands in the cash drawer, and so in the open cash drawer session (task 2.4). */
+    public boolean goesToCashDrawer() {
+        return this == CASH;
+    }
 }

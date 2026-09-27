@@ -232,12 +232,27 @@ public class Folio extends AuditedEntity {
     // ------------------------------------------------------------------ payments
 
     /**
-     * Registers a payment received at the counter.
+     * Registers a payment received at the counter with no cash drawer session open and cash control
+     * off: the same as {@link #receive(PaymentMethod, Money, String, UUID, Instant, CashDrawerAssignment)}
+     * with {@code CashDrawerAssignment.of(Optional.empty(), false)}.
+     */
+    public Payment receive(
+            PaymentMethod method, Money amount, String idempotencyKey, UUID receivedBy, Instant paidAt) {
+        return receive(method, amount, idempotencyKey, receivedBy, paidAt, CashDrawerAssignment.uncontrolled());
+    }
+
+    /**
+     * Registers a payment received at the counter, or by another module through the facade.
      *
      * <p>A retry is recognised before any other rule, even on a closed folio (decision #5 of task
      * 1.3): a key this folio already holds with the same method and amount answers the payment
      * already registered, refunded or not, and writes nothing.
      *
+     * <p>The cash drawer is asked last, after every rule of the payment itself (invariant 22 of task
+     * 2.4), and a retry never asks it: the retry of a cash payment answers the original even after its
+     * session closed or cash control was turned on.
+     *
+     * @param cashDrawer which session a payment of this method falls into
      * @return the new payment, or the one already registered under this key
      * @throws InvalidIdempotencyKeyException if the key is blank or longer than 100 characters
      * @throws IdempotencyKeyReusedException if this folio holds the key with another method or amount
@@ -245,9 +260,16 @@ public class Folio extends AuditedEntity {
      * @throws PaymentMethodNotAcceptedException if the method is not registered by hand
      * @throws InvalidPaymentAmountException if the amount is missing or not greater than zero
      * @throws PaymentExceedsBalanceException if a tab folio would be paid beyond what it owes
+     * @throws CashDrawerSessionNotOpenException if a cash payment needs an open session and there is none
      */
     public Payment receive(
-            PaymentMethod method, Money amount, String idempotencyKey, UUID receivedBy, Instant paidAt) {
+            PaymentMethod method,
+            Money amount,
+            String idempotencyKey,
+            UUID receivedBy,
+            Instant paidAt,
+            CashDrawerAssignment cashDrawer) {
+        Objects.requireNonNull(cashDrawer, "cashDrawer");
         String key = Payment.requireValidIdempotencyKey(idempotencyKey);
         Optional<Payment> earlier = paymentWithKey(key);
         if (earlier.isPresent()) {
@@ -264,7 +286,8 @@ public class Folio extends AuditedEntity {
         if (!acceptsPaymentBeyondBalance() && amount.isGreaterThan(balance())) {
             throw new PaymentExceedsBalanceException("A tab folio takes no payment above its balance");
         }
-        Payment payment = Payment.receivedAtCounter(method, amount, key, receivedBy, paidAt);
+        Optional<CashDrawerSessionId> cashDrawerSession = cashDrawer.sessionFor(method);
+        Payment payment = Payment.receivedAtCounter(method, amount, key, receivedBy, paidAt, cashDrawerSession);
         payments.add(payment);
         return payment;
     }
@@ -281,6 +304,18 @@ public class Folio extends AuditedEntity {
         Objects.requireNonNull(paymentId, "paymentId");
         requireOpen();
         payment(paymentId).refund(reason, refundedBy, refundedAt);
+    }
+
+    /**
+     * The cash drawer session of a payment of this folio; empty when the payment fell into none, and
+     * when the folio has no such payment, which {@link #refund} is the one to refuse.
+     */
+    public Optional<CashDrawerSessionId> cashDrawerSessionOf(PaymentId paymentId) {
+        Objects.requireNonNull(paymentId, "paymentId");
+        return payments.stream()
+                .filter(payment -> payment.id().equals(paymentId))
+                .findFirst()
+                .flatMap(Payment::cashDrawerSessionId);
     }
 
     /** The payment this folio registered under the key, trimmed; how a retry is recognised. */

@@ -29,6 +29,9 @@ public abstract class AbstractIntegrationTest {
     /** The single property of the test installation, seeded before the first context starts. */
     protected static final UUID PROPERTY_ID = UUID.fromString("0b7e3b8e-3c52-4c1e-9d0e-4a1f00000001");
 
+    /** Whether a cash payment needs an open cash drawer session (task 2.4); seeded off, as the V8 seeds it. */
+    protected static final String CASH_DRAWER_REQUIRED_SETTING = "billing.cash-drawer.required";
+
     @ServiceConnection
     static final PostgreSQLContainer<?> POSTGRES =
             new PostgreSQLContainer<>(DockerImageName.parse("postgres:16"));
@@ -55,8 +58,24 @@ public abstract class AbstractIntegrationTest {
             statement.setObject(1, PROPERTY_ID);
             statement.setString(2, "Integration Property");
             statement.executeUpdate();
+            seedSettingsOf(connection);
         } catch (SQLException failure) {
             throw new IllegalStateException("Could not seed the single property of the test database", failure);
+        }
+    }
+
+    /**
+     * The settings a migration seeds for the properties that exist when it runs. The property is seeded
+     * here, after the migrations, so its settings are seeded here too, with the values of the migrations.
+     */
+    private static void seedSettingsOf(Connection connection) throws SQLException {
+        try (PreparedStatement statement = connection.prepareStatement(
+                "insert into setting (id, property_id, setting_key, setting_value, value_type) "
+                        + "values (?, ?, ?, 'false', 'BOOLEAN') on conflict (property_id, setting_key) do nothing")) {
+            statement.setObject(1, UUID.randomUUID());
+            statement.setObject(2, PROPERTY_ID);
+            statement.setString(3, CASH_DRAWER_REQUIRED_SETTING);
+            statement.executeUpdate();
         }
     }
 }

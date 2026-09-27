@@ -26,8 +26,12 @@ import java.util.UUID;
  * <p>The idempotency key is what makes a double click, or a retry after a lost answer, register the
  * payment once (decision #5 of task 1.3). It is unique across every folio ({@code uk_payment_idempotency}).
  *
- * <p>Part of the {@link Folio} aggregate and changed only through it. Neither the cash drawer session
- * (task 2.4) nor the payment intent (version 1.1) is mapped yet.
+ * <p>A {@code CASH} payment falls into the open cash drawer session, when there is one (task 2.4):
+ * the link is decided by the {@link CashDrawerAssignment} the folio receives, and never changes. Any
+ * other method falls into no session ({@code ck_payment_cash_session}).
+ *
+ * <p>Part of the {@link Folio} aggregate and changed only through it. The payment intent (version
+ * 1.1) is not mapped yet.
  */
 @Entity
 @Table(name = "payment")
@@ -72,12 +76,22 @@ public class Payment extends AuditedEntity {
     @Column(name = "refund_reason")
     private String refundReason;
 
+    @Column(name = "cash_drawer_session_id", updatable = false)
+    private UUID cashDrawerSessionId;
+
     protected Payment() {
         // for JPA
     }
 
-    private Payment(PaymentMethod method, Money amount, String idempotencyKey, UUID receivedBy, Instant paidAt) {
+    private Payment(
+            PaymentMethod method,
+            Money amount,
+            String idempotencyKey,
+            UUID receivedBy,
+            Instant paidAt,
+            Optional<CashDrawerSessionId> cashDrawerSession) {
         this.id = PaymentId.newId().value();
+        this.cashDrawerSessionId = cashDrawerSession.map(CashDrawerSessionId::value).orElse(null);
         this.method = method;
         this.amount = amount;
         this.status = PaymentStatus.CONFIRMED;
@@ -88,13 +102,19 @@ public class Payment extends AuditedEntity {
 
     /** A payment registered by an operator. Receives values the aggregate already validated. */
     static Payment receivedAtCounter(
-            PaymentMethod method, Money amount, String idempotencyKey, UUID receivedBy, Instant paidAt) {
+            PaymentMethod method,
+            Money amount,
+            String idempotencyKey,
+            UUID receivedBy,
+            Instant paidAt,
+            Optional<CashDrawerSessionId> cashDrawerSession) {
         return new Payment(
                 method,
                 amount,
                 idempotencyKey,
                 Objects.requireNonNull(receivedBy, "receivedBy"),
-                Objects.requireNonNull(paidAt, "paidAt"));
+                Objects.requireNonNull(paidAt, "paidAt"),
+                Objects.requireNonNull(cashDrawerSession, "cashDrawerSession"));
     }
 
     /**
@@ -180,5 +200,10 @@ public class Payment extends AuditedEntity {
 
     public Optional<String> refundReason() {
         return Optional.ofNullable(refundReason);
+    }
+
+    /** The cash drawer session this payment fell into; empty for any method but {@code CASH}, and for cash with no session. */
+    public Optional<CashDrawerSessionId> cashDrawerSessionId() {
+        return Optional.ofNullable(cashDrawerSessionId).map(CashDrawerSessionId::new);
     }
 }
