@@ -1,0 +1,1028 @@
+### Task 3.2 - fechamento da comanda: taxa de servico, divisao de conta, folio
+### Ambiente: selecione "dev" no IntelliJ HTTP Client, com http-client.env.json
+### + http-client.private.env.json (copie o .example). Ver http/README.md.
+###
+### Pre-requisito: aplicacao rodando no perfil "dev" com o seed habilitado
+### (usuarios admin, garcom e cozinha; o seed grava restaurant.service_charge_percent
+### = 10.00). Rode o arquivo inteiro, em ordem: a preparacao e o caminho feliz
+### salvam os ids que os cenarios negativos usam.
+###
+### Valores: pizza 40,00 e refrigerante 6,00 com taxa; couvert 12,00 sem taxa;
+### pudim 10,00 com taxa. Taxa de 10% calculada uma vez sobre a soma.
+### Pagamentos em PIX e cartao; o cenario em dinheiro (CASH) entra depois da 2.4.
+### No fim, as comandas abertas sao canceladas e a mesa fica livre.
+
+
+### ------------------------------------------------------------------
+### Preparacao: logins, cardapio e mesa
+### ------------------------------------------------------------------
+
+
+### 0. Login do admin
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{
+  "username": "{{adminUsername}}",
+  "password": "{{password}}"
+}
+
+> {%
+    client.test("login do admin retorna 200", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+    });
+    client.global.set("adminToken", response.body.accessToken);
+    client.global.set("suffix", Math.random().toString(36).substring(2, 8));
+    client.global.set("keyPrefix", "tab-closing-" + Math.random().toString(36).substring(2, 12));
+%}
+
+
+### 1. Login do garcom (tambem o caixa do restaurante)
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{
+  "username": "{{waiterUsername}}",
+  "password": "{{password}}"
+}
+
+> {%
+    client.test("login do garcom retorna 200", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+    });
+    client.global.set("waiterToken", response.body.accessToken);
+%}
+
+
+### 2. Login da cozinha
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{
+  "username": "cozinha",
+  "password": "{{password}}"
+}
+
+> {%
+    client.test("login da cozinha retorna 200", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+    });
+    client.global.set("kitchenToken", response.body.accessToken);
+%}
+
+
+### 3. Cria a categoria
+POST {{host}}/api/restaurant/menu-categories
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "name": "Fechamento {{suffix}}",
+  "displayOrder": 1
+}
+
+> {%
+    client.test("categoria criada", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+    });
+    client.global.set("categoryId", response.body.id);
+%}
+
+
+### 4. Pizza 40,00, com taxa
+POST {{host}}/api/restaurant/menu-items
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "categoryId": "{{categoryId}}",
+  "name": "Pizza {{suffix}}",
+  "prepStation": "PIZZA",
+  "soldByWeight": false,
+  "price": "40.00"
+}
+
+> {%
+    client.test("pizza criada", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+    });
+    client.global.set("pizzaId", response.body.id);
+%}
+
+
+### 5. Refrigerante 6,00, com taxa
+POST {{host}}/api/restaurant/menu-items
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "categoryId": "{{categoryId}}",
+  "name": "Refrigerante {{suffix}}",
+  "prepStation": "BAR",
+  "soldByWeight": false,
+  "price": "6.00"
+}
+
+> {%
+    client.test("refrigerante criado", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+    });
+    client.global.set("sodaId", response.body.id);
+%}
+
+
+### 6. Couvert 12,00, sem taxa (serviceChargeEligible = false)
+POST {{host}}/api/restaurant/menu-items
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "categoryId": "{{categoryId}}",
+  "name": "Couvert {{suffix}}",
+  "prepStation": "KITCHEN",
+  "soldByWeight": false,
+  "price": "12.00",
+  "serviceChargeEligible": false
+}
+
+> {%
+    client.test("couvert criado sem taxa", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+    });
+    client.global.set("couvertId", response.body.id);
+%}
+
+
+### 7. Pudim 10,00, com taxa (a sobremesa depois da reabertura)
+POST {{host}}/api/restaurant/menu-items
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "categoryId": "{{categoryId}}",
+  "name": "Pudim {{suffix}}",
+  "prepStation": "KITCHEN",
+  "soldByWeight": false,
+  "price": "10.00"
+}
+
+> {%
+    client.test("pudim criado", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+    });
+    client.global.set("puddingId", response.body.id);
+%}
+
+
+### 8. Cria a mesa
+POST {{host}}/api/restaurant/dining-tables
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "label": "Fecha {{suffix}}"
+}
+
+> {%
+    client.test("mesa criada", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+    });
+    client.global.set("diningTableId", response.body.id);
+%}
+
+
+### ------------------------------------------------------------------
+### Caminho feliz: lancamentos, taxa, divisao, pre-conta, pagamentos
+### ------------------------------------------------------------------
+
+
+### 9. Abre a comanda na mesa
+POST {{host}}/api/restaurant/tabs
+Authorization: Bearer {{waiterToken}}
+Content-Type: application/json
+
+{
+  "origin": "TABLE_SERVICE",
+  "diningTableId": "{{diningTableId}}"
+}
+
+> {%
+    client.test("comanda aberta com taxa ligada e sem total congelado", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+        client.assert(response.body.serviceChargeApplied === true, "taxa deveria nascer ligada na mesa");
+        client.assert(response.body.total === null, "total congelado deveria ser null em OPEN");
+    });
+    client.global.set("tabId", response.body.id);
+%}
+
+
+### 10. Lanca a pizza
+POST {{host}}/api/restaurant/tabs/{{tabId}}/items
+Authorization: Bearer {{waiterToken}}
+Content-Type: application/json
+
+{
+  "menuItemId": "{{pizzaId}}"
+}
+
+> {%
+    client.test("pizza lancada no grupo 1", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+        const item = response.body.items[response.body.items.length - 1];
+        client.assert(item.splitGroup === 1, "item deveria nascer no grupo 1");
+        client.assert(item.serviceChargeWaived === false, "item nasce com a taxa");
+        client.global.set("pizzaItemId", item.id);
+    });
+%}
+
+
+### 11. Lanca 2 refrigerantes
+POST {{host}}/api/restaurant/tabs/{{tabId}}/items
+Authorization: Bearer {{waiterToken}}
+Content-Type: application/json
+
+{
+  "menuItemId": "{{sodaId}}",
+  "quantity": 2
+}
+
+> {%
+    client.test("refrigerantes lancados", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+        client.global.set("sodaItemId", response.body.items[response.body.items.length - 1].id);
+    });
+%}
+
+
+### 12. Lanca o couvert (sem taxa)
+POST {{host}}/api/restaurant/tabs/{{tabId}}/items
+Authorization: Bearer {{waiterToken}}
+Content-Type: application/json
+
+{
+  "menuItemId": "{{couvertId}}"
+}
+
+> {%
+    client.test("couvert lancado sem taxa", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+        const item = response.body.items[response.body.items.length - 1];
+        client.assert(item.serviceChargeable === false, "couvert nao deveria ter taxa");
+        client.global.set("couvertItemId", item.id);
+    });
+%}
+
+
+### 13. Pre-conta em OPEN: taxa de 10% sobre 52,00
+GET {{host}}/api/restaurant/tabs/{{tabId}}/bill
+Authorization: Bearer {{waiterToken}}
+
+> {%
+    client.test("pre-conta: 64,00 + 5,20 = 69,20, sem folio", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        client.assert(response.body.subtotal === "64.00", "subtotal " + response.body.subtotal);
+        client.assert(response.body.serviceChargeBase === "52.00", "base " + response.body.serviceChargeBase);
+        client.assert(response.body.serviceChargeRate === "10.00", "taxa " + response.body.serviceChargeRate);
+        client.assert(response.body.serviceCharge === "5.20", "taxa de servico " + response.body.serviceCharge);
+        client.assert(response.body.total === "69.20", "total " + response.body.total);
+        client.assert(response.body.paid === null && response.body.balance === null, "sem folio, sem pago nem saldo");
+    });
+%}
+
+
+### 14. Tira a taxa dos refrigerantes
+PUT {{host}}/api/restaurant/tabs/{{tabId}}/items/{{sodaItemId}}/service-charge
+Authorization: Bearer {{waiterToken}}
+Content-Type: application/json
+
+{
+  "applied": false
+}
+
+> {%
+    client.test("sem a taxa do refrigerante: 64,00 + 4,00 = 68,00", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        client.assert(response.body.serviceChargeBase === "40.00", "base " + response.body.serviceChargeBase);
+        client.assert(response.body.serviceCharge === "4.00", "taxa " + response.body.serviceCharge);
+        client.assert(response.body.total === "68.00", "total " + response.body.total);
+    });
+%}
+
+
+### 15. Tres pessoas: divisao igual padrao
+PUT {{host}}/api/restaurant/tabs/{{tabId}}/guest-count
+Authorization: Bearer {{waiterToken}}
+Content-Type: application/json
+
+{
+  "guestCount": 3
+}
+
+> {%
+    client.test("68,00 em 3: as primeiras cotas levam o centavo", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        client.assert(response.body.guestCount === 3, "guestCount " + response.body.guestCount);
+        client.assert(response.body.evenSplitParts === 3, "partes " + response.body.evenSplitParts);
+        client.assert(JSON.stringify(response.body.evenSplit) === JSON.stringify(["22.67", "22.67", "22.66"]),
+            "cotas " + JSON.stringify(response.body.evenSplit));
+    });
+%}
+
+
+### 16. Divisao por item: pizza no grupo 1, refrigerante e couvert no grupo 2
+PUT {{host}}/api/restaurant/tabs/{{tabId}}/split-groups
+Authorization: Bearer {{waiterToken}}
+Content-Type: application/json
+
+{
+  "assignments": [
+    {"itemId": "{{pizzaItemId}}", "splitGroup": 1},
+    {"itemId": "{{sodaItemId}}", "splitGroup": 2},
+    {"itemId": "{{couvertItemId}}", "splitGroup": 2}
+  ]
+}
+
+> {%
+    client.test("grupos: 44,00 (com taxa) e 24,00 (sem taxa), somando 68,00", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        const groups = response.body.groups;
+        client.assert(groups.length === 2, "dois grupos, recebido " + groups.length);
+        client.assert(groups[0].splitGroup === 1 && groups[0].total === "44.00" && groups[0].serviceCharge === "4.00",
+            "grupo 1 " + JSON.stringify(groups[0]));
+        client.assert(groups[1].splitGroup === 2 && groups[1].total === "24.00" && groups[1].serviceCharge === "0.00",
+            "grupo 2 " + JSON.stringify(groups[1]));
+        client.assert(response.body.total === "68.00", "o total nao muda");
+    });
+%}
+
+
+### 17. Grupo 2 dividido em 2
+GET {{host}}/api/restaurant/tabs/{{tabId}}/bill?parts=2&splitGroup=2
+Authorization: Bearer {{waiterToken}}
+
+> {%
+    client.test("24,00 em 2", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        client.assert(JSON.stringify(response.body.evenSplit) === JSON.stringify(["12.00", "12.00"]),
+            "cotas " + JSON.stringify(response.body.evenSplit));
+        client.assert(response.body.evenSplitGroup === 2, "grupo " + response.body.evenSplitGroup);
+    });
+%}
+
+
+### 18. Inicia o fechamento (pre-conta): lanca 68,00 no folio
+POST {{host}}/api/restaurant/tabs/{{tabId}}/closing
+Authorization: Bearer {{waiterToken}}
+
+> {%
+    client.test("CLOSING com saldo 68,00 e nada pago", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        client.assert(response.body.status === "CLOSING", "status " + response.body.status);
+        client.assert(response.body.total === "68.00", "total " + response.body.total);
+        client.assert(response.body.paid === "0.00", "pago " + response.body.paid);
+        client.assert(response.body.balance === "68.00", "saldo " + response.body.balance);
+        client.assert(JSON.stringify(response.body.balanceEvenSplit) === JSON.stringify(["22.67", "22.67", "22.66"]),
+            "saldo em 3 " + JSON.stringify(response.body.balanceEvenSplit));
+    });
+%}
+
+
+### 19. Le a comanda: total e percentual congelados, folio ligado
+GET {{host}}/api/restaurant/tabs/{{tabId}}
+Authorization: Bearer {{waiterToken}}
+
+> {%
+    client.test("comanda em CLOSING com o congelado", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        client.assert(response.body.status === "CLOSING", "status " + response.body.status);
+        client.assert(response.body.serviceChargeRate === "10.00", "taxa " + response.body.serviceChargeRate);
+        client.assert(response.body.total === "68.00", "total " + response.body.total);
+        client.assert(response.body.folioId !== null, "folio deveria estar ligado");
+        client.assert(response.body.closingStartedAt !== null, "closingStartedAt");
+    });
+    client.global.set("folioId", response.body.folioId);
+%}
+
+
+### 20. Paga 30,00 em PIX
+POST {{host}}/api/restaurant/tabs/{{tabId}}/payments
+Authorization: Bearer {{waiterToken}}
+Idempotency-Key: {{keyPrefix}}-pix
+Content-Type: application/json
+
+{
+  "method": "PIX",
+  "amount": "30.00"
+}
+
+> {%
+    client.test("PIX registrado, saldo 38,00", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+        client.assert(response.body.method === "PIX", "metodo " + response.body.method);
+        client.assert(response.body.amount === "30.00", "valor " + response.body.amount);
+        client.assert(response.body.bill.balance === "38.00", "saldo " + response.body.bill.balance);
+    });
+    client.global.set("pixPaymentId", response.body.paymentId);
+%}
+
+
+### 21. Retry do mesmo PIX: devolve o original, nao registra de novo
+POST {{host}}/api/restaurant/tabs/{{tabId}}/payments
+Authorization: Bearer {{waiterToken}}
+Idempotency-Key: {{keyPrefix}}-pix
+Content-Type: application/json
+
+{
+  "method": "PIX",
+  "amount": "30.00"
+}
+
+> {%
+    client.test("replay: mesmo pagamento, saldo ainda 38,00", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+        client.assert(response.body.paymentId === client.global.get("pixPaymentId"), "deveria ser o mesmo pagamento");
+        client.assert(response.body.bill.balance === "38.00", "saldo " + response.body.bill.balance);
+    });
+%}
+
+
+### ------------------------------------------------------------------
+### Negativos em CLOSING
+### ------------------------------------------------------------------
+
+
+### 22. Lancar em CLOSING -> 409 TAB_NOT_OPEN
+POST {{host}}/api/restaurant/tabs/{{tabId}}/items
+Authorization: Bearer {{waiterToken}}
+Content-Type: application/json
+
+{
+  "menuItemId": "{{pizzaId}}"
+}
+
+> {%
+    client.test("lancar em CLOSING: 409 TAB_NOT_OPEN", function() {
+        client.assert(response.status === 409, "esperado 409, recebido " + response.status);
+        client.assert(response.body.code === "TAB_NOT_OPEN", "code " + response.body.code);
+    });
+%}
+
+
+### 23. Mudar a taxa em CLOSING -> 409 TAB_NOT_OPEN
+PUT {{host}}/api/restaurant/tabs/{{tabId}}/service-charge
+Authorization: Bearer {{waiterToken}}
+Content-Type: application/json
+
+{
+  "applied": false
+}
+
+> {%
+    client.test("taxa em CLOSING: 409 TAB_NOT_OPEN", function() {
+        client.assert(response.status === 409, "esperado 409, recebido " + response.status);
+        client.assert(response.body.code === "TAB_NOT_OPEN", "code " + response.body.code);
+    });
+%}
+
+
+### 24. Iniciar o fechamento de novo -> 409 TAB_NOT_OPEN
+POST {{host}}/api/restaurant/tabs/{{tabId}}/closing
+Authorization: Bearer {{waiterToken}}
+
+> {%
+    client.test("segundo closing: 409 TAB_NOT_OPEN", function() {
+        client.assert(response.status === 409, "esperado 409, recebido " + response.status);
+        client.assert(response.body.code === "TAB_NOT_OPEN", "code " + response.body.code);
+    });
+%}
+
+
+### 25. Desativar a mesa em CLOSING -> 409 DINING_TABLE_HAS_OPEN_TAB
+POST {{host}}/api/restaurant/dining-tables/{{diningTableId}}/deactivate
+Authorization: Bearer {{adminToken}}
+
+> {%
+    client.test("mesa em CLOSING nao desativa: 409 DINING_TABLE_HAS_OPEN_TAB", function() {
+        client.assert(response.status === 409, "esperado 409, recebido " + response.status);
+        client.assert(response.body.code === "DINING_TABLE_HAS_OPEN_TAB", "code " + response.body.code);
+    });
+%}
+
+
+### 26. Fechar com saldo 38,00 -> 409 FOLIO_BALANCE_NOT_ZERO
+POST {{host}}/api/restaurant/tabs/{{tabId}}/close
+Authorization: Bearer {{waiterToken}}
+
+> {%
+    client.test("fechar com saldo: 409 FOLIO_BALANCE_NOT_ZERO", function() {
+        client.assert(response.status === 409, "esperado 409, recebido " + response.status);
+        client.assert(response.body.code === "FOLIO_BALANCE_NOT_ZERO", "code " + response.body.code);
+    });
+%}
+
+
+### 27. Pagar acima do saldo -> 422 PAYMENT_EXCEEDS_BALANCE
+POST {{host}}/api/restaurant/tabs/{{tabId}}/payments
+Authorization: Bearer {{waiterToken}}
+Idempotency-Key: {{keyPrefix}}-excess
+Content-Type: application/json
+
+{
+  "method": "PIX",
+  "amount": "50.00"
+}
+
+> {%
+    client.test("acima do saldo: 422 PAYMENT_EXCEEDS_BALANCE", function() {
+        client.assert(response.status === 422, "esperado 422, recebido " + response.status);
+        client.assert(response.body.code === "PAYMENT_EXCEEDS_BALANCE", "code " + response.body.code);
+    });
+%}
+
+
+### 28. Pagar na conta do quarto -> 422 PAYMENT_METHOD_NOT_ACCEPTED
+POST {{host}}/api/restaurant/tabs/{{tabId}}/payments
+Authorization: Bearer {{waiterToken}}
+Idempotency-Key: {{keyPrefix}}-room
+Content-Type: application/json
+
+{
+  "method": "ROOM_ACCOUNT",
+  "amount": "10.00"
+}
+
+> {%
+    client.test("ROOM_ACCOUNT: 422 PAYMENT_METHOD_NOT_ACCEPTED", function() {
+        client.assert(response.status === 422, "esperado 422, recebido " + response.status);
+        client.assert(response.body.code === "PAYMENT_METHOD_NOT_ACCEPTED", "code " + response.body.code);
+    });
+%}
+
+
+### 29. Mesma chave com outro valor -> 409 IDEMPOTENCY_KEY_REUSED
+POST {{host}}/api/restaurant/tabs/{{tabId}}/payments
+Authorization: Bearer {{waiterToken}}
+Idempotency-Key: {{keyPrefix}}-pix
+Content-Type: application/json
+
+{
+  "method": "PIX",
+  "amount": "10.00"
+}
+
+> {%
+    client.test("chave reusada: 409 IDEMPOTENCY_KEY_REUSED", function() {
+        client.assert(response.status === 409, "esperado 409, recebido " + response.status);
+        client.assert(response.body.code === "IDEMPOTENCY_KEY_REUSED", "code " + response.body.code);
+    });
+%}
+
+
+### 30. Sem Idempotency-Key -> 422 INVALID_IDEMPOTENCY_KEY
+POST {{host}}/api/restaurant/tabs/{{tabId}}/payments
+Authorization: Bearer {{waiterToken}}
+Content-Type: application/json
+
+{
+  "method": "PIX",
+  "amount": "10.00"
+}
+
+> {%
+    client.test("sem chave: 422 INVALID_IDEMPOTENCY_KEY", function() {
+        client.assert(response.status === 422, "esperado 422, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_IDEMPOTENCY_KEY", "code " + response.body.code);
+    });
+%}
+
+
+### 31. Valor zero -> 422 INVALID_PAYMENT_AMOUNT
+POST {{host}}/api/restaurant/tabs/{{tabId}}/payments
+Authorization: Bearer {{waiterToken}}
+Idempotency-Key: {{keyPrefix}}-zero
+Content-Type: application/json
+
+{
+  "method": "PIX",
+  "amount": "0.00"
+}
+
+> {%
+    client.test("valor zero: 422 INVALID_PAYMENT_AMOUNT", function() {
+        client.assert(response.status === 422, "esperado 422, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_PAYMENT_AMOUNT", "code " + response.body.code);
+    });
+%}
+
+
+### 32. Reabrir sem motivo -> 422 INVALID_REOPENING_REASON
+POST {{host}}/api/restaurant/tabs/{{tabId}}/reopen
+Authorization: Bearer {{waiterToken}}
+Content-Type: application/json
+
+{
+  "reason": "   "
+}
+
+> {%
+    client.test("reabrir sem motivo: 422 INVALID_REOPENING_REASON", function() {
+        client.assert(response.status === 422, "esperado 422, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_REOPENING_REASON", "code " + response.body.code);
+    });
+%}
+
+
+### ------------------------------------------------------------------
+### Caminho feliz: reabertura, sobremesa, segundo fechamento, fecha
+### ------------------------------------------------------------------
+
+
+### 33. Reabre: o cliente pediu sobremesa depois de pagar 30,00
+POST {{host}}/api/restaurant/tabs/{{tabId}}/reopen
+Authorization: Bearer {{waiterToken}}
+Content-Type: application/json
+
+{
+  "reason": "cliente pediu sobremesa"
+}
+
+> {%
+    client.test("reaberta: OPEN, sem congelado, folio mantido", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        client.assert(response.body.status === "OPEN", "status " + response.body.status);
+        client.assert(response.body.serviceChargeRate === null && response.body.total === null, "congelado descartado");
+        client.assert(response.body.folioId === client.global.get("folioId"), "o folio deveria ser o mesmo");
+    });
+%}
+
+
+### 34. Lanca o pudim
+POST {{host}}/api/restaurant/tabs/{{tabId}}/items
+Authorization: Bearer {{waiterToken}}
+Content-Type: application/json
+
+{
+  "menuItemId": "{{puddingId}}"
+}
+
+> {%
+    client.test("pudim lancado depois da reabertura", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+    });
+%}
+
+
+### 35. Segundo fechamento: 74,00 + 5,00 = 79,00, com 30,00 ja pagos
+POST {{host}}/api/restaurant/tabs/{{tabId}}/closing
+Authorization: Bearer {{waiterToken}}
+
+> {%
+    client.test("saldo = novo total - pago", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        client.assert(response.body.total === "79.00", "total " + response.body.total);
+        client.assert(response.body.paid === "30.00", "pago " + response.body.paid);
+        client.assert(response.body.balance === "49.00", "saldo " + response.body.balance);
+    });
+%}
+
+
+### 36. Paga o resto no cartao de credito
+POST {{host}}/api/restaurant/tabs/{{tabId}}/payments
+Authorization: Bearer {{waiterToken}}
+Idempotency-Key: {{keyPrefix}}-card
+Content-Type: application/json
+
+{
+  "method": "CREDIT_CARD",
+  "amount": "49.00"
+}
+
+> {%
+    client.test("cartao registrado, saldo zero", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+        client.assert(response.body.bill.balance === "0.00", "saldo " + response.body.bill.balance);
+    });
+%}
+
+
+### 37. Fecha a comanda: folio fechado, mesa livre
+POST {{host}}/api/restaurant/tabs/{{tabId}}/close
+Authorization: Bearer {{waiterToken}}
+
+> {%
+    client.test("CLOSED, pago direto", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        client.assert(response.body.status === "CLOSED", "status " + response.body.status);
+        client.assert(response.body.destination === "DIRECT_PAYMENT", "destino " + response.body.destination);
+        client.assert(response.body.closedAt !== null && response.body.closedBy !== null, "closedAt/closedBy");
+        client.assert(response.body.total === "79.00", "total " + response.body.total);
+    });
+%}
+
+
+### 38. Retry do PIX depois do fechamento: devolve o original
+POST {{host}}/api/restaurant/tabs/{{tabId}}/payments
+Authorization: Bearer {{waiterToken}}
+Idempotency-Key: {{keyPrefix}}-pix
+Content-Type: application/json
+
+{
+  "method": "PIX",
+  "amount": "30.00"
+}
+
+> {%
+    client.test("replay em CLOSED: 201 com o mesmo pagamento", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+        client.assert(response.body.paymentId === client.global.get("pixPaymentId"), "deveria ser o mesmo pagamento");
+    });
+%}
+
+
+### 39. Pagamento novo em CLOSED -> 409 FOLIO_CLOSED
+POST {{host}}/api/restaurant/tabs/{{tabId}}/payments
+Authorization: Bearer {{waiterToken}}
+Idempotency-Key: {{keyPrefix}}-late
+Content-Type: application/json
+
+{
+  "method": "PIX",
+  "amount": "1.00"
+}
+
+> {%
+    client.test("pagamento novo em CLOSED: 409 FOLIO_CLOSED", function() {
+        client.assert(response.status === 409, "esperado 409, recebido " + response.status);
+        client.assert(response.body.code === "FOLIO_CLOSED", "code " + response.body.code);
+    });
+%}
+
+
+### 40. Reabrir CLOSED -> 409 TAB_NOT_CLOSING
+POST {{host}}/api/restaurant/tabs/{{tabId}}/reopen
+Authorization: Bearer {{waiterToken}}
+Content-Type: application/json
+
+{
+  "reason": "fechou errado"
+}
+
+> {%
+    client.test("CLOSED nao reabre: 409 TAB_NOT_CLOSING", function() {
+        client.assert(response.status === 409, "esperado 409, recebido " + response.status);
+        client.assert(response.body.code === "TAB_NOT_CLOSING", "code " + response.body.code);
+    });
+%}
+
+
+### 41. Grupo em CLOSED -> 409 TAB_NOT_OPEN
+PUT {{host}}/api/restaurant/tabs/{{tabId}}/split-groups
+Authorization: Bearer {{waiterToken}}
+Content-Type: application/json
+
+{
+  "assignments": [{"itemId": "{{pizzaItemId}}", "splitGroup": 2}]
+}
+
+> {%
+    client.test("grupo em CLOSED: 409 TAB_NOT_OPEN", function() {
+        client.assert(response.status === 409, "esperado 409, recebido " + response.status);
+        client.assert(response.body.code === "TAB_NOT_OPEN", "code " + response.body.code);
+    });
+%}
+
+
+### 42. A mesa ficou livre: abre nova comanda
+POST {{host}}/api/restaurant/tabs
+Authorization: Bearer {{waiterToken}}
+Content-Type: application/json
+
+{
+  "origin": "TABLE_SERVICE",
+  "diningTableId": "{{diningTableId}}"
+}
+
+> {%
+    client.test("mesa livre depois do fechamento", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+    });
+    client.global.set("secondTabId", response.body.id);
+%}
+
+
+### ------------------------------------------------------------------
+### Negativos em OPEN e de entrada
+### ------------------------------------------------------------------
+
+
+### 43. Pagar comanda OPEN -> 409 TAB_NOT_CLOSING
+POST {{host}}/api/restaurant/tabs/{{secondTabId}}/payments
+Authorization: Bearer {{waiterToken}}
+Idempotency-Key: {{keyPrefix}}-open
+Content-Type: application/json
+
+{
+  "method": "PIX",
+  "amount": "10.00"
+}
+
+> {%
+    client.test("pagar em OPEN: 409 TAB_NOT_CLOSING", function() {
+        client.assert(response.status === 409, "esperado 409, recebido " + response.status);
+        client.assert(response.body.code === "TAB_NOT_CLOSING", "code " + response.body.code);
+    });
+%}
+
+
+### 44. Fechar comanda OPEN -> 409 TAB_NOT_CLOSING
+POST {{host}}/api/restaurant/tabs/{{secondTabId}}/close
+Authorization: Bearer {{waiterToken}}
+
+> {%
+    client.test("fechar em OPEN: 409 TAB_NOT_CLOSING", function() {
+        client.assert(response.status === 409, "esperado 409, recebido " + response.status);
+        client.assert(response.body.code === "TAB_NOT_CLOSING", "code " + response.body.code);
+    });
+%}
+
+
+### 45. Iniciar fechamento sem item -> 409 TAB_HAS_NO_ACTIVE_ITEMS
+POST {{host}}/api/restaurant/tabs/{{secondTabId}}/closing
+Authorization: Bearer {{waiterToken}}
+
+> {%
+    client.test("sem item: 409 TAB_HAS_NO_ACTIVE_ITEMS", function() {
+        client.assert(response.status === 409, "esperado 409, recebido " + response.status);
+        client.assert(response.body.code === "TAB_HAS_NO_ACTIVE_ITEMS", "code " + response.body.code);
+    });
+%}
+
+
+### 46. Pessoas fora da faixa -> 422 INVALID_GUEST_COUNT
+PUT {{host}}/api/restaurant/tabs/{{secondTabId}}/guest-count
+Authorization: Bearer {{waiterToken}}
+Content-Type: application/json
+
+{
+  "guestCount": 0
+}
+
+> {%
+    client.test("zero pessoas: 422 INVALID_GUEST_COUNT", function() {
+        client.assert(response.status === 422, "esperado 422, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_GUEST_COUNT", "code " + response.body.code);
+    });
+%}
+
+
+### 47. Lanca o couvert na segunda comanda (para os negativos de item)
+POST {{host}}/api/restaurant/tabs/{{secondTabId}}/items
+Authorization: Bearer {{waiterToken}}
+Content-Type: application/json
+
+{
+  "menuItemId": "{{couvertId}}"
+}
+
+> {%
+    client.test("couvert lancado", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+    });
+    client.global.set("secondCouvertItemId", response.body.items[0].id);
+%}
+
+
+### 48. Tirar a taxa de item que nunca teve -> 422 TAB_ITEM_NOT_SERVICE_CHARGEABLE
+PUT {{host}}/api/restaurant/tabs/{{secondTabId}}/items/{{secondCouvertItemId}}/service-charge
+Authorization: Bearer {{waiterToken}}
+Content-Type: application/json
+
+{
+  "applied": false
+}
+
+> {%
+    client.test("item sem taxa: 422 TAB_ITEM_NOT_SERVICE_CHARGEABLE", function() {
+        client.assert(response.status === 422, "esperado 422, recebido " + response.status);
+        client.assert(response.body.code === "TAB_ITEM_NOT_SERVICE_CHARGEABLE", "code " + response.body.code);
+    });
+%}
+
+
+### 49. Grupo 100 -> 422 INVALID_SPLIT_GROUP
+PUT {{host}}/api/restaurant/tabs/{{secondTabId}}/split-groups
+Authorization: Bearer {{waiterToken}}
+Content-Type: application/json
+
+{
+  "assignments": [{"itemId": "{{secondCouvertItemId}}", "splitGroup": 100}]
+}
+
+> {%
+    client.test("grupo 100: 422 INVALID_SPLIT_GROUP", function() {
+        client.assert(response.status === 422, "esperado 422, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_SPLIT_GROUP", "code " + response.body.code);
+    });
+%}
+
+
+### 50. Grupo de item que nao esta na comanda -> 404 TAB_ITEM_NOT_FOUND
+PUT {{host}}/api/restaurant/tabs/{{secondTabId}}/split-groups
+Authorization: Bearer {{waiterToken}}
+Content-Type: application/json
+
+{
+  "assignments": [{"itemId": "{{pizzaItemId}}", "splitGroup": 2}]
+}
+
+> {%
+    client.test("item de outra comanda: 404 TAB_ITEM_NOT_FOUND", function() {
+        client.assert(response.status === 404, "esperado 404, recebido " + response.status);
+        client.assert(response.body.code === "TAB_ITEM_NOT_FOUND", "code " + response.body.code);
+    });
+%}
+
+
+### 51. 100 partes -> 422 INVALID_SPLIT_PARTS
+GET {{host}}/api/restaurant/tabs/{{secondTabId}}/bill?parts=100
+Authorization: Bearer {{waiterToken}}
+
+> {%
+    client.test("100 partes: 422 INVALID_SPLIT_PARTS", function() {
+        client.assert(response.status === 422, "esperado 422, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_SPLIT_PARTS", "code " + response.body.code);
+    });
+%}
+
+
+### 52. Pre-conta de comanda que nao existe -> 404 TAB_NOT_FOUND
+GET {{host}}/api/restaurant/tabs/0190a3b4-0000-7000-8000-000000000000/bill
+Authorization: Bearer {{waiterToken}}
+
+> {%
+    client.test("comanda inexistente: 404 TAB_NOT_FOUND", function() {
+        client.assert(response.status === 404, "esperado 404, recebido " + response.status);
+        client.assert(response.body.code === "TAB_NOT_FOUND", "code " + response.body.code);
+    });
+%}
+
+
+### 53. Pre-conta sem token -> 401 AUTHENTICATION_REQUIRED
+GET {{host}}/api/restaurant/tabs/{{secondTabId}}/bill
+
+> {%
+    client.test("sem token: 401 AUTHENTICATION_REQUIRED", function() {
+        client.assert(response.status === 401, "esperado 401, recebido " + response.status);
+        client.assert(response.body.code === "AUTHENTICATION_REQUIRED", "code " + response.body.code);
+    });
+%}
+
+
+### 54. Cozinha inicia o fechamento -> 403 ACCESS_DENIED
+POST {{host}}/api/restaurant/tabs/{{secondTabId}}/closing
+Authorization: Bearer {{kitchenToken}}
+
+> {%
+    client.test("cozinha: 403 ACCESS_DENIED", function() {
+        client.assert(response.status === 403, "esperado 403, recebido " + response.status);
+        client.assert(response.body.code === "ACCESS_DENIED", "code " + response.body.code);
+    });
+%}
+
+
+### ------------------------------------------------------------------
+### Limpeza: a segunda comanda fica cancelada e a mesa livre
+### ------------------------------------------------------------------
+
+
+### 55. Cancela o couvert da segunda comanda
+POST {{host}}/api/restaurant/tabs/{{secondTabId}}/items/{{secondCouvertItemId}}/cancel
+Authorization: Bearer {{waiterToken}}
+Content-Type: application/json
+
+{
+  "reason": "limpeza do arquivo .http"
+}
+
+> {%
+    client.test("couvert cancelado", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+    });
+%}
+
+
+### 56. Cancela a segunda comanda
+POST {{host}}/api/restaurant/tabs/{{secondTabId}}/cancel
+Authorization: Bearer {{waiterToken}}
+Content-Type: application/json
+
+{
+  "reason": "limpeza do arquivo .http"
+}
+
+> {%
+    client.test("segunda comanda cancelada", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        client.assert(response.body.status === "CANCELLED", "status " + response.body.status);
+    });
+%}

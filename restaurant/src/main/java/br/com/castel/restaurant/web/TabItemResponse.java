@@ -32,7 +32,10 @@ public record TabItemResponse(
         String orderedBy,
         String cancelledAt,
         String cancelledBy,
-        String cancellationReason) {
+        String cancellationReason,
+        // ---- closing (task 3.2)
+        boolean serviceChargeWaived,
+        int splitGroup) {
 
     public static TabItemResponse from(TabItem item) {
         return new TabItemResponse(
@@ -55,7 +58,9 @@ public record TabItemResponse(
                 item.orderedBy().toString(),
                 item.cancelledAt().map(Instant::toString).orElse(null),
                 item.cancelledBy().map(UUID::toString).orElse(null),
-                item.cancellationReason().orElse(null));
+                item.cancellationReason().orElse(null),
+                item.serviceChargeWaived(),
+                item.splitGroup());
     }
 
     /** A modifier as it went on the item: name and price frozen. */

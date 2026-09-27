@@ -27,9 +27,9 @@ do DEV nesta task, pendentes de revisão.
 | | |
 |---|---|
 | Branch | `task/3.2-tab-closing` (base `origin/task/billing-api-payment`) |
-| Rodada atual | 0 — implementação |
-| Build | ver relatório da rodada |
-| Testes | integração no `app`; unidade do domínio com o agente de teste |
+| Rodada atual | 0 — implementação entregue; aguarda testes de unidade (agente de teste) e revisão do Ruan |
+| Build | `./mvnw clean install` **verde** — 1404 testes, 0 falhas, ArchUnit incluído. `.http` 34 rodado duas vezes seguidas em banco isolado (57/57) e o 33 sem regressão (81/81) |
+| Testes | 7 de integração (3 de fluxo, 4 de concorrência), 441 linhas, para ~1.700 de produção (com migration, javadoc e o `.http` fora da conta). Os de unidade do domínio vêm do agente de teste e completam o orçamento |
 
 ---
 
@@ -75,6 +75,10 @@ do DEV nesta task, pendentes de revisão.
 | D15 | 0 | Adaptador da porta em `restaurant.infra`: `FolioFacadeTabBilling` sobre o `FolioFacade`; transação do chamador | implementado (DEV, aguarda Ruan) |
 | D16 | 0 | Comanda com total zero (só possível com item por peso de centavo zero) no `startClosing` recebe `INVALID_CHARGE_AMOUNT` do billing: o folio não aceita lançamento zero. Aceito como limitação | implementado (DEV, aguarda Ruan) |
 
+| D17 | 0 | O `DevUserSeeder` grava a chave a cada subida com `ON CONFLICT DO NOTHING`, não só quando cria a propriedade: cobre o banco `dev` em qualquer ordem de subida e nunca sobrescreve um valor mudado à mão | implementado (DEV, aguarda Ruan) |
+| D18 | 0 | O grupo da pré-conta é o record aninhado `TabBill.SplitGroup`, e não o `SplitGroupBill` do rascunho: evita um nome novo fora do glossário (`TabBill` + `splitGroup` já aprovados) | implementado (DEV, aguarda Ruan) |
+| D19 | 0 | `TabBilling.charge` recebe também o `TabId`, para o lançamento levar `ChargeSource.tab(id)` sem o adaptador ler o dono do folio (que na 3.3 será a reserva) | implementado (DEV, aguarda Ruan) |
+
 Valores de status: `pendente` · `implementado` · `revertida pela #n`
 
 ---
@@ -83,18 +87,18 @@ Valores de status: `pendente` · `implementado` · `revertida pela #n`
 
 - [x] Spec final e este registro antes do código
 - [x] §11.1 e §13 do `docs/schema-banco-de-dados.md` (F6)
-- [ ] `V9__tab_closing.sql` com seed do `Setting` (G1, G3)
-- [ ] `DevUserSeeder` grava `restaurant.service_charge_percent` ao criar a propriedade (G3)
-- [ ] `TabStatus`, `TabDestination`, `TabItem` e `Tab` com o bloco de fechamento
-- [ ] Taxa de serviço: comanda e item, calculada sobre a soma, congelada no `startClosing` (F1–F3)
-- [ ] Divisão igual e por item, rateio da taxa, `guestCount` (F4, F5, F8)
-- [ ] `startClosing`, pagamento, `reopen`, `close` (F9–F12)
-- [ ] Cancelar comanda com folio (invariante 17; ligação da rota pendente, D2)
-- [ ] Porta `TabBilling` e adaptador sobre o `FolioFacade`
-- [ ] `TabClosingService` e `TabClosingController`, DTOs
-- [ ] `http/34-restaurant-tab-closing.http` e linha no `http/README.md`
-- [ ] Integração: fatia, reabertura, 403 e os quatro cenários de concorrência
-- [ ] `./mvnw clean install` verde, ArchUnit incluído
+- [x] `V9__tab_closing.sql` com seed do `Setting` (G1, G3)
+- [x] `DevUserSeeder` grava `restaurant.service_charge_percent` ao criar a propriedade (G3)
+- [x] `TabStatus`, `TabDestination`, `TabItem` e `Tab` com o bloco de fechamento
+- [x] Taxa de serviço: comanda e item, calculada sobre a soma, congelada no `startClosing` (F1–F3)
+- [x] Divisão igual e por item, rateio da taxa, `guestCount` (F4, F5, F8)
+- [x] `startClosing`, pagamento, `reopen`, `close` (F9–F12)
+- [ ] Cancelar comanda com folio (invariante 17): domínio e `TabClosingService.cancel` prontos; **falta ligar a rota** (D2, ponto em aberto 1)
+- [x] Porta `TabBilling` e adaptador sobre o `FolioFacade`
+- [x] `TabClosingService` e `TabClosingController`, DTOs
+- [x] `http/34-restaurant-tab-closing.http` e linha no `http/README.md`
+- [x] Integração: fatia, reabertura, 403 e os quatro cenários de concorrência
+- [x] `./mvnw clean install` verde, ArchUnit incluído
 
 ### Fora do escopo
 
