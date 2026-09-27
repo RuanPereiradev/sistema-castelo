@@ -2,8 +2,8 @@ package br.com.castel.billing.web;
 
 import br.com.castel.billing.api.ChargeId;
 import br.com.castel.billing.api.FolioId;
+import br.com.castel.billing.api.PaymentId;
 import br.com.castel.billing.application.FolioService;
-import br.com.castel.billing.domain.PaymentId;
 import br.com.castel.sharedkernel.Money;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
@@ -62,7 +62,7 @@ public class FolioController {
             @PathVariable("folioId") String folioId,
             @RequestHeader(name = IDEMPOTENCY_KEY_HEADER, required = false) String idempotencyKey,
             @Valid @RequestBody PaymentRequest request) {
-        return ReceivedPaymentResponse.from(folios.receivePayment(
+        return ReceivedPaymentResponse.from(folios.registerPayment(
                 FolioId.of(folioId), request.getMethod(), Money.of(request.getAmount()), idempotencyKey));
     }
 

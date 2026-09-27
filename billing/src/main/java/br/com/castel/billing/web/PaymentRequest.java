@@ -1,6 +1,6 @@
 package br.com.castel.billing.web;
 
-import br.com.castel.billing.domain.PaymentMethod;
+import br.com.castel.billing.api.PaymentMethod;
 import jakarta.validation.constraints.NotNull;
 
 /**

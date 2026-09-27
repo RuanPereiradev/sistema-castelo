@@ -65,6 +65,19 @@ public interface FolioFacade {
      */
     ChargeId reverse(FolioId folioId, ChargeId chargeId, String reason);
 
+    /**
+     * Registers money received against a folio, in the transaction of the caller.
+     *
+     * <p>It is the same path the front desk takes at the counter, so every rule of a payment holds
+     * here too: the idempotency key, a method an operator may register by hand, an amount above zero,
+     * never above the balance of a tab's folio, and whatever the cash drawer asks of a cash payment
+     * (task 2.4). A retry with the same key answers the original payment and registers nothing.
+     *
+     * @param idempotencyKey what makes a double click or a retry register the payment once
+     */
+    ReceivedPaymentView receivePayment(
+            FolioId folioId, PaymentMethod method, Money amount, String idempotencyKey);
+
     /** What the folio still owes: the sum of its charges minus the sum of its payments. */
     Money balanceOf(FolioId folioId);
 
