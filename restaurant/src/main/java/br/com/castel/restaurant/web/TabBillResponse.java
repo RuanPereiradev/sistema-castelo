@@ -6,7 +6,6 @@ import br.com.castel.restaurant.domain.TabBill;
 import br.com.castel.sharedkernel.Money;
 import br.com.castel.sharedkernel.Percentage;
 import java.util.List;
-import java.util.Optional;
 
 /**
  * The pre-bill as the waiter reads it: totals, the service charge and its rate, what was paid, the
@@ -87,10 +86,6 @@ public record TabBillResponse(
     /** {@code 0.1000} as {@code "10.00"}. */
     static String percentPoints(Percentage rate) {
         return rate.fraction().movePointRight(2).toPlainString();
-    }
-
-    static String percentPoints(Optional<Percentage> rate) {
-        return rate.map(TabBillResponse::percentPoints).orElse(null);
     }
 
     private static List<String> asStrings(List<Money> amounts) {

@@ -89,6 +89,32 @@ class TabClosingHttpIntegrationTest extends AbstractTabClosingIntegrationTest {
     }
 
     @Test
+    void shouldCloseTheFolioWhenAReopenedTabIsCancelledAndRefuseItWhileMoneyIsOnIt() {
+        String sodaId = createItem("Soda", "6.00", true);
+        String paidTab = openOnTable(createDiningTable("Pago"));
+        String paidLine = order(paidTab, sodaId, 1);
+        send(post(TABS + "/" + paidTab + "/closing", waiterToken, ""), 200);
+        send(pay(paidTab, "PIX", "6.60", "cancel-pix-" + suffix), 201);
+        send(post(TABS + "/" + paidTab + "/reopen", waiterToken, "{\"reason\":\"engano\"}"), 200);
+        send(post(TABS + "/" + paidTab + "/items/" + paidLine + "/cancel", waiterToken, "{\"reason\":\"engano\"}"), 200);
+        String unpaidTab = openOnTable(createDiningTable("Sem pago"));
+        String unpaidLine = order(unpaidTab, sodaId, 1);
+        assertThat(send(get(TABS + "/" + unpaidTab, waiterToken), 200).get("total").asString()).isEqualTo("6.60");
+        send(post(TABS + "/" + unpaidTab + "/closing", waiterToken, ""), 200);
+        send(post(TABS + "/" + unpaidTab + "/reopen", waiterToken, "{\"reason\":\"engano\"}"), 200);
+        send(post(TABS + "/" + unpaidTab + "/items/" + unpaidLine + "/cancel", waiterToken, "{\"reason\":\"engano\"}"), 200);
+
+        JsonNode refused = send(post(TABS + "/" + paidTab + "/cancel", waiterToken, "{\"reason\":\"engano\"}"), 409);
+        JsonNode cancelled = send(post(TABS + "/" + unpaidTab + "/cancel", waiterToken, "{\"reason\":\"engano\"}"), 200);
+
+        assertThat(refused.get("code").asString()).isEqualTo("FOLIO_BALANCE_NOT_ZERO");
+        assertThat(send(get(TABS + "/" + paidTab, waiterToken), 200).get("status").asString()).isEqualTo("OPEN");
+        assertThat(cancelled.get("status").asString()).isEqualTo("CANCELLED");
+        assertThat(folios.findById(FolioId.of(cancelled.get("folioId").asString())).status())
+                .isEqualTo(FolioStatus.CLOSED);
+    }
+
+    @Test
     void shouldRefuseTheKitchenOnTheClosingRoutes() {
         String kitchenToken = accessTokenFor(createUser(Role.KITCHEN));
         String tabId = openOnTable(createDiningTable("Cozinha"));

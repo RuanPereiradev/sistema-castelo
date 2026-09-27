@@ -2,10 +2,11 @@ package br.com.castel.restaurant.web;
 
 import br.com.castel.restaurant.domain.Tab;
 import br.com.castel.restaurant.domain.TabItem;
+import br.com.castel.sharedkernel.Percentage;
 
 /**
  * One active tab on the list the waiter reads: no items, only how many are active, the subtotal and
- * the total frozen when closing started (null while {@code OPEN}, decision D1 of task 3.2).
+ * the total, live while {@code OPEN} and frozen once closing started (decision D20 of task 3.2).
  */
 public record TabSummaryResponse(
         String id,
@@ -20,7 +21,8 @@ public record TabSummaryResponse(
         // ---- closing (task 3.2)
         String total) {
 
-    public static TabSummaryResponse from(Tab tab, String diningTableLabel) {
+    /** @param currentRate the rate of the setting now; used only while no rate is frozen */
+    public static TabSummaryResponse from(Tab tab, String diningTableLabel, Percentage currentRate) {
         return new TabSummaryResponse(
                 tab.id().value().toString(),
                 tab.origin().name(),
@@ -31,6 +33,6 @@ public record TabSummaryResponse(
                 tab.openedAt().toString(),
                 tab.subtotal().asString(),
                 tab.items().stream().filter(TabItem::isActive).count(),
-                TabResponse.frozenTotal(tab));
+                tab.total(currentRate).asString());
     }
 }

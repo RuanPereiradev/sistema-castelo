@@ -1,6 +1,8 @@
 package br.com.castel.restaurant.web;
 
 import br.com.castel.restaurant.domain.Tab;
+import br.com.castel.restaurant.domain.TabBill;
+import br.com.castel.sharedkernel.Percentage;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -11,9 +13,9 @@ import java.util.UUID;
  * <p>{@code diningTableLabel} is read from the table, so the screen does not need a second request.
  * {@code publicToken} is not here: it belongs to the QR code of version 1.1.
  *
- * <p>{@code serviceChargeRate}, {@code serviceCharge} and {@code total} are the figures frozen when
- * closing started, and null while the tab is {@code OPEN} (decision D1 of task 3.2): the live figures
- * of an open tab are in its pre-bill, {@link TabBillResponse}.
+ * <p>{@code serviceChargeRate} (percent points), {@code serviceCharge} and {@code total} are live
+ * while the tab is {@code OPEN}, with the rate of the setting now, and the frozen figures once closing
+ * started (decision D20 of task 3.2).
  */
 public record TabResponse(
         String id,
@@ -42,7 +44,9 @@ public record TabResponse(
         String closedBy,
         String destination) {
 
-    public static TabResponse from(Tab tab, String diningTableLabel) {
+    /** @param currentRate the rate of the setting now; used only while no rate is frozen */
+    public static TabResponse from(Tab tab, String diningTableLabel, Percentage currentRate) {
+        TabBill bill = tab.bill(currentRate);
         return new TabResponse(
                 tab.id().value().toString(),
                 tab.origin().name(),
@@ -58,9 +62,9 @@ public record TabResponse(
                 tab.cancellationReason().orElse(null),
                 tab.items().stream().map(TabItemResponse::from).toList(),
                 tab.serviceChargeApplied(),
-                TabBillResponse.percentPoints(tab.serviceChargeRate()),
-                tab.serviceChargeRate().map(rate -> tab.serviceCharge(rate).asString()).orElse(null),
-                frozenTotal(tab),
+                TabBillResponse.percentPoints(bill.serviceChargeRate()),
+                bill.serviceCharge().asString(),
+                bill.total().asString(),
                 tab.guestCount().orElse(null),
                 tab.folioId().map(id -> id.value().toString()).orElse(null),
                 tab.closingStartedAt().map(Instant::toString).orElse(null),
@@ -68,10 +72,5 @@ public record TabResponse(
                 tab.closedAt().map(Instant::toString).orElse(null),
                 tab.closedBy().map(UUID::toString).orElse(null),
                 tab.destination().map(Enum::name).orElse(null));
-    }
-
-    /** The total with the rate frozen when closing started; null while the tab is {@code OPEN}. */
-    static String frozenTotal(Tab tab) {
-        return tab.serviceChargeRate().map(rate -> tab.total(rate).asString()).orElse(null);
     }
 }

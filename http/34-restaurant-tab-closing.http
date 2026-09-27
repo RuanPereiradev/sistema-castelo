@@ -10,7 +10,8 @@
 ### Valores: pizza 40,00 e refrigerante 6,00 com taxa; couvert 12,00 sem taxa;
 ### pudim 10,00 com taxa. Taxa de 10% calculada uma vez sobre a soma.
 ### Pagamentos em PIX e cartao; o cenario em dinheiro (CASH) entra depois da 2.4.
-### No fim, as comandas abertas sao canceladas e a mesa fica livre.
+### No fim, a segunda comanda e reaberta e cancelada (o folio fecha junto) e a
+### mesa fica livre.
 
 
 ### ------------------------------------------------------------------
@@ -207,10 +208,11 @@ Content-Type: application/json
 }
 
 > {%
-    client.test("comanda aberta com taxa ligada e sem total congelado", function() {
+    client.test("comanda aberta com taxa ligada e total ao vivo", function() {
         client.assert(response.status === 201, "esperado 201, recebido " + response.status);
         client.assert(response.body.serviceChargeApplied === true, "taxa deveria nascer ligada na mesa");
-        client.assert(response.body.total === null, "total congelado deveria ser null em OPEN");
+        client.assert(response.body.total === "0.00", "total ao vivo de comanda vazia " + response.body.total);
+        client.assert(response.body.serviceChargeRate === "10.00", "taxa ao vivo " + response.body.serviceChargeRate);
     });
     client.global.set("tabId", response.body.id);
 %}
@@ -647,10 +649,10 @@ Content-Type: application/json
 }
 
 > {%
-    client.test("reaberta: OPEN, sem congelado, folio mantido", function() {
+    client.test("reaberta: OPEN, total ao vivo, folio mantido", function() {
         client.assert(response.status === 200, "esperado 200, recebido " + response.status);
         client.assert(response.body.status === "OPEN", "status " + response.body.status);
-        client.assert(response.body.serviceChargeRate === null && response.body.total === null, "congelado descartado");
+        client.assert(response.body.total === "68.00", "total ao vivo depois de reabrir " + response.body.total);
         client.assert(response.body.folioId === client.global.get("folioId"), "o folio deveria ser o mesmo");
     });
 %}
@@ -991,17 +993,66 @@ Authorization: Bearer {{kitchenToken}}
 
 
 ### ------------------------------------------------------------------
-### Limpeza: a segunda comanda fica cancelada e a mesa livre
+### Cancelar comanda reaberta: recusa com saldo, fecha o folio sem saldo
 ### ------------------------------------------------------------------
 
 
-### 55. Cancela o couvert da segunda comanda
+### 55. Inicia o fechamento da segunda comanda (couvert 12,00, sem taxa)
+POST {{host}}/api/restaurant/tabs/{{secondTabId}}/closing
+Authorization: Bearer {{waiterToken}}
+
+> {%
+    client.test("segunda comanda em CLOSING com 12,00", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        client.assert(response.body.total === "12.00", "total " + response.body.total);
+    });
+%}
+
+
+### 56. Paga 5,00 em PIX
+POST {{host}}/api/restaurant/tabs/{{secondTabId}}/payments
+Authorization: Bearer {{waiterToken}}
+Idempotency-Key: {{keyPrefix}}-second
+Content-Type: application/json
+
+{
+  "method": "PIX",
+  "amount": "5.00"
+}
+
+> {%
+    client.test("PIX de 5,00 registrado", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+    });
+    client.global.set("secondPaymentId", response.body.paymentId);
+%}
+
+
+### 57. Reabre a segunda comanda
+POST {{host}}/api/restaurant/tabs/{{secondTabId}}/reopen
+Authorization: Bearer {{waiterToken}}
+Content-Type: application/json
+
+{
+  "reason": "aberta na mesa errada"
+}
+
+> {%
+    client.test("reaberta com o folio ligado", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        client.assert(response.body.folioId !== null, "folio deveria continuar ligado");
+    });
+    client.global.set("secondFolioId", response.body.folioId);
+%}
+
+
+### 58. Cancela o couvert da segunda comanda
 POST {{host}}/api/restaurant/tabs/{{secondTabId}}/items/{{secondCouvertItemId}}/cancel
 Authorization: Bearer {{waiterToken}}
 Content-Type: application/json
 
 {
-  "reason": "limpeza do arquivo .http"
+  "reason": "aberta na mesa errada"
 }
 
 > {%
@@ -1011,18 +1062,63 @@ Content-Type: application/json
 %}
 
 
-### 56. Cancela a segunda comanda
+### 59. Cancelar a comanda com 5,00 de credito no folio -> 409 FOLIO_BALANCE_NOT_ZERO
 POST {{host}}/api/restaurant/tabs/{{secondTabId}}/cancel
 Authorization: Bearer {{waiterToken}}
 Content-Type: application/json
 
 {
-  "reason": "limpeza do arquivo .http"
+  "reason": "aberta na mesa errada"
 }
 
 > {%
-    client.test("segunda comanda cancelada", function() {
+    client.test("cancelar com saldo no folio: 409 FOLIO_BALANCE_NOT_ZERO", function() {
+        client.assert(response.status === 409, "esperado 409, recebido " + response.status);
+        client.assert(response.body.code === "FOLIO_BALANCE_NOT_ZERO", "code " + response.body.code);
+    });
+%}
+
+
+### 60. Admin estorna o PIX no folio (rota da 1.3)
+POST {{host}}/api/billing/folios/{{secondFolioId}}/payments/{{secondPaymentId}}/refund
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "reason": "devolvido ao cliente"
+}
+
+> {%
+    client.test("pagamento estornado, saldo zero", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+    });
+%}
+
+
+### 61. Cancela a comanda reaberta: o folio fecha junto
+POST {{host}}/api/restaurant/tabs/{{secondTabId}}/cancel
+Authorization: Bearer {{waiterToken}}
+Content-Type: application/json
+
+{
+  "reason": "aberta na mesa errada"
+}
+
+> {%
+    client.test("comanda reaberta cancelada", function() {
         client.assert(response.status === 200, "esperado 200, recebido " + response.status);
         client.assert(response.body.status === "CANCELLED", "status " + response.body.status);
+    });
+%}
+
+
+### 62. O folio da comanda cancelada esta fechado
+GET {{host}}/api/billing/folios/{{secondFolioId}}
+Authorization: Bearer {{adminToken}}
+
+> {%
+    client.test("folio fechado junto com o cancelamento", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        client.assert(response.body.status === "CLOSED", "status " + response.body.status);
     });
 %}

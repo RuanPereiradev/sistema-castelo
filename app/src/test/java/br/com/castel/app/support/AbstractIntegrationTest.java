@@ -32,6 +32,9 @@ public abstract class AbstractIntegrationTest {
     /** Whether a cash payment needs an open cash drawer session (task 2.4); seeded off, as the V8 seeds it. */
     protected static final String CASH_DRAWER_REQUIRED_SETTING = "billing.cash-drawer.required";
 
+    /** Seeded by V9 for the properties that exist when it runs (decision G3 of task 3.2). */
+    protected static final String SERVICE_CHARGE_PERCENT_SETTING = "restaurant.service-charge-percent";
+
     @ServiceConnection
     static final PostgreSQLContainer<?> POSTGRES =
             new PostgreSQLContainer<>(DockerImageName.parse("postgres:16"));
@@ -75,6 +78,14 @@ public abstract class AbstractIntegrationTest {
             statement.setObject(1, UUID.randomUUID());
             statement.setObject(2, PROPERTY_ID);
             statement.setString(3, CASH_DRAWER_REQUIRED_SETTING);
+            statement.executeUpdate();
+        }
+        try (PreparedStatement statement = connection.prepareStatement(
+                "insert into setting (id, property_id, setting_key, setting_value, value_type) "
+                        + "values (?, ?, ?, '10.00', 'DECIMAL') on conflict (property_id, setting_key) do nothing")) {
+            statement.setObject(1, UUID.randomUUID());
+            statement.setObject(2, PROPERTY_ID);
+            statement.setString(3, SERVICE_CHARGE_PERCENT_SETTING);
             statement.executeUpdate();
         }
     }

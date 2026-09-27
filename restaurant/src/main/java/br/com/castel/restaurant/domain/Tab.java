@@ -381,15 +381,14 @@ public class Tab extends AuditedEntity {
      * @throws TabNotOpenException if the tab is not {@code OPEN}
      * @throws TabHasActiveItemsException if any item on it is not cancelled
      * @throws InvalidCancellationReasonException if the reason is missing, blank or past 500 characters
-     * @throws IllegalStateException if the tab was reopened and has a folio: that tab is cancelled by
-     *     {@link #cancel(String, TabBilling, UUID, Instant)}, which closes the folio too (decision D2
-     *     of task 3.2)
+     * <p>For a tab without a folio. The routes cancel through
+     * {@link #cancel(String, TabBilling, UUID, Instant)}, which also closes the folio of a tab
+     * reopened after its closing started (invariant 17 of task 3.2).
      */
     public void cancel(String reason, UUID cancelledBy, Instant cancelledAt) {
         Objects.requireNonNull(cancelledBy, "cancelledBy");
         Objects.requireNonNull(cancelledAt, "cancelledAt");
         requireStatusAccepting(status.acceptsCancellation(), "cannot be cancelled");
-        requireNoFolio();
         if (items.stream().anyMatch(TabItem::isActive)) {
             throw new TabHasActiveItemsException("Tab " + id.value() + " still has active items");
         }
@@ -817,16 +816,6 @@ public class Tab extends AuditedEntity {
     private void requireClosingStep(boolean accepted, String refusal) {
         if (!accepted) {
             throw new TabNotClosingException("Tab " + id.value() + " is " + status + " and " + refusal);
-        }
-    }
-
-    /**
-     * A tab with a folio was reopened after its closing started; cancelling it without closing the
-     * folio would leave an open account behind (decision D2 of task 3.2).
-     */
-    private void requireNoFolio() {
-        if (folioId != null) {
-            throw new IllegalStateException("Tab " + id.value() + " has a folio; cancel it with its TabBilling");
         }
     }
 

@@ -3,6 +3,7 @@ package br.com.castel.restaurant.web;
 import br.com.castel.restaurant.api.MenuItemId;
 import br.com.castel.restaurant.application.AddTabItemCommand;
 import br.com.castel.restaurant.application.DiningTableService;
+import br.com.castel.restaurant.application.TabClosingService;
 import br.com.castel.restaurant.application.TabService;
 import br.com.castel.restaurant.domain.DiningTable;
 import br.com.castel.restaurant.domain.DiningTableId;
@@ -11,6 +12,7 @@ import br.com.castel.restaurant.domain.ModifierId;
 import br.com.castel.restaurant.domain.Tab;
 import br.com.castel.restaurant.domain.TabId;
 import br.com.castel.restaurant.domain.TabItemId;
+import br.com.castel.sharedkernel.Percentage;
 import jakarta.validation.Valid;
 import java.util.List;
 import java.util.Map;
@@ -44,10 +46,12 @@ public class TabController {
 
     private final TabService tabs;
     private final DiningTableService diningTables;
+    private final TabClosingService closing;
 
-    public TabController(TabService tabs, DiningTableService diningTables) {
+    public TabController(TabService tabs, DiningTableService diningTables, TabClosingService closing) {
         this.tabs = tabs;
         this.diningTables = diningTables;
+        this.closing = closing;
     }
 
     @PostMapping
@@ -66,10 +70,12 @@ public class TabController {
             @RequestParam(name = "cardNumber", required = false) Integer cardNumber) {
         List<Tab> active = tabs.listActive(
                 diningTableId == null ? null : DiningTableId.of(diningTableId), cardNumber);
+        Percentage currentRate = closing.currentServiceChargeRate();
         Map<DiningTableId, String> labels = diningTables.list(true).stream()
                 .collect(Collectors.toMap(DiningTable::id, DiningTable::label, (first, second) -> first));
         return active.stream()
-                .map(tab -> TabSummaryResponse.from(tab, tab.diningTableId().map(labels::get).orElse(null)))
+                .map(tab -> TabSummaryResponse.from(
+                        tab, tab.diningTableId().map(labels::get).orElse(null), currentRate))
                 .toList();
     }
 
@@ -101,7 +107,7 @@ public class TabController {
         String diningTableLabel = tab.diningTableId()
                 .map(id -> diningTables.find(id).label())
                 .orElse(null);
-        return TabResponse.from(tab, diningTableLabel);
+        return TabResponse.from(tab, diningTableLabel, closing.currentServiceChargeRate());
     }
 
     private static AddTabItemCommand commandFrom(AddTabItemRequest request) {

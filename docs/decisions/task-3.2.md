@@ -27,8 +27,8 @@ do DEV nesta task, pendentes de revisão.
 | | |
 |---|---|
 | Branch | `task/3.2-tab-closing` (base `origin/task/billing-api-payment`) |
-| Rodada atual | 0 — implementação entregue; aguarda testes de unidade (agente de teste) e revisão do Ruan |
-| Build | `./mvnw clean install` **verde** — 1404 testes, 0 falhas, ArchUnit incluído. `.http` 34 rodado duas vezes seguidas em banco isolado (57/57) e o 33 sem regressão (81/81) |
+| Rodada atual | 1 — D20/D21 aplicadas; aguarda testes de unidade (agente de teste) e revisão do Ruan. Conflito esperado com a 3.5 no construtor do `TabService` (resolvido pelo orquestrador no rebase) |
+| Build | `./mvnw -Dmaven.repo.local=<isolado> clean install` **verde** — 1405 testes, 0 falhas, ArchUnit incluído. `.http` 34 rodado duas vezes seguidas em banco isolado (63/63) e o 33 sem regressão (81/81) |
 | Testes | 7 de integração (3 de fluxo, 4 de concorrência), 441 linhas, para ~1.700 de produção (com migration, javadoc e o `.http` fora da conta). Os de unidade do domínio vêm do agente de teste e completam o orçamento |
 
 ---
@@ -58,8 +58,8 @@ do DEV nesta task, pendentes de revisão.
 | F14 | 0 | Gorjeta além da taxa fora da v1 | implementado (fora) |
 | F15 | 0 | Desconto = `AdjustmentCharge` do `ADMIN` na rota da 1.3; a taxa incide antes do desconto | implementado (fora) |
 | C2 | 0 | (P16) A 3.2 herda a regra de `CASH` do `FolioService.receivePayment` da 2.4; não decide nada sobre caixa | implementado |
-| D1 | 0 | `TabResponse` e a lista trazem `serviceChargeRate`, `serviceCharge` e `total` **congelados**: `null` em `OPEN`. O número vivo em `OPEN` sai na pré-conta (`TabBillResponse`), que as rotas de taxa, grupo e pessoas devolvem. Motivo: o `TabController` (fora do escopo, disputado com a 3.5) monta o `TabResponse` sem o percentual atual, e a leitura da comanda não passa a depender do `Setting` | implementado (DEV, aguarda Ruan) |
-| D2 | 0 | **Cancelar comanda reaberta** (com folio): `Tab.cancel(reason, TabBilling, by, at)` e `TabClosingService.cancel` implementam a invariante 17, mas a rota `POST /tabs/{id}/cancel` é do `TabService`/`TabController`, que esta task não pode editar. Até a ligação, o `cancel(reason, by, at)` da 2.2 **recusa** comanda com folio (`IllegalStateException`, 500) em vez de deixar um folio aberto órfão. A ligação é uma linha no `TabService.cancel` (ver pontos em aberto) | pendente (DEV, aguarda Ruan) |
+| D1 | 0 | ~~`TabResponse` e a lista trazem `serviceChargeRate`, `serviceCharge` e `total` **congelados**: `null` em `OPEN`. O número vivo em `OPEN` sai na pré-conta (`TabBillResponse`), que as rotas de taxa, grupo e pessoas devolvem. Motivo: o `TabController` (fora do escopo, disputado com a 3.5) monta o `TabResponse` sem o percentual atual, e a leitura da comanda não passa a depender do `Setting`~~ | **revertida pela D20** |
+| D2 | 0 | ~~**Cancelar comanda reaberta** (com folio): `Tab.cancel(reason, TabBilling, by, at)` e `TabClosingService.cancel` implementam a invariante 17, mas a rota `POST /tabs/{id}/cancel` é do `TabService`/`TabController`, que esta task não pode editar. Até a ligação, o `cancel(reason, by, at)` da 2.2 **recusa** comanda com folio (`IllegalStateException`, 500) em vez de deixar um folio aberto órfão. A ligação é uma linha no `TabService.cancel`~~ | **revertida pela D21** |
 | D3 | 0 | `reopen(reason, billing)` sem autor e instante: a V9 não tem colunas de reabertura, e o rastro é o estorno no folio (motivo, `created_by`, instante). `reopen` zera `tab_charge_id`, o percentual congelado e `closing_started_*` | implementado (DEV, aguarda Ruan) |
 | D4 | 0 | "Saldo zero" no `close` e no `cancel` é decidido pelo `billing` pela porta (`closeFolio` recusa com `FOLIO_BALANCE_NOT_ZERO`), sem código duplicado no restaurante. O fake da porta no teste de unidade precisa reproduzir essa recusa | implementado (DEV, aguarda Ruan) |
 | D5 | 0 | A porta `TabBilling` ganha `receivePayment` e `paidOn` além dos cinco métodos do rascunho: o pagamento passa pelo agregado (que checa `acceptsPayment`) e a pré-conta mostra o pago | implementado (DEV, aguarda Ruan) |
@@ -79,6 +79,11 @@ do DEV nesta task, pendentes de revisão.
 | D18 | 0 | O grupo da pré-conta é o record aninhado `TabBill.SplitGroup`, e não o `SplitGroupBill` do rascunho: evita um nome novo fora do glossário (`TabBill` + `splitGroup` já aprovados) | implementado (DEV, aguarda Ruan) |
 | D19 | 0 | `TabBilling.charge` recebe também o `TabId`, para o lançamento levar `ChargeSource.tab(id)` sem o adaptador ler o dono do folio (que na 3.3 será a reserva) | implementado (DEV, aguarda Ruan) |
 
+| D20 | 1 | **Revê a D1** (orquestrador do lote 2, decisão de fronteira de arquivo): o front precisa do total ao vivo. O `TabController` passa o percentual atual (`TabClosingService.currentServiceChargeRate()`) ao `TabResponse` e à lista: `serviceChargeRate`, `serviceCharge` e `total` vêm ao vivo em `OPEN` e congelados depois. Toda leitura de comanda passa a ler o `Setting` | implementado |
+| D21 | 1 | **Revê a D2** (orquestrador do lote 2): o `TabService` recebe `TabBilling` no construtor e o `cancel` chama `tab.cancel(reason, tabBilling, by, at)`. Comanda reaberta cancelada fecha o folio junto, ou recusa com `FOLIO_BALANCE_NOT_ZERO`. O `IllegalStateException` do `cancel` antigo saiu: nenhuma rota o alcança mais, e o método antigo fica para comanda sem folio (usado pelos testes de unidade da 2.2). O `TabClosingService.cancel` saiu, por ser duplicado | implementado |
+| D22 | 1 | O suporte de teste (`AbstractIntegrationTest`) grava `restaurant.service_charge_percent` junto com a propriedade única, como a V9 faz com as propriedades existentes e o `DevUserSeeder` no `dev`: com a D20, toda leitura de comanda precisa da chave, inclusive nos testes da 2.2 | implementado |
+| D23 | 1 | Maven rodado com repositório local isolado (fora do git), porque o `~/.m2` é compartilhado com as worktrees da 2.4 e da 3.5 | implementado |
+
 Valores de status: `pendente` · `implementado` · `revertida pela #n`
 
 ---
@@ -93,7 +98,7 @@ Valores de status: `pendente` · `implementado` · `revertida pela #n`
 - [x] Taxa de serviço: comanda e item, calculada sobre a soma, congelada no `startClosing` (F1–F3)
 - [x] Divisão igual e por item, rateio da taxa, `guestCount` (F4, F5, F8)
 - [x] `startClosing`, pagamento, `reopen`, `close` (F9–F12)
-- [ ] Cancelar comanda com folio (invariante 17): domínio e `TabClosingService.cancel` prontos; **falta ligar a rota** (D2, ponto em aberto 1)
+- [x] Cancelar comanda com folio (invariante 17), pela rota da 2.2 (D21)
 - [x] Porta `TabBilling` e adaptador sobre o `FolioFacade`
 - [x] `TabClosingService` e `TabClosingController`, DTOs
 - [x] `http/34-restaurant-tab-closing.http` e linha no `http/README.md`
@@ -134,5 +139,3 @@ Especificado em `docs/task-3.2-tab-closing.md`, seções 5 e 6.
 
 | # | Pergunta | Desde a rodada |
 |---|---|---|
-| 1 | **Ligar a rota de cancelar comanda à invariante 17 (D2).** Precisa de uma linha no `TabService.cancel` (`tab.cancel(reason, tabBilling, by, at)`, com `TabBilling` no construtor) — arquivo que esta task foi proibida de editar para não conflitar com a 3.5. Quem aplica: a 3.2 depois do merge da 3.5, ou a 3.5 no rebase? | 0 |
-| 2 | `TabResponse` com `total` congelado e `null` em `OPEN` (D1) serve ao front, ou o `TabController` deve passar o percentual atual? | 0 |

@@ -126,6 +126,6 @@ public class TabClosingController {
         String diningTableLabel = tab.diningTableId()
                 .map(id -> diningTables.find(id).label())
                 .orElse(null);
-        return TabResponse.from(tab, diningTableLabel);
+        return TabResponse.from(tab, diningTableLabel, closing.currentServiceChargeRate());
     }
 }

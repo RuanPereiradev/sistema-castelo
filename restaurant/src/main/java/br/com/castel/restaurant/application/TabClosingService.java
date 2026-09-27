@@ -26,7 +26,7 @@ import org.springframework.transaction.annotation.Transactional;
  * {@link TabService}, so the kitchen display of task 3.5 and this task do not compete for one file.
  *
  * <p>Locks, always the tab before the folio: a change of the tab's status ({@code startClosing},
- * {@code reopen}, {@code close}, {@code cancel}) loads it {@code FOR UPDATE}, waiting for every
+ * {@code reopen}, {@code close}) loads it {@code FOR UPDATE}, waiting for every
  * ordering, payment and change of the split in progress; those load it {@code FOR KEY SHARE}, so two
  * waiters receiving at once do not wait for each other on the tab and queue on the lock of the folio.
  *
@@ -144,25 +144,22 @@ public class TabClosingService {
         return tabs.save(tab);
     }
 
-    /**
-     * Cancels a tab, closing its folio when it was reopened (invariant 17). Not routed yet: the route
-     * of the cancellation belongs to {@link TabService} (decision D2).
-     *
-     * @throws TabNotFoundException if the tab does not exist
-     */
-    @Transactional
-    public Tab cancel(TabId tabId, String reason) {
-        Tab tab = loadExclusive(tabId);
-        tab.cancel(reason, billing, auditorAware.currentAuditorId(), clock.instant());
-        return tabs.save(tab);
-    }
-
     private TabClosingView view(Tab tab) {
         return new TabClosingView(
                 tab,
                 tab.bill(currentRate()),
                 tab.folioId().map(billing::paidOn),
                 tab.folioId().map(billing::balanceOf));
+    }
+
+    /**
+     * The rate of the service charge in the setting now, for the responses that show an open tab's
+     * live total (decision D20).
+     *
+     * @throws br.com.castel.sharedkernel.SettingNotFoundException if the setting is not configured
+     */
+    public Percentage currentServiceChargeRate() {
+        return currentRate();
     }
 
     private Percentage currentRate() {
