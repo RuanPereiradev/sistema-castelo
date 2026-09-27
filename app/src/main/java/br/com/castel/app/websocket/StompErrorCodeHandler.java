@@ -17,7 +17,9 @@ import org.springframework.security.core.AuthenticationException;
  * <ul>
  *   <li>a refused token: its own code ({@code TOKEN_EXPIRED}, {@code INVALID_TOKEN},
  *       {@code SESSION_SUPERSEDED}, {@code USER_INACTIVE})
- *   <li>no token on {@code CONNECT}: {@code AUTHENTICATION_REQUIRED}
+ *   <li>no token on {@code CONNECT}, or a frame the protocol refuses on a session that is not
+ *       connected (a frame before {@code CONNECT}, a second {@code CONNECT}), which Spring raises as
+ *       {@link IllegalStateException}: {@code AUTHENTICATION_REQUIRED}
  *   <li>a subscription or a {@code SEND} the user may not make: {@code ACCESS_DENIED}
  *   <li>a frame that does not parse: {@code MALFORMED_REQUEST}; anything else: {@code INTERNAL_ERROR}
  * </ul>
@@ -42,7 +44,7 @@ class StompErrorCodeHandler extends StompSubProtocolErrorHandler {
             if (cause instanceof AccessDeniedException) {
                 return ApiErrorCode.ACCESS_DENIED.code();
             }
-            if (cause instanceof AuthenticationException) {
+            if (cause instanceof AuthenticationException || cause instanceof IllegalStateException) {
                 return ApiErrorCode.AUTHENTICATION_REQUIRED.code();
             }
             if (cause instanceof StompConversionException) {

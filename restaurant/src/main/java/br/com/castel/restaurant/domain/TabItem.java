@@ -295,12 +295,10 @@ public class TabItem extends AuditedEntity {
             throw new InvalidTabItemTransitionException(
                     "Tab item " + id.value() + " is " + status + " and has no step to undo");
         }
-        if (status == TabItemStatus.READY) {
-            this.readyAt = null;
-            this.status = preparationStartedAt == null ? TabItemStatus.PENDING : TabItemStatus.IN_PREPARATION;
-        } else {
+        this.status = status.undoneTo(preparationStartedAt != null);
+        this.readyAt = null;
+        if (!status.carriesPreparationStart()) {
             this.preparationStartedAt = null;
-            this.status = TabItemStatus.PENDING;
         }
     }
 

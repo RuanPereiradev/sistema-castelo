@@ -14,7 +14,8 @@ public interface AccessTokenAuthenticator {
 
     /**
      * The authenticated user, as an {@link Authentication} whose principal is an
-     * {@link AuthenticatedUser} and whose authorities are the {@code ROLE_*} of its roles.
+     * {@link AuthenticatedUser}, whose authorities are the {@code ROLE_*} of its roles and whose
+     * {@link Authentication#getName() name} is the id of the user.
      *
      * @param accessToken the compact token, without the {@code Bearer } prefix
      * @throws br.com.castel.sharedkernel.DomainException with code {@code TOKEN_EXPIRED},

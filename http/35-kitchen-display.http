@@ -306,7 +306,19 @@ Authorization: Bearer {{kitchenToken}}
 %}
 
 
-### 16. Cozinha inicia o preparo da pizza
+### 16. Negativo: desfazer item PENDING (a pizza ainda nao comecou)
+POST {{host}}/api/kitchen/items/{{pizzaItemId}}/undo
+Authorization: Bearer {{kitchenToken}}
+
+> {%
+    client.test("pendente nao desfaz", function() {
+        client.assert(response.status === 409, "esperado 409, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_TAB_ITEM_TRANSITION", "code INVALID_TAB_ITEM_TRANSITION, recebido " + response.body.code);
+    });
+%}
+
+
+### 17. Cozinha inicia o preparo da pizza
 POST {{host}}/api/kitchen/items/{{pizzaItemId}}/start
 Authorization: Bearer {{kitchenToken}}
 
@@ -320,7 +332,7 @@ Authorization: Bearer {{kitchenToken}}
 %}
 
 
-### 17. Cozinha marca a pizza pronta
+### 18. Cozinha marca a pizza pronta
 POST {{host}}/api/kitchen/items/{{pizzaItemId}}/ready
 Authorization: Bearer {{kitchenToken}}
 
@@ -332,7 +344,7 @@ Authorization: Bearer {{kitchenToken}}
 %}
 
 
-### 18. Cozinha desfaz o pronto (toque errado)
+### 19. Cozinha desfaz o pronto (toque errado)
 POST {{host}}/api/kitchen/items/{{pizzaItemId}}/undo
 Authorization: Bearer {{kitchenToken}}
 
@@ -344,7 +356,7 @@ Authorization: Bearer {{kitchenToken}}
 %}
 
 
-### 19. Cozinha marca a pizza pronta de novo
+### 20. Cozinha marca a pizza pronta de novo
 POST {{host}}/api/kitchen/items/{{pizzaItemId}}/ready
 Authorization: Bearer {{kitchenToken}}
 
@@ -356,7 +368,7 @@ Authorization: Bearer {{kitchenToken}}
 %}
 
 
-### 20. A pizza pronta continua na fila ate a entrega
+### 21. A pizza pronta continua na fila ate a entrega
 GET {{host}}/api/kitchen/queue?station=PIZZA
 Authorization: Bearer {{kitchenToken}}
 
@@ -369,7 +381,7 @@ Authorization: Bearer {{kitchenToken}}
 %}
 
 
-### 21. Garcom entrega a pizza
+### 22. Garcom entrega a pizza
 POST {{host}}/api/restaurant/tabs/{{tableTabId}}/items/{{pizzaItemId}}/deliver
 Authorization: Bearer {{waiterToken}}
 
@@ -382,7 +394,7 @@ Authorization: Bearer {{waiterToken}}
 %}
 
 
-### 22. A pizza entregue saiu da fila
+### 23. A pizza entregue saiu da fila
 GET {{host}}/api/kitchen/queue?station=PIZZA
 Authorization: Bearer {{kitchenToken}}
 
@@ -395,7 +407,7 @@ Authorization: Bearer {{kitchenToken}}
 %}
 
 
-### 23. Bar marca o refrigerante pronto direto, sem preparo
+### 24. Bar marca o refrigerante pronto direto, sem preparo
 POST {{host}}/api/kitchen/items/{{sodaItemId}}/ready
 Authorization: Bearer {{kitchenToken}}
 
@@ -412,7 +424,7 @@ Authorization: Bearer {{kitchenToken}}
 ### ------------------------------------------------------------------
 
 
-### 24. Iniciar preparo de item ja pronto
+### 25. Iniciar preparo de item ja pronto
 POST {{host}}/api/kitchen/items/{{sodaItemId}}/start
 Authorization: Bearer {{kitchenToken}}
 
@@ -424,7 +436,7 @@ Authorization: Bearer {{kitchenToken}}
 %}
 
 
-### 25. Desfazer item entregue (DELIVERED nunca volta)
+### 26. Desfazer item entregue (DELIVERED nunca volta)
 POST {{host}}/api/kitchen/items/{{pizzaItemId}}/undo
 Authorization: Bearer {{kitchenToken}}
 
@@ -436,7 +448,7 @@ Authorization: Bearer {{kitchenToken}}
 %}
 
 
-### 26. Entregar de novo
+### 27. Entregar de novo
 POST {{host}}/api/restaurant/tabs/{{tableTabId}}/items/{{pizzaItemId}}/deliver
 Authorization: Bearer {{waiterToken}}
 
@@ -448,7 +460,7 @@ Authorization: Bearer {{waiterToken}}
 %}
 
 
-### 27. Garcom cancela o refrigerante pronto
+### 28. Garcom cancela o refrigerante pronto
 POST {{host}}/api/restaurant/tabs/{{tableTabId}}/items/{{sodaItemId}}/cancel
 Authorization: Bearer {{waiterToken}}
 Content-Type: application/json
@@ -464,7 +476,7 @@ Content-Type: application/json
 %}
 
 
-### 28. Transicao em item cancelado
+### 29. Transicao em item cancelado
 POST {{host}}/api/kitchen/items/{{sodaItemId}}/ready
 Authorization: Bearer {{kitchenToken}}
 
@@ -476,7 +488,7 @@ Authorization: Bearer {{kitchenToken}}
 %}
 
 
-### 29. Item inexistente
+### 30. Item inexistente
 POST {{host}}/api/kitchen/items/0192f5a0-0000-7000-8000-000000000000/start
 Authorization: Bearer {{kitchenToken}}
 
@@ -488,7 +500,7 @@ Authorization: Bearer {{kitchenToken}}
 %}
 
 
-### 30. Setor desconhecido
+### 31. Setor desconhecido
 GET {{host}}/api/kitchen/queue?station=GRILL
 Authorization: Bearer {{kitchenToken}}
 
@@ -500,7 +512,7 @@ Authorization: Bearer {{kitchenToken}}
 %}
 
 
-### 31. Fila sem setor
+### 32. Fila sem setor
 GET {{host}}/api/kitchen/queue
 Authorization: Bearer {{kitchenToken}}
 
@@ -512,7 +524,7 @@ Authorization: Bearer {{kitchenToken}}
 %}
 
 
-### 32. Fila sem token
+### 33. Fila sem token
 GET {{host}}/api/kitchen/queue?station=PIZZA
 
 > {%
@@ -523,7 +535,7 @@ GET {{host}}/api/kitchen/queue?station=PIZZA
 %}
 
 
-### 33. Garcom na fila da cozinha
+### 34. Garcom na fila da cozinha
 GET {{host}}/api/kitchen/queue?station=PIZZA
 Authorization: Bearer {{waiterToken}}
 
@@ -535,7 +547,7 @@ Authorization: Bearer {{waiterToken}}
 %}
 
 
-### 34. Cozinha tentando entregar
+### 35. Cozinha tentando entregar
 POST {{host}}/api/restaurant/tabs/{{tableTabId}}/items/{{pizzaItemId}}/deliver
 Authorization: Bearer {{kitchenToken}}
 
@@ -547,7 +559,7 @@ Authorization: Bearer {{kitchenToken}}
 %}
 
 
-### 35. Entrega em comanda inexistente
+### 36. Entrega em comanda inexistente
 POST {{host}}/api/restaurant/tabs/0192f5a0-0000-7000-8000-000000000000/items/{{pizzaItemId}}/deliver
 Authorization: Bearer {{waiterToken}}
 
@@ -564,7 +576,7 @@ Authorization: Bearer {{waiterToken}}
 ### ------------------------------------------------------------------
 
 
-### 36. Cancela a pizza entregue
+### 37. Cancela a pizza entregue
 POST {{host}}/api/restaurant/tabs/{{tableTabId}}/items/{{pizzaItemId}}/cancel
 Authorization: Bearer {{waiterToken}}
 Content-Type: application/json
@@ -580,7 +592,7 @@ Content-Type: application/json
 %}
 
 
-### 37. Cancela a comanda da mesa
+### 38. Cancela a comanda da mesa
 POST {{host}}/api/restaurant/tabs/{{tableTabId}}/cancel
 Authorization: Bearer {{waiterToken}}
 Content-Type: application/json
@@ -596,7 +608,7 @@ Content-Type: application/json
 %}
 
 
-### 38. Cancela o prato por peso
+### 39. Cancela o prato por peso
 POST {{host}}/api/restaurant/tabs/{{cardTabId}}/items/{{plateItemId}}/cancel
 Authorization: Bearer {{waiterToken}}
 Content-Type: application/json
@@ -612,7 +624,7 @@ Content-Type: application/json
 %}
 
 
-### 39. Cancela a comanda do cartao
+### 40. Cancela a comanda do cartao
 POST {{host}}/api/restaurant/tabs/{{cardTabId}}/cancel
 Authorization: Bearer {{waiterToken}}
 Content-Type: application/json

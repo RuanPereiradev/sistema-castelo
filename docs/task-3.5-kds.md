@@ -150,6 +150,8 @@ public boolean acceptsPreparationStart();
 public boolean acceptsReady();
 public boolean acceptsDelivery();
 public boolean acceptsUndo();
+public TabItemStatus undoneTo(boolean preparationStarted); // só quando acceptsUndo(); READY → IN_PREPARATION ou PENDING
+public boolean carriesPreparationStart();                  // tudo menos PENDING
 
 // restaurant.domain.Tab — cada uma devolve o evento da transição
 public TabItemStatusChanged startItemPreparation(TabItemId itemId, Instant at);
@@ -188,7 +190,6 @@ record KitchenQueueView(PrepStation station, Instant serverTime,
                         int warningAfterMinutes, int lateAfterMinutes, List<KitchenTicket> tickets)
 class KitchenDisplayService {
     KitchenQueueView queue(PrepStation station);
-    Optional<KitchenTicket> ticket(TabItemId itemId);
     KitchenTicket startPreparation(TabItemId itemId);
     KitchenTicket markReady(TabItemId itemId);
     KitchenTicket undo(TabItemId itemId);
@@ -216,12 +217,16 @@ cancelado).
   `TabItemStatusChanged` que o agregado devolve. Item por peso também gera
   `TabItemOrdered`; o ouvinte o descarta porque não está na fila.
 - **Ouvinte:** `KitchenDisplayBroadcaster` (`restaurant.web`, adaptador de saída
-  como um controller), `@TransactionalEventListener(phase = AFTER_COMMIT)` com
-  transação nova só de leitura (`REQUIRES_NEW`): relê o ticket e envia pelo
-  `SimpMessageSendingOperations`.
-- **Consequências do `AFTER_COMMIT`:** lançamento recusado ou transação desfeita
-  não empurra nada. Falha no envio não desfaz nada nem vira erro na resposta HTTP:
-  fica em log, e a tela se corrige na próxima reconexão (K13).
+  como um controller), `@TransactionalEventListener(phase = BEFORE_COMMIT)`: lê o
+  ticket pela porta `KitchenQueue` **dentro** da transação, na conexão que ela já
+  tem, e registra um `afterCommit` que só envia pelo `SimpMessageSendingOperations`.
+  Nada depois do commit toca o banco: ler ali pediria uma segunda conexão ao pool
+  antes de a primeira voltar, e lançamentos simultâneos acima do tamanho do pool
+  travariam até o timeout (review, rodada 1). Os `afterCommit` rodam na ordem dos
+  commits, o que preserva a ordem das mensagens; nada de `@Async`.
+- **Consequências:** lançamento recusado ou transação desfeita não chega ao
+  `afterCommit` e não empurra nada. Falha na leitura ou no envio fica em log e não
+  vira erro na resposta; a tela se corrige na próxima reconexão (K13).
 
 **Destinos**
 
@@ -280,9 +285,12 @@ O mesmo formato na fila REST, na resposta das transições e na mensagem STOMP
   autenticação é no CONNECT.
 - **CONNECT:** cabeçalho nativo `Authorization: Bearer <access>`. Um
   `ChannelInterceptor` do `app` chama `AccessTokenAuthenticator` e grava o usuário
-  na sessão. Falha: frame `ERROR` com `message` igual ao código —
-  `AUTHENTICATION_REQUIRED` (sem cabeçalho), `TOKEN_EXPIRED`, `INVALID_TOKEN`,
-  `SESSION_SUPERSEDED`, `USER_INACTIVE` — e a sessão fecha.
+  na sessão; o nome do principal é o id do usuário. O comando `STOMP`, sinônimo de
+  `CONNECT`, passa pelo mesmo caminho. Falha: frame `ERROR` com `message` igual ao
+  código — `AUTHENTICATION_REQUIRED` (sem cabeçalho, ou frame que o protocolo
+  recusa numa sessão não conectada, como frame antes do `CONNECT` ou `CONNECT`
+  duplicado), `TOKEN_EXPIRED`, `INVALID_TOKEN`, `SESSION_SUPERSEDED`,
+  `USER_INACTIVE` — e a sessão fecha.
 - **Autorização:** manual, sem `@EnableWebSocketSecurity` (o CSRF obrigatório no
   CONNECT não faz sentido com bearer): interceptor JWT →
   `SecurityContextChannelInterceptor` → `AuthorizationChannelInterceptor`, com:
@@ -294,6 +302,9 @@ O mesmo formato na fila REST, na resposta das transições e na mensagem STOMP
   sessão só recebe; toda ação passa pelo REST, que revalida o token. Na reconexão o
   cliente usa o token renovado.
 - **Sessão única (0.4 #3):** um usuário `KITCHEN` por tela.
+- **Log:** não ligar `DEBUG` do `StompSubProtocolHandler` (nem de
+  `org.springframework.web.socket`) em produção: o frame `CONNECT` sai no log com o
+  cabeçalho `Authorization`, isto é, com o token.
 
 ---
 
@@ -396,6 +407,9 @@ devolvido com `from` e `to` corretos.
 - Concorrência: um cancelamento e quatro "pronto" simultâneos no mesmo item:
   nenhum 500, estado final `CANCELLED` com um autor só.
 - WebSocket (`WebSocketStompClient` real): CONNECT sem token e com token expirado
-  recebem `ERROR` com o código; `WAITER` assinando `/topic/kitchen/PIZZA` recebe
-  `ACCESS_DENIED`; `ORDERED` só no setor certo; `CANCELLED`; lançamento recusado
-  não gera mensagem.
+  recebem `ERROR` com o código; handshake com query string recebe 400; `WAITER`
+  assinando `/topic/kitchen/PIZZA`, `KITCHEN` assinando
+  `/topic/restaurant/ready-items` e `SEND` do cliente recebem `ACCESS_DENIED`;
+  `ORDERED` só no setor certo; `CANCELLED`; lançamento recusado não gera mensagem.
+- Pool pequeno: com `maximum-pool-size=2`, seis lançamentos simultâneos respondem
+  201 e as seis mensagens chegam.

@@ -13,7 +13,6 @@ import br.com.castel.sharedkernel.Settings;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.Locale;
-import java.util.Optional;
 import java.util.function.BiFunction;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
@@ -70,12 +69,6 @@ public class KitchenDisplayService {
                 settings.asInteger(delayLimitKey(station, WARNING_KEY_SUFFIX)),
                 settings.asInteger(delayLimitKey(station, LATE_KEY_SUFFIX)),
                 kitchenQueue.ticketsOf(currentProperty.id(), station));
-    }
-
-    /** The ticket of one item, whatever its status. */
-    @Transactional(readOnly = true)
-    public Optional<KitchenTicket> ticket(TabItemId itemId) {
-        return kitchenQueue.ticket(itemId);
     }
 
     /** @throws TabItemNotFoundException if no tab holds the item */

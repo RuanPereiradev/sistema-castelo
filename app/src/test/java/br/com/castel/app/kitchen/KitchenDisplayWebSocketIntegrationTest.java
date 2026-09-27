@@ -1,36 +1,30 @@
 package br.com.castel.app.kitchen;
 
+import static br.com.castel.app.kitchen.StompTestClient.MESSAGE_TIMEOUT_SECONDS;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.catchThrowable;
 
-import java.lang.reflect.Type;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.WebSocket;
+import java.net.http.WebSocketHandshakeException;
 import java.time.Clock;
 import java.time.Duration;
 import java.util.concurrent.BlockingQueue;
-import java.util.Map;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
 import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.messaging.converter.ByteArrayMessageConverter;
 import org.springframework.messaging.simp.SimpMessageSendingOperations;
-import org.springframework.messaging.simp.stomp.StompCommand;
-import org.springframework.messaging.simp.stomp.StompFrameHandler;
-import org.springframework.messaging.simp.stomp.StompHeaders;
-import org.springframework.messaging.simp.stomp.StompSession;
-import org.springframework.messaging.simp.stomp.StompSessionHandlerAdapter;
-import org.springframework.util.MimeTypeUtils;
-import org.springframework.web.socket.WebSocketHttpHeaders;
-import org.springframework.web.socket.client.standard.StandardWebSocketClient;
-import org.springframework.web.socket.messaging.WebSocketStompClient;
 import tools.jackson.databind.JsonNode;
 
 /**
  * Task 3.5 over a real STOMP session: the CONNECT is authenticated by the access token and refused
- * with its code, a waiter cannot listen to the kitchen, and a change reaches only the topic of its
- * station, only after it is committed.
+ * with its code, each topic is open only to its roles, nothing is accepted from the client, and a
+ * change reaches only the topic of its station, only after it is committed.
  *
  * <p>A topic that must stay silent is checked with a short wait after a message that did arrive on
  * another topic of the same session: the broker keeps the publish order (preservePublishOrder), so
@@ -38,44 +32,93 @@ import tools.jackson.databind.JsonNode;
  */
 class KitchenDisplayWebSocketIntegrationTest extends AbstractKitchenDisplayIntegrationTest {
 
-    private static final long MESSAGE_TIMEOUT_SECONDS = 5;
     private static final long SILENCE_MILLISECONDS = 500;
-
-    private static final String PROBE = "PROBE";
-    private static final int PROBE_ATTEMPTS = 50;
 
     @Autowired
     private SimpMessageSendingOperations messaging;
 
-    private WebSocketStompClient stompClient;
+    private StompTestClient client;
 
     @BeforeEach
     void createClient() {
-        stompClient = new WebSocketStompClient(new StandardWebSocketClient());
-        stompClient.setMessageConverter(new JsonAsBytesConverter());
-        stompClient.setDefaultHeartbeat(new long[] {0, 0});
+        client = new StompTestClient(port, messaging);
     }
 
     @AfterEach
     void stopClient() {
-        stompClient.stop();
+        client.close();
     }
 
     @Test
     void shouldAnswerTheCodeWhenTheConnectCarriesNoTokenOrAnExpiredOne() throws Exception {
-        assertThat(errorOnConnect(null)).isEqualTo("AUTHENTICATION_REQUIRED");
+        assertThat(client.errorOnConnect(null)).isEqualTo("AUTHENTICATION_REQUIRED");
 
         Clock anHourAgo = Clock.offset(clock, Duration.ofHours(-1));
-        assertThat(errorOnConnect(accessTokenFor(newWaiterUsername(), anHourAgo))).isEqualTo("TOKEN_EXPIRED");
+        assertThat(client.errorOnConnect(accessTokenFor(newWaiterUsername(), anHourAgo))).isEqualTo("TOKEN_EXPIRED");
+    }
+
+    @Test
+    void shouldRefuseAHandshakeCarryingAQueryString() {
+        Throwable refusal = catchThrowable(() -> HttpClient.newHttpClient().newWebSocketBuilder()
+                .buildAsync(URI.create(client.url() + "?access_token=" + kitchenToken), new WebSocket.Listener() {})
+                .get(MESSAGE_TIMEOUT_SECONDS, TimeUnit.SECONDS));
+
+        assertThat(refusal).hasCauseInstanceOf(WebSocketHandshakeException.class);
+        assertThat(((WebSocketHandshakeException) refusal.getCause()).getResponse().statusCode()).isEqualTo(400);
+    }
+
+    /** Raw frames, because the STOMP client never sends anything before its CONNECT. */
+    @Test
+    void shouldAnswerAuthenticationRequiredToAFrameBeforeTheConnect() throws Exception {
+        CompletableFuture<String> firstFrame = new CompletableFuture<>();
+        WebSocket socket = HttpClient.newHttpClient().newWebSocketBuilder()
+                .buildAsync(URI.create(client.url()), new WebSocket.Listener() {
+                    private final StringBuilder frame = new StringBuilder();
+
+                    @Override
+                    public CompletionStage<?> onText(WebSocket webSocket, CharSequence data, boolean last) {
+                        frame.append(data);
+                        if (last) {
+                            firstFrame.complete(frame.toString());
+                        }
+                        webSocket.request(1);
+                        return null;
+                    }
+                })
+                .get(MESSAGE_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+
+        socket.sendText("SUBSCRIBE\nid:0\ndestination:/topic/kitchen/PIZZA\n\n\0", true);
+
+        assertThat(firstFrame.get(MESSAGE_TIMEOUT_SECONDS, TimeUnit.SECONDS))
+                .startsWith("ERROR")
+                .contains("message:AUTHENTICATION_REQUIRED");
     }
 
     @Test
     void shouldRefuseAWaiterSubscribingToTheKitchen() throws Exception {
-        Listener waiter = connect(waiterToken);
+        StompTestClient.Session waiter = client.connect(waiterToken);
 
-        waiter.session.subscribe("/topic/kitchen/PIZZA", new TopicHandler());
+        waiter.subscribeExpectingRefusal("/topic/kitchen/PIZZA");
 
-        assertThat(waiter.errors.poll(MESSAGE_TIMEOUT_SECONDS, TimeUnit.SECONDS)).isEqualTo("ACCESS_DENIED");
+        assertThat(waiter.nextError()).isEqualTo("ACCESS_DENIED");
+    }
+
+    @Test
+    void shouldRefuseTheKitchenSubscribingToTheReadyItemsOfTheWaiters() throws Exception {
+        StompTestClient.Session kitchen = client.connect(kitchenToken);
+
+        kitchen.subscribeExpectingRefusal("/topic/restaurant/ready-items");
+
+        assertThat(kitchen.nextError()).isEqualTo("ACCESS_DENIED");
+    }
+
+    @Test
+    void shouldRefuseAnyMessageSentByTheClient() throws Exception {
+        StompTestClient.Session kitchen = client.connect(kitchenToken);
+
+        kitchen.stomp.send("/topic/kitchen/PIZZA", "{}".getBytes());
+
+        assertThat(kitchen.nextError()).isEqualTo("ACCESS_DENIED");
     }
 
     @Test
@@ -85,7 +128,7 @@ class KitchenDisplayWebSocketIntegrationTest extends AbstractKitchenDisplayInteg
         String soldOutId = createItem(categoryId, "Esgotada", "PIZZA", false);
         send(post("/api/restaurant/menu-items/" + soldOutId + "/unavailable", adminToken, ""), 200);
         String tabId = openTabOnNewTable("Tela");
-        Listener kitchen = connect(kitchenToken);
+        StompTestClient.Session kitchen = client.connect(kitchenToken);
         BlockingQueue<JsonNode> pizzaTopic = kitchen.subscribe("/topic/kitchen/PIZZA");
         BlockingQueue<JsonNode> barTopic = kitchen.subscribe("/topic/kitchen/BAR");
 
@@ -110,103 +153,5 @@ class KitchenDisplayWebSocketIntegrationTest extends AbstractKitchenDisplayInteg
                         "{\"menuItemId\":\"%s\"}".formatted(soldOutId)), 422))
                 .isEqualTo("MENU_ITEM_UNAVAILABLE");
         assertThat(pizzaTopic.poll(SILENCE_MILLISECONDS, TimeUnit.MILLISECONDS)).isNull();
-    }
-
-    // ------------------------------------------------------------- stomp helpers
-
-    /** Connects and waits for {@code CONNECTED}. */
-    private Listener connect(String token) throws Exception {
-        Listener listener = new Listener();
-        listener.session = stompClient
-                .connectAsync(url(), new WebSocketHttpHeaders(), connectHeaders(token), listener)
-                .get(MESSAGE_TIMEOUT_SECONDS, TimeUnit.SECONDS);
-        return listener;
-    }
-
-    /** Connects expecting a refusal, and answers the code of the {@code ERROR} frame. */
-    private String errorOnConnect(String token) throws Exception {
-        Listener listener = new Listener();
-        stompClient.connectAsync(url(), new WebSocketHttpHeaders(), connectHeaders(token), listener);
-        return listener.errors.poll(MESSAGE_TIMEOUT_SECONDS, TimeUnit.SECONDS);
-    }
-
-    private String url() {
-        return "ws://localhost:" + port + "/ws/kitchen";
-    }
-
-    private static StompHeaders connectHeaders(String token) {
-        StompHeaders headers = new StompHeaders();
-        if (token != null) {
-            headers.add("Authorization", "Bearer " + token);
-        }
-        return headers;
-    }
-
-    /** One client session: the codes of its {@code ERROR} frames and the messages of its topics. */
-    private final class Listener extends StompSessionHandlerAdapter {
-
-        private final BlockingQueue<String> errors = new LinkedBlockingQueue<>();
-        private StompSession session;
-
-        /**
-         * Subscribes and waits until the broker delivers to the subscription, so nothing published
-         * afterwards is missed. The simple broker sends no receipt for a SUBSCRIBE, so a probe goes
-         * through the broker until one arrives; probes never reach the queue answered.
-         */
-        BlockingQueue<JsonNode> subscribe(String destination) throws InterruptedException {
-            TopicHandler handler = new TopicHandler();
-            session.subscribe(destination, handler);
-            for (int attempt = 0; attempt < PROBE_ATTEMPTS && handler.probed.getCount() > 0; attempt++) {
-                messaging.convertAndSend(destination, (Object) Map.of("type", PROBE));
-                handler.probed.await(100, TimeUnit.MILLISECONDS);
-            }
-            assertThat(handler.probed.getCount()).as("subscription to " + destination + " active").isZero();
-            return handler.messages;
-        }
-
-        @Override
-        public Type getPayloadType(StompHeaders headers) {
-            return byte[].class;
-        }
-
-        @Override
-        public void handleFrame(StompHeaders headers, Object payload) {
-            errors.add(String.valueOf(headers.getFirst("message")));
-        }
-
-        @Override
-        public void handleException(
-                StompSession session, StompCommand command, StompHeaders headers, byte[] payload, Throwable exception) {
-            errors.add("EXCEPTION " + exception);
-        }
-    }
-
-    private final class TopicHandler implements StompFrameHandler {
-
-        private final BlockingQueue<JsonNode> messages = new LinkedBlockingQueue<>();
-        private final CountDownLatch probed = new CountDownLatch(1);
-
-        @Override
-        public Type getPayloadType(StompHeaders headers) {
-            return byte[].class;
-        }
-
-        @Override
-        public void handleFrame(StompHeaders headers, Object payload) {
-            JsonNode message = jsonMapper.readTree((byte[]) payload);
-            if (PROBE.equals(message.get("type").asString())) {
-                probed.countDown();
-            } else {
-                messages.add(message);
-            }
-        }
-    }
-
-    /** The raw JSON bytes of each message, parsed by the test itself. */
-    private static final class JsonAsBytesConverter extends ByteArrayMessageConverter {
-
-        JsonAsBytesConverter() {
-            addSupportedMimeTypes(MimeTypeUtils.APPLICATION_JSON);
-        }
     }
 }

@@ -61,4 +61,27 @@ public enum TabItemStatus {
             case PENDING, DELIVERED, CANCELLED -> false;
         };
     }
+
+    /**
+     * The status before the last tap (K3): preparation goes back to pending; ready goes back to
+     * preparation when it was started, or to pending when ready skipped it (K2).
+     *
+     * @param preparationStarted whether the item carries the moment its preparation started
+     * @throws IllegalStateException if this status does not {@link #acceptsUndo() accept undoing}
+     */
+    public TabItemStatus undoneTo(boolean preparationStarted) {
+        return switch (this) {
+            case READY -> preparationStarted ? IN_PREPARATION : PENDING;
+            case IN_PREPARATION -> PENDING;
+            case PENDING, DELIVERED, CANCELLED -> throw new IllegalStateException(this + " has no step to undo");
+        };
+    }
+
+    /**
+     * Whether an item in this status may carry the moment its preparation started: every status
+     * past {@code PENDING}. Undoing back to {@code PENDING} erases it.
+     */
+    public boolean carriesPreparationStart() {
+        return this != PENDING;
+    }
 }
