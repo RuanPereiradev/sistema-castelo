@@ -87,6 +87,19 @@ class JpaTabRepository implements TabRepository {
         return springData.existsActiveOnDiningTable(diningTableId);
     }
 
+    // ---- kitchen display
+
+    @Override
+    public Optional<Tab> findByIdForItemChange(TabId id, TabItemId itemId) {
+        return findByIdForItemCancellation(id, itemId);
+    }
+
+    @Override
+    public Optional<Tab> findByItemIdForItemChange(TabItemId itemId) {
+        return springData.findTabIdOfItem(itemId.value())
+                .flatMap(tabId -> findByIdForItemChange(TabId.of(tabId), itemId));
+    }
+
     /** The conflict of the domain for the index that refused the row; anything else goes on as it was. */
     private static RuntimeException translate(DataIntegrityViolationException violation, Tab tab) {
         String constraint = constraintNameOf(violation);

@@ -87,6 +87,7 @@ a URL, o privado com a senha.
 | `31-restaurant-menu-variants-modifiers.http` | 1.2 | Variações, adicionais, esgotar variação, cardápio público com "a partir de" |
 | `32-restaurant-dining-tables.http` | 1.5 | Cadastro de mesas, ordem natural da lista, leitura pelo garçom, inativas |
 | `33-restaurant-tabs.http` | 2.2 | Comanda: abrir em mesa e cartão, lançar por unidade e por peso, cancelar item e comanda |
+| `35-kitchen-display.http` | 3.5 | KDS: fila por setor com limites de atraso, iniciar/pronto/desfazer, pronto direto, entrega pelo garçom, perfis trocados (STOMP fica no teste de integração) |
 | `40-billing-folios.http` | 1.3 | Folio: lançamentos, estorno, pagamentos, estorno de pagamento, fechamento com saldo zero |
 
 Numeração em ordem de execução sugerida. Cada task nova acrescenta o próximo

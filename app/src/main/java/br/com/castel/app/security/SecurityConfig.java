@@ -51,6 +51,8 @@ public class SecurityConfig {
         "/api/auth/login", "/api/auth/refresh", "/actuator/health", "/public/**"
     };
 
+    private static final String KITCHEN_DISPLAY_HANDSHAKE = "/ws/kitchen";
+
     private final ObjectMapper objectMapper;
 
     public SecurityConfig(ObjectMapper objectMapper) {
@@ -69,6 +71,9 @@ public class SecurityConfig {
                 .authorizeHttpRequests(authorize -> authorize
                         .dispatcherTypeMatchers(DispatcherType.ERROR).permitAll()
                         .requestMatchers(PUBLIC_ROUTES).permitAll()
+                        // WebSocket handshake of the kitchen display: the browser sends no
+                        // Authorization here; the STOMP CONNECT frame is authenticated (task 3.5).
+                        .requestMatchers(KITCHEN_DISPLAY_HANDSHAKE).permitAll()
                         .anyRequest().authenticated())
                 .exceptionHandling(exceptions -> exceptions
                         .authenticationEntryPoint(this::commenceUnauthenticated)

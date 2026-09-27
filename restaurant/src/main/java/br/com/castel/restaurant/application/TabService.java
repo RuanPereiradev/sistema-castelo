@@ -12,8 +12,11 @@ import br.com.castel.restaurant.domain.ModifierNotFoundException;
 import br.com.castel.restaurant.domain.ModifierRepository;
 import br.com.castel.restaurant.domain.Tab;
 import br.com.castel.restaurant.domain.TabId;
+import br.com.castel.restaurant.domain.TabItem;
+import br.com.castel.restaurant.domain.TabItemCancelled;
 import br.com.castel.restaurant.domain.TabItemId;
 import br.com.castel.restaurant.domain.TabItemOrder;
+import br.com.castel.restaurant.domain.TabItemOrdered;
 import br.com.castel.restaurant.domain.TabNotFoundException;
 import br.com.castel.restaurant.domain.TabOrigin;
 import br.com.castel.restaurant.domain.TabRepository;
@@ -21,6 +24,7 @@ import br.com.castel.sharedkernel.AuditorAware;
 import br.com.castel.sharedkernel.CurrentProperty;
 import java.time.Clock;
 import java.util.List;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -37,6 +41,9 @@ import org.springframework.transaction.annotation.Transactional;
  * item run one after the other and the second finds it already cancelled.
  * Cancelling the whole tab changes its status, so it loads it {@code FOR UPDATE} and waits for every
  * ordering in progress (decision #18).
+ *
+ * <p>Ordering and cancelling an item publish {@link TabItemOrdered} and {@link TabItemCancelled}
+ * for the kitchen display (task 3.5), which tells the screens only after the commit.
  */
 @Service
 public class TabService {
@@ -48,6 +55,7 @@ public class TabService {
     private final CurrentProperty currentProperty;
     private final AuditorAware auditorAware;
     private final Clock clock;
+    private final ApplicationEventPublisher events;
 
     public TabService(
             TabRepository tabs,
@@ -56,7 +64,8 @@ public class TabService {
             ModifierRepository modifiers,
             CurrentProperty currentProperty,
             AuditorAware auditorAware,
-            Clock clock) {
+            Clock clock,
+            ApplicationEventPublisher events) {
         this.tabs = tabs;
         this.diningTables = diningTables;
         this.menuItems = menuItems;
@@ -64,6 +73,7 @@ public class TabService {
         this.currentProperty = currentProperty;
         this.auditorAware = auditorAware;
         this.clock = clock;
+        this.events = events;
     }
 
     /**
@@ -108,8 +118,10 @@ public class TabService {
                 .toList();
         TabItemOrder order = new TabItemOrder(
                 command.variantId(), command.quantity(), command.weightGrams(), choices, command.specialInstructions());
-        tab.addItem(menuItem, order, auditorAware.currentAuditorId(), clock.instant(), currentProperty.timeZone());
-        return tabs.save(tab);
+        TabItem item = tab.addItem(menuItem, order, auditorAware.currentAuditorId(), clock.instant(), currentProperty.timeZone());
+        Tab saved = tabs.save(tab);
+        events.publishEvent(TabItemOrdered.of(saved.id(), item));
+        return saved;
     }
 
     /** @throws TabNotFoundException if the tab does not exist */
@@ -117,7 +129,9 @@ public class TabService {
     public Tab cancelItem(TabId tabId, TabItemId itemId, String reason) {
         Tab tab = tabs.findByIdForItemCancellation(tabId, itemId).orElseThrow(() -> notFound(tabId));
         tab.cancelItem(itemId, reason, auditorAware.currentAuditorId(), clock.instant());
-        return tabs.save(tab);
+        Tab saved = tabs.save(tab);
+        events.publishEvent(TabItemCancelled.of(saved.id(), saved.item(itemId)));
+        return saved;
     }
 
     /** @throws TabNotFoundException if the tab does not exist */

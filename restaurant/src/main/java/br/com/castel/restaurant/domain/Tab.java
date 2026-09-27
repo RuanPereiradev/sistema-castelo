@@ -340,6 +340,79 @@ public class Tab extends AuditedEntity {
         this.cancelledAt = cancelledAt;
     }
 
+    // ---- kitchen display
+
+    /*
+     * The transitions of the kitchen display (task 3.5). None of them looks at the status of the tab:
+     * preparation is operational, closing is financial, and the kitchen keeps moving an item of a tab
+     * that is closing or closed (F12). Each checks, in this order: the item exists, it is not
+     * cancelled, its status accepts the transition. Each returns the event of the change.
+     */
+
+    /**
+     * @throws TabItemNotFoundException if the tab has no such item
+     * @throws TabItemAlreadyCancelledException if the item was cancelled
+     * @throws InvalidTabItemTransitionException if the item is not {@code PENDING}
+     */
+    public TabItemStatusChanged startItemPreparation(TabItemId itemId, Instant at) {
+        Objects.requireNonNull(at, "at");
+        TabItem item = item(itemId);
+        TabItemStatus from = item.status();
+        item.startPreparation(at);
+        return changeOf(item, from, at);
+    }
+
+    /**
+     * Ready from preparation, or straight from pending (K2).
+     *
+     * @throws TabItemNotFoundException if the tab has no such item
+     * @throws TabItemAlreadyCancelledException if the item was cancelled
+     * @throws InvalidTabItemTransitionException if the item is not {@code PENDING} or {@code IN_PREPARATION}
+     */
+    public TabItemStatusChanged markItemReady(TabItemId itemId, Instant at) {
+        Objects.requireNonNull(at, "at");
+        TabItem item = item(itemId);
+        TabItemStatus from = item.status();
+        item.markReady(at);
+        return changeOf(item, from, at);
+    }
+
+    /**
+     * Delivered by the waiter, ready or not (K4).
+     *
+     * @throws TabItemNotFoundException if the tab has no such item
+     * @throws TabItemAlreadyCancelledException if the item was cancelled
+     * @throws InvalidTabItemTransitionException if the item was already delivered
+     */
+    public TabItemStatusChanged deliverItem(TabItemId itemId, Instant at) {
+        Objects.requireNonNull(at, "at");
+        TabItem item = item(itemId);
+        TabItemStatus from = item.status();
+        item.deliver(at);
+        return changeOf(item, from, at);
+    }
+
+    /**
+     * One step back, erasing the moment of the step undone (K3). A ready item that skipped
+     * preparation goes back to pending.
+     *
+     * @param at the moment of the undoing, for the event only
+     * @throws TabItemNotFoundException if the tab has no such item
+     * @throws TabItemAlreadyCancelledException if the item was cancelled
+     * @throws InvalidTabItemTransitionException if the item is {@code PENDING} or {@code DELIVERED}
+     */
+    public TabItemStatusChanged undoItemStatus(TabItemId itemId, Instant at) {
+        Objects.requireNonNull(at, "at");
+        TabItem item = item(itemId);
+        TabItemStatus from = item.status();
+        item.undoLastStep();
+        return changeOf(item, from, at);
+    }
+
+    private TabItemStatusChanged changeOf(TabItem item, TabItemStatus from, Instant at) {
+        return new TabItemStatusChanged(id, item.id(), item.prepStation(), from, item.status(), at);
+    }
+
     // ------------------------------------------------------------------ guards
 
     private static void requireOpeningFields(UUID propertyId, UUID openedBy, Instant openedAt) {

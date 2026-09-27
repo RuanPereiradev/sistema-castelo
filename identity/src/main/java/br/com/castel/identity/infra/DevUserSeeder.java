@@ -3,6 +3,7 @@ package br.com.castel.identity.infra;
 import br.com.castel.identity.api.Role;
 import br.com.castel.identity.domain.User;
 import br.com.castel.identity.domain.UserRepository;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import org.springframework.beans.factory.annotation.Value;
@@ -22,7 +23,8 @@ import org.springframework.transaction.annotation.Transactional;
  *
  * <p>Idempotent: a username that already exists is left untouched. There is no {@code Property}
  * aggregate yet, so a minimal row is inserted through {@link JdbcTemplate}, just enough to satisfy
- * {@code app_user}'s foreign key. Restricted to the {@code dev} profile and to
+ * {@code app_user}'s foreign key, together with the settings the migrations seed for every property
+ * that already existed when they ran. Restricted to the {@code dev} profile and to
  * {@code castel.dev.seed-enabled=true}; it must never run in {@code prod}.
  */
 @Component
@@ -89,6 +91,29 @@ public class DevUserSeeder implements ApplicationRunner {
                 propertyId,
                 "Castel Dev",
                 "America/Fortaleza");
+        seedKitchenDisplayDelayLimits(propertyId);
         return propertyId;
+    }
+
+    /**
+     * The delay limits of each station of the kitchen display (task 3.5, K11), in minutes. The same
+     * keys and values {@code V10__kitchen_queue_ready.sql} seeds for an existing property.
+     */
+    private static final Map<String, String> KITCHEN_DISPLAY_DELAY_LIMITS = Map.of(
+            "restaurant.kitchen-display.kitchen.warning-minutes", "15",
+            "restaurant.kitchen-display.kitchen.late-minutes", "25",
+            "restaurant.kitchen-display.pizza.warning-minutes", "20",
+            "restaurant.kitchen-display.pizza.late-minutes", "30",
+            "restaurant.kitchen-display.bar.warning-minutes", "5",
+            "restaurant.kitchen-display.bar.late-minutes", "10");
+
+    private void seedKitchenDisplayDelayLimits(UUID propertyId) {
+        KITCHEN_DISPLAY_DELAY_LIMITS.forEach((settingKey, settingValue) -> jdbcTemplate.update(
+                "INSERT INTO setting (id, property_id, setting_key, setting_value, value_type) "
+                        + "VALUES (?, ?, ?, ?, 'INTEGER') ON CONFLICT (property_id, setting_key) DO NOTHING",
+                UUID.randomUUID(),
+                propertyId,
+                settingKey,
+                settingValue));
     }
 }

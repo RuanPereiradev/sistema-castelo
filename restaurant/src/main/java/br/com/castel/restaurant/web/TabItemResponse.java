@@ -30,6 +30,9 @@ public record TabItemResponse(
         String status,
         String orderedAt,
         String orderedBy,
+        String preparationStartedAt,
+        String readyAt,
+        String deliveredAt,
         String cancelledAt,
         String cancelledBy,
         String cancellationReason) {
@@ -53,6 +56,9 @@ public record TabItemResponse(
                 item.status().name(),
                 item.orderedAt().toString(),
                 item.orderedBy().toString(),
+                item.preparationStartedAt().map(Instant::toString).orElse(null),
+                item.readyAt().map(Instant::toString).orElse(null),
+                item.deliveredAt().map(Instant::toString).orElse(null),
                 item.cancelledAt().map(Instant::toString).orElse(null),
                 item.cancelledBy().map(UUID::toString).orElse(null),
                 item.cancellationReason().orElse(null));
