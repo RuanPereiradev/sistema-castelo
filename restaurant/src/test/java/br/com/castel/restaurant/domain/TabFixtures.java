@@ -3,10 +3,12 @@ package br.com.castel.restaurant.domain;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import br.com.castel.billing.api.PaymentMethod;
 import br.com.castel.restaurant.api.MenuCategoryId;
 import br.com.castel.restaurant.api.PrepStation;
 import br.com.castel.sharedkernel.DomainException;
 import br.com.castel.sharedkernel.Money;
+import br.com.castel.sharedkernel.Percentage;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
@@ -61,6 +63,23 @@ final class TabFixtures {
     static final String INVALID_CANCELLATION_REASON = "INVALID_CANCELLATION_REASON";
     static final String INVALID_QUANTITY = "INVALID_QUANTITY";
     static final String INVALID_WEIGHT = "INVALID_WEIGHT";
+
+    // ------------------------------------------------------------------ codes, task 3.2
+
+    static final String TAB_NOT_CLOSING = "TAB_NOT_CLOSING";
+    static final String TAB_HAS_NO_ACTIVE_ITEMS = "TAB_HAS_NO_ACTIVE_ITEMS";
+    static final String TAB_ITEM_NOT_SERVICE_CHARGEABLE = "TAB_ITEM_NOT_SERVICE_CHARGEABLE";
+    static final String INVALID_SPLIT_GROUP = "INVALID_SPLIT_GROUP";
+    static final String INVALID_SPLIT_PARTS = "INVALID_SPLIT_PARTS";
+    static final String INVALID_GUEST_COUNT = "INVALID_GUEST_COUNT";
+    static final String INVALID_REOPENING_REASON = "INVALID_REOPENING_REASON";
+
+    // ------------------------------------------------------------------ closing, task 3.2
+
+    static final Percentage TEN_PERCENT = Percentage.ofPercent(10);
+    static final Percentage TWENTY_PERCENT = Percentage.ofPercent(20);
+    static final Instant CLOSING_AT = wednesdayAt("13:00");
+    static final Instant CLOSED_AT = wednesdayAt("13:30");
 
     private TabFixtures() {
     }
@@ -150,6 +169,42 @@ final class TabFixtures {
 
     static TabItem order(Tab tab, MenuItem menuItem, TabItemOrder order) {
         return tab.addItem(menuItem, order, WAITER, ORDERED_AT, FORTALEZA);
+    }
+
+    /** A dish at any price, eligible for the service charge. */
+    static MenuItem dish(String price) {
+        return MenuItem.soldByUnit(PROPERTY_ID, CATEGORY_ID, "Prato " + price, PrepStation.KITCHEN, Money.of(price));
+    }
+
+    /** A dish at any price that the menu keeps out of the service charge. */
+    static MenuItem dishWithoutServiceCharge(String price) {
+        MenuItem dish = dish(price);
+        dish.chargeServiceCharge(false);
+        return dish;
+    }
+
+    static TabItem orderDish(Tab tab, String price) {
+        return order(tab, dish(price), oneUnit());
+    }
+
+    static TabItem orderDishWithoutServiceCharge(Tab tab, String price) {
+        return order(tab, dishWithoutServiceCharge(price), oneUnit());
+    }
+
+    /** A table tab with one 100.00 dish, already in CLOSING at 10%. */
+    static Tab closingTab(TabBilling billing) {
+        Tab tab = tableTab();
+        orderDish(tab, "100.00");
+        tab.startClosing(TEN_PERCENT, billing, WAITER, CLOSING_AT);
+        return tab;
+    }
+
+    /** A table tab paid in full and CLOSED. */
+    static Tab closedTab(FakeTabBilling billing) {
+        Tab tab = closingTab(billing);
+        tab.receivePayment(PaymentMethod.PIX, Money.of("110.00"), "key-closed", billing);
+        tab.close(billing, WAITER, CLOSED_AT);
+        return tab;
     }
 
     // ------------------------------------------------------------------ asserts
