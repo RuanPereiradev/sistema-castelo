@@ -149,7 +149,9 @@ public class FolioService implements FolioFacade {
     @Override
     @Transactional
     public void close(FolioId folioId) {
-        closeFolio(folioId);
+        Folio folio = loadForUpdate(folioId);
+        folio.close(auditorAware.currentAuditorId(), clock.instant());
+        saveReadable(folio);
     }
 
     /**
@@ -231,16 +233,26 @@ public class FolioService implements FolioFacade {
         return saveReadable(folio);
     }
 
+    /**
+     * The reversal at the counter. A tab's folio is refused: its charge is reversed by the tab's
+     * reopening (decision R1 of task 3.2).
+     */
     @Transactional
     public Folio reverseCharge(FolioId folioId, ChargeId chargeId, String reason) {
         Folio folio = loadForUpdate(folioId);
+        folio.requireManagedByCounter();
         folio.reverse(chargeId, reason);
         return saveReadable(folio);
     }
 
+    /**
+     * The close at the counter. A tab's folio is refused: it closes with the tab's close or
+     * cancellation, through {@link #close} (decision R1 of task 3.2).
+     */
     @Transactional
     public Folio closeFolio(FolioId folioId) {
         Folio folio = loadForUpdate(folioId);
+        folio.requireManagedByCounter();
         folio.close(auditorAware.currentAuditorId(), clock.instant());
         return saveReadable(folio);
     }

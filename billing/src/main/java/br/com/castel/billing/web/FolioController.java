@@ -21,7 +21,9 @@ import org.springframework.web.bind.annotation.RestController;
 /**
  * The folio at the front desk (decision #3 of task 1.3): reading, receiving, reversing a charge and
  * closing are {@code ADMIN} and {@code FRONT_DESK}; an adjustment and the refund of a payment are
- * {@code ADMIN} only. {@code WAITER} and {@code KITCHEN} reach nothing here.
+ * {@code ADMIN} only. {@code WAITER} and {@code KITCHEN} reach nothing here. The folio of a tab is
+ * reversed and closed only by the tab, for every role: those two routes refuse it with
+ * {@code FOLIO_OWNED_BY_TAB} (decision R1 of task 3.2).
  *
  * <p>The class-level rule covers every route; the two {@code ADMIN} routes narrow it with their own
  * annotation, which takes precedence. Every {@code @PathVariable} names its variable explicitly.

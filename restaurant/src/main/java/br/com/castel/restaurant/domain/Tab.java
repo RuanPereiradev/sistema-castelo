@@ -1,8 +1,13 @@
 package br.com.castel.restaurant.domain;
 
+import br.com.castel.billing.api.ChargeId;
+import br.com.castel.billing.api.FolioId;
+import br.com.castel.billing.api.PaymentMethod;
+import br.com.castel.billing.api.ReceivedPaymentView;
 import br.com.castel.sharedkernel.AuditedEntity;
 import br.com.castel.sharedkernel.EntityId;
 import br.com.castel.sharedkernel.Money;
+import br.com.castel.sharedkernel.Percentage;
 import br.com.castel.sharedkernel.Quantity;
 import br.com.castel.sharedkernel.Weight;
 import jakarta.persistence.AttributeOverride;
@@ -16,16 +21,20 @@ import jakarta.persistence.FetchType;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import org.hibernate.annotations.DynamicUpdate;
 import org.hibernate.annotations.Fetch;
 import org.hibernate.annotations.FetchMode;
 
@@ -41,10 +50,19 @@ import org.hibernate.annotations.FetchMode;
  * (decision #6). Each item freezes the menu as it was at the moment of the order, and
  * {@link #subtotal()} is calculated from the items on every read.
  *
- * <p>Closing, the service charge and the total arrive with task 3.2.
+ * <p>Closing (task 3.2) goes in three steps: {@link #startClosing} freezes the service charge rate and
+ * posts the total as one {@code TabCharge} on the tab's folio, payments come in through
+ * {@link #receivePayment}, and {@link #close} settles the tab once the folio is at zero. In between,
+ * {@link #reopen} takes a closing tab back to {@code OPEN}, reversing its charge. The service charge
+ * is calculated once over the sum of what counts for it ({@link #serviceCharge}), never item by item.
+ *
+ * <p>Updated column by column ({@code @DynamicUpdate}, decision D9 of task 3.2): writers under the
+ * shared lock of the tab, such as the guest count and the service charge switch, never rewrite each
+ * other.
  */
 @Entity
 @Table(name = "tab")
+@DynamicUpdate
 public class Tab extends AuditedEntity {
 
     public static final int MINIMUM_CARD_NUMBER = 1;
@@ -109,6 +127,42 @@ public class Tab extends AuditedEntity {
     @Fetch(FetchMode.SUBSELECT)
     private List<TabItem> items = new ArrayList<>();
 
+    // ---- closing (task 3.2)
+
+    @Column(name = "folio_id")
+    private UUID folioId;
+
+    @Column(name = "tab_charge_id")
+    private UUID tabChargeId;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "destination", length = 20)
+    private TabDestination destination;
+
+    @Column(name = "service_charge_applied", nullable = false)
+    private boolean serviceChargeApplied;
+
+    /** The frozen rate, as the fraction {@link Percentage} keeps; null unless closing started. */
+    @Column(name = "service_charge_rate", precision = 5, scale = 4)
+    private BigDecimal serviceChargeRateFraction;
+
+    @Column(name = "guest_count")
+    private Short guestCount;
+
+    @Column(name = "closing_started_at")
+    private Instant closingStartedAt;
+
+    @Column(name = "closing_started_by")
+    private UUID closingStartedBy;
+
+    @Column(name = "closed_at")
+    private Instant closedAt;
+
+    @Column(name = "closed_by")
+    private UUID closedBy;
+
+    // ---- end closing
+
     protected Tab() {
         // for JPA
     }
@@ -124,6 +178,7 @@ public class Tab extends AuditedEntity {
         this.publicToken = EntityId.newPublicToken();
         this.openedBy = openedBy;
         this.openedAt = openedAt;
+        this.serviceChargeApplied = origin.chargesServiceByDefault();
     }
 
     /**
@@ -326,6 +381,9 @@ public class Tab extends AuditedEntity {
      * @throws TabNotOpenException if the tab is not {@code OPEN}
      * @throws TabHasActiveItemsException if any item on it is not cancelled
      * @throws InvalidCancellationReasonException if the reason is missing, blank or past 500 characters
+     * <p>For a tab without a folio. The routes cancel through
+     * {@link #cancel(String, TabBilling, UUID, Instant)}, which also closes the folio of a tab
+     * reopened after its closing started (invariant 17 of task 3.2).
      */
     public void cancel(String reason, UUID cancelledBy, Instant cancelledAt) {
         Objects.requireNonNull(cancelledBy, "cancelledBy");
@@ -440,5 +498,343 @@ public class Tab extends AuditedEntity {
 
     public Optional<String> cancellationReason() {
         return Optional.ofNullable(cancellationReason);
+    }
+
+    // ------------------------------------------------------------------ closing (task 3.2)
+
+    public static final int MINIMUM_SPLIT_GROUP = 1;
+    public static final int MAXIMUM_SPLIT_GROUP = 99;
+    public static final int MINIMUM_GUEST_COUNT = 1;
+    public static final int MAXIMUM_GUEST_COUNT = 999;
+
+    /** Maximum length of the reason of a reopening, after trimming. */
+    public static final int MAXIMUM_REOPENING_REASON_LENGTH = 500;
+
+    /**
+     * Takes the service charge off the whole tab. No reason: the charge is optional by law and the
+     * author is in the audit columns (decision F2). Repeating it changes nothing.
+     *
+     * @throws TabNotOpenException if the tab is not {@code OPEN}
+     */
+    public void removeServiceCharge() {
+        requireServiceChargeChange();
+        this.serviceChargeApplied = false;
+    }
+
+    /**
+     * Puts the service charge back on the tab, only where its origin charges it: a self-service tab
+     * stays without (decision F3). Repeating it changes nothing.
+     *
+     * @throws TabNotOpenException if the tab is not {@code OPEN}
+     */
+    public void restoreServiceCharge() {
+        requireServiceChargeChange();
+        this.serviceChargeApplied = origin.chargesServiceByDefault();
+    }
+
+    /**
+     * Takes the service charge off one item. A cancelled item is accepted and left as it is, since it
+     * weighs on nothing; repeating it changes nothing.
+     *
+     * @throws TabNotOpenException if the tab is not {@code OPEN}
+     * @throws TabItemNotFoundException if the tab has no such item
+     * @throws TabItemNotServiceChargeableException if the item was ordered without the charge
+     */
+    public void removeServiceChargeFrom(TabItemId itemId) {
+        TabItem item = serviceChargeableItem(itemId);
+        if (item.isActive()) {
+            item.waiveServiceCharge();
+        }
+    }
+
+    /**
+     * Puts the service charge back on one item that was ordered with it. A cancelled item is accepted
+     * and left as it is; repeating it changes nothing.
+     *
+     * @throws TabNotOpenException if the tab is not {@code OPEN}
+     * @throws TabItemNotFoundException if the tab has no such item
+     * @throws TabItemNotServiceChargeableException if the item was ordered without the charge
+     */
+    public void restoreServiceChargeTo(TabItemId itemId) {
+        TabItem item = serviceChargeableItem(itemId);
+        if (item.isActive()) {
+            item.restoreServiceCharge();
+        }
+    }
+
+    /**
+     * Moves whole lines to split groups (decision F5). All or nothing: every group number is checked,
+     * then every item, and only then is anything moved. It never changes the total nor the charge
+     * already posted.
+     *
+     * @param assignments the split group of each item named; items not named stay where they are
+     * @throws TabNotOpenException if the tab is neither {@code OPEN} nor {@code CLOSING}
+     * @throws InvalidSplitGroupException if a group is missing or falls outside 1 to 99
+     * @throws TabItemNotFoundException if the tab has no such item
+     */
+    public void assignToSplitGroup(Map<TabItemId, Integer> assignments) {
+        Objects.requireNonNull(assignments, "assignments");
+        requireStatusAccepting(status.acceptsSplitChange(), "has its bill settled");
+        for (Integer splitGroup : assignments.values()) {
+            if (splitGroup == null || splitGroup < MINIMUM_SPLIT_GROUP || splitGroup > MAXIMUM_SPLIT_GROUP) {
+                throw new InvalidSplitGroupException(
+                        "A split group goes from " + MINIMUM_SPLIT_GROUP + " to " + MAXIMUM_SPLIT_GROUP);
+            }
+        }
+        Map<TabItem, Integer> moves = new LinkedHashMap<>();
+        assignments.forEach((itemId, splitGroup) -> moves.put(item(itemId), splitGroup));
+        moves.forEach(TabItem::assignToSplitGroup);
+    }
+
+    /**
+     * How many guests share the tab (decision F8): optional, the default of an even split.
+     *
+     * @throws TabNotOpenException if the tab is neither {@code OPEN} nor {@code CLOSING}
+     * @throws InvalidGuestCountException if the count falls outside 1 to 999
+     */
+    public void recordGuestCount(int guestCount) {
+        requireStatusAccepting(status.acceptsSplitChange(), "has its bill settled");
+        if (guestCount < MINIMUM_GUEST_COUNT || guestCount > MAXIMUM_GUEST_COUNT) {
+            throw new InvalidGuestCountException(
+                    "The guests of a tab go from " + MINIMUM_GUEST_COUNT + " to " + MAXIMUM_GUEST_COUNT);
+        }
+        this.guestCount = (short) guestCount;
+    }
+
+    /**
+     * Starts the closing: the pre-bill. In this order: the status; an active item; the rate is frozen
+     * (decision F1); the folio of the tab is opened, or the one it already has is reused after a
+     * reopening; the total is posted on it as one charge (decision F6); the tab goes to
+     * {@code CLOSING}, which takes no item, no cancellation and no change of the service charge.
+     *
+     * @param currentRate the rate of the setting now, frozen here
+     * @throws TabNotOpenException if the tab is not {@code OPEN}
+     * @throws TabHasNoActiveItemsException if no item on it is active
+     */
+    public void startClosing(Percentage currentRate, TabBilling billing, UUID startedBy, Instant startedAt) {
+        Objects.requireNonNull(currentRate, "currentRate");
+        Objects.requireNonNull(billing, "billing");
+        Objects.requireNonNull(startedBy, "startedBy");
+        Objects.requireNonNull(startedAt, "startedAt");
+        requireStatusAccepting(status.acceptsClosing(), "cannot start closing");
+        if (items.stream().noneMatch(TabItem::isActive)) {
+            throw new TabHasNoActiveItemsException("Tab " + id.value() + " has no active item to charge");
+        }
+        this.serviceChargeRateFraction = currentRate.fraction();
+        if (folioId == null) {
+            this.folioId = billing.openFolio(id).value();
+        }
+        this.tabChargeId = billing.charge(new FolioId(folioId), id, total(currentRate), chargeDescription()).value();
+        this.closingStartedBy = startedBy;
+        this.closingStartedAt = startedAt;
+        this.status = TabStatus.CLOSING;
+    }
+
+    /**
+     * Registers a payment on the folio of the tab. Every rule of the payment is billing's: the key,
+     * the method, the amount, the balance, the cash drawer. A {@code CLOSED} tab delegates too, so a
+     * retry answers the original payment and anything new meets {@code FOLIO_CLOSED}.
+     *
+     * @throws TabNotClosingException if the tab is neither {@code CLOSING} nor {@code CLOSED}
+     */
+    public ReceivedPaymentView receivePayment(PaymentMethod method, Money amount, String idempotencyKey,
+            TabBilling billing) {
+        Objects.requireNonNull(billing, "billing");
+        requireClosingStep(status.acceptsPayment(), "takes no payment");
+        return billing.receivePayment(new FolioId(folioId), method, amount, idempotencyKey);
+    }
+
+    /**
+     * The waiter's override: back to {@code OPEN}, with a reason (decision F10). The charge in force is
+     * reversed with that reason, and the reversal on the folio is the record of who reopened and when.
+     * What was paid stays on the folio as credit; the frozen rate is dropped and read again on the next
+     * closing, which reuses the folio.
+     *
+     * @throws TabNotClosingException if the tab is not {@code CLOSING}
+     * @throws InvalidReopeningReasonException if the reason is missing, blank or past 500 characters
+     */
+    public void reopen(String reason, TabBilling billing) {
+        Objects.requireNonNull(billing, "billing");
+        requireClosingStep(status.acceptsReopening(), "cannot be reopened");
+        String validReason = requireValidReopeningReason(reason);
+        billing.reverse(new FolioId(folioId), new ChargeId(tabChargeId), validReason);
+        this.tabChargeId = null;
+        this.serviceChargeRateFraction = null;
+        this.closingStartedAt = null;
+        this.closingStartedBy = null;
+        this.status = TabStatus.OPEN;
+    }
+
+    /**
+     * Closes the tab for good, paid directly, closing its folio in the same transaction (decision #11
+     * of task 1.3). The folio refuses a balance other than zero. Items still being prepared do not
+     * hold the closing (decision F12). Frees the dining table or the card.
+     *
+     * @throws TabNotClosingException if the tab is not {@code CLOSING}
+     */
+    public void close(TabBilling billing, UUID closedBy, Instant closedAt) {
+        Objects.requireNonNull(billing, "billing");
+        Objects.requireNonNull(closedBy, "closedBy");
+        Objects.requireNonNull(closedAt, "closedAt");
+        requireClosingStep(status.acceptsSettlement(), "cannot be closed");
+        billing.closeFolio(new FolioId(folioId));
+        this.destination = TabDestination.DIRECT_PAYMENT;
+        this.closedBy = closedBy;
+        this.closedAt = closedAt;
+        this.status = TabStatus.CLOSED;
+    }
+
+    /**
+     * Cancels a tab opened by mistake, as {@link #cancel(String, UUID, Instant)} does, and closes its
+     * folio when it has one because it was reopened (invariant 17 of task 3.2). The folio refuses a
+     * balance other than zero: a payment already registered is refunded first.
+     *
+     * @throws TabNotOpenException if the tab is not {@code OPEN}
+     * @throws TabHasActiveItemsException if any item on it is not cancelled
+     * @throws InvalidCancellationReasonException if the reason is missing, blank or past 500 characters
+     */
+    public void cancel(String reason, TabBilling billing, UUID cancelledBy, Instant cancelledAt) {
+        Objects.requireNonNull(billing, "billing");
+        Objects.requireNonNull(cancelledBy, "cancelledBy");
+        Objects.requireNonNull(cancelledAt, "cancelledAt");
+        requireStatusAccepting(status.acceptsCancellation(), "cannot be cancelled");
+        if (items.stream().anyMatch(TabItem::isActive)) {
+            throw new TabHasActiveItemsException("Tab " + id.value() + " still has active items");
+        }
+        String validReason = requireValidReason(reason);
+        folioId().ifPresent(billing::closeFolio);
+        this.cancellationReason = validReason;
+        this.status = TabStatus.CANCELLED;
+        this.cancelledBy = cancelledBy;
+        this.cancelledAt = cancelledAt;
+    }
+
+    /**
+     * What counts for the service charge: the line totals of the active items ordered with it and not
+     * waived, when the tab has it on; zero otherwise. Modifiers are in the line total, so they follow
+     * their item (decision #8 of task 1.2).
+     */
+    public Money serviceChargeBase() {
+        return items.stream()
+                .filter(item -> serviceChargeApplied && item.countsForServiceCharge())
+                .map(TabItem::lineTotal)
+                .reduce(Money.ZERO, Money::plus);
+    }
+
+    /**
+     * The service charge, once over {@link #serviceChargeBase()}, rounded half up to the cent — never
+     * item by item.
+     *
+     * @param currentRate the rate of the setting now; used only while no rate is frozen
+     */
+    public Money serviceCharge(Percentage currentRate) {
+        return serviceChargeBase().percentage(rateInForce(currentRate));
+    }
+
+    /** The subtotal plus the service charge. */
+    public Money total(Percentage currentRate) {
+        return subtotal().plus(serviceCharge(currentRate));
+    }
+
+    /** The pre-bill: totals, the rate in force and the split groups. */
+    public TabBill bill(Percentage currentRate) {
+        Percentage rate = rateInForce(currentRate);
+        return TabBill.of(items(), serviceChargeApplied, subtotal(), serviceChargeBase(), rate, serviceCharge(rate));
+    }
+
+    /**
+     * The total in {@code parts} shares of whole cents, the first ones taking the extra cent.
+     *
+     * @throws InvalidSplitPartsException if the parts fall outside 1 to 99 or outnumber the cents
+     */
+    public List<Money> evenSplit(Percentage currentRate, int parts) {
+        return bill(currentRate).evenSplit(parts);
+    }
+
+    /** Whether the tab carries the service charge at all; off by the operator, or on self-service. */
+    public boolean serviceChargeApplied() {
+        return serviceChargeApplied;
+    }
+
+    /** The rate frozen when closing started; empty while the tab is {@code OPEN}. */
+    public Optional<Percentage> serviceChargeRate() {
+        return Optional.ofNullable(serviceChargeRateFraction).map(Percentage::ofFraction);
+    }
+
+    public Optional<Integer> guestCount() {
+        return Optional.ofNullable(guestCount).map(Short::intValue);
+    }
+
+    public Optional<FolioId> folioId() {
+        return Optional.ofNullable(folioId).map(FolioId::new);
+    }
+
+    /** The charge in force on the folio; empty while the tab is {@code OPEN}. */
+    public Optional<ChargeId> tabChargeId() {
+        return Optional.ofNullable(tabChargeId).map(ChargeId::new);
+    }
+
+    public Optional<TabDestination> destination() {
+        return Optional.ofNullable(destination);
+    }
+
+    public Optional<Instant> closingStartedAt() {
+        return Optional.ofNullable(closingStartedAt);
+    }
+
+    public Optional<UUID> closingStartedBy() {
+        return Optional.ofNullable(closingStartedBy);
+    }
+
+    public Optional<Instant> closedAt() {
+        return Optional.ofNullable(closedAt);
+    }
+
+    public Optional<UUID> closedBy() {
+        return Optional.ofNullable(closedBy);
+    }
+
+    private Percentage rateInForce(Percentage currentRate) {
+        Objects.requireNonNull(currentRate, "currentRate");
+        return serviceChargeRate().orElse(currentRate);
+    }
+
+    private void requireServiceChargeChange() {
+        requireStatusAccepting(status.acceptsServiceChargeChange(), "has its service charge frozen");
+    }
+
+    private TabItem serviceChargeableItem(TabItemId itemId) {
+        requireServiceChargeChange();
+        TabItem item = item(itemId);
+        if (!item.serviceChargeable()) {
+            throw new TabItemNotServiceChargeableException(
+                    "Tab item " + itemId.value() + " was ordered without the service charge");
+        }
+        return item;
+    }
+
+    private void requireClosingStep(boolean accepted, String refusal) {
+        if (!accepted) {
+            throw new TabNotClosingException("Tab " + id.value() + " is " + status + " and " + refusal);
+        }
+    }
+
+    private static String requireValidReopeningReason(String reason) {
+        if (reason == null || reason.isBlank()) {
+            throw new InvalidReopeningReasonException("A reopening needs a reason");
+        }
+        String trimmed = reason.trim();
+        if (trimmed.length() > MAXIMUM_REOPENING_REASON_LENGTH) {
+            throw new InvalidReopeningReasonException(
+                    "A reopening reason takes at most " + MAXIMUM_REOPENING_REASON_LENGTH + " characters");
+        }
+        return trimmed;
+    }
+
+    /** Written on the folio, where the operator reads it; English, as every text of the backend. */
+    private String chargeDescription() {
+        return cardNumber != null
+                ? "Tab card " + cardNumber
+                : "Tab table " + diningTableId.value();
     }
 }

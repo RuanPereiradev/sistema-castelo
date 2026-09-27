@@ -404,6 +404,20 @@ public class Folio extends AuditedEntity {
         }
     }
 
+    /**
+     * Refuses a folio a tab owns, for the writes only the tab makes on it: reversing its charge and
+     * closing it (decision R1 of task 3.2). Called by the routes of the counter, never by the facade
+     * the tab goes through.
+     *
+     * @throws FolioOwnedByTabException if a tab owns the folio
+     */
+    public void requireManagedByCounter() {
+        if (owner().isTab()) {
+            throw new FolioOwnedByTabException(
+                    "Folio " + id + " belongs to a tab; the tab reverses and closes it");
+        }
+    }
+
     private void requireOpen() {
         if (!status.acceptsPostings()) {
             throw new FolioClosedException("Folio " + id + " is closed");

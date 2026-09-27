@@ -98,6 +98,7 @@ Content-Type: application/json
         client.assert(response.status === 201, "esperado 201, recebido " + response.status);
         client.assert(response.body.balance === "120.00", "saldo deveria ser 120.00, veio " + response.body.balance);
     });
+    client.global.set("tabChargeId", response.body.chargeId);
 %}
 
 
@@ -161,16 +162,32 @@ Idempotency-Key: {{key2}}
 %}
 
 
-### 7. Fecha o folio TAB
+### 7. Fechar o folio TAB pelo balcao -> 409 FOLIO_OWNED_BY_TAB
+### Decisao do Ruan (task 3.2): quem fecha o folio da comanda e a propria comanda.
 POST {{host}}/api/billing/folios/{{tabFolioId}}/close
-Authorization: Bearer {{frontDeskToken}}
+Authorization: Bearer {{accessToken}}
 
 > {%
-    client.test("folio TAB fechado com saldo zero", function() {
-        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
-        client.assert(response.body.status === "CLOSED", "folio deveria estar CLOSED");
-        client.assert(response.body.closedAt !== null, "closedAt deveria estar preenchido");
-        client.assert(response.body.payments.length === 2, "dois pagamentos, a repeticao nao conta");
+    client.test("folio de comanda nao fecha pelo balcao, nem pelo admin: 409 FOLIO_OWNED_BY_TAB", function() {
+        client.assert(response.status === 409, "esperado 409, recebido " + response.status);
+        client.assert(response.body.code === "FOLIO_OWNED_BY_TAB", "code " + response.body.code);
+    });
+%}
+
+
+### 7b. Estornar o lancamento do folio TAB pelo balcao -> 409 FOLIO_OWNED_BY_TAB
+POST {{host}}/api/billing/folios/{{tabFolioId}}/charges/{{tabChargeId}}/reversal
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "reason": "Lancado errado"
+}
+
+> {%
+    client.test("folio de comanda nao estorna pelo balcao: 409 FOLIO_OWNED_BY_TAB", function() {
+        client.assert(response.status === 409, "esperado 409, recebido " + response.status);
+        client.assert(response.body.code === "FOLIO_OWNED_BY_TAB", "code " + response.body.code);
     });
 %}
 
@@ -578,7 +595,7 @@ Content-Type: application/json
 
 
 ### 31. Pagamento novo em folio fechado -> 409 FOLIO_CLOSED
-POST {{host}}/api/billing/folios/{{tabFolioId}}/payments
+POST {{host}}/api/billing/folios/{{stayFolioId}}/payments
 Authorization: Bearer {{frontDeskToken}}
 Content-Type: application/json
 Idempotency-Key: {{key7}}
@@ -596,7 +613,7 @@ Idempotency-Key: {{key7}}
 %}
 
 
-### 32. Repeticao do pagamento depois do fechamento: devolve o original
+### 32. Repeticao do pagamento com o folio TAB ja quitado: devolve o original
 POST {{host}}/api/billing/folios/{{tabFolioId}}/payments
 Authorization: Bearer {{frontDeskToken}}
 Content-Type: application/json
@@ -608,7 +625,7 @@ Idempotency-Key: {{key1}}
 }
 
 > {%
-    client.test("repeticao vale mesmo com o folio fechado", function() {
+    client.test("repeticao vale mesmo com o saldo zerado", function() {
         client.assert(response.status === 201, "esperado 201, recebido " + response.status);
         client.assert(response.body.id === client.global.get("tabPaymentId"), "deveria ser o pagamento original");
     });

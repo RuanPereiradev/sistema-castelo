@@ -23,6 +23,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.hibernate.annotations.DynamicUpdate;
 import org.hibernate.annotations.Fetch;
 import org.hibernate.annotations.FetchMode;
 
@@ -41,10 +42,19 @@ import org.hibernate.annotations.FetchMode;
  * <p>The columns of the kitchen display (task 3.5) and of the transfer between tabs (task 3.6) exist
  * in {@code tab_item} but are not mapped yet, except {@code delivered_at}: an item sold by weight is
  * born delivered (decision #9).
+ *
+ * <p>Updated column by column ({@code @DynamicUpdate}, decision D9 of task 3.2): moving the item to a
+ * split group or waiving its service charge writes only those columns, so it never rewrites the
+ * status another transaction just changed. Two writers of the status itself — a cancellation and the
+ * kitchen display — are kept apart by the {@code FOR UPDATE} lock on the item's row, not by this.
  */
 @Entity
 @Table(name = "tab_item")
+@DynamicUpdate
 public class TabItem extends AuditedEntity {
+
+    /** Every item starts in the first split group; the operator moves it to another. */
+    public static final int DEFAULT_SPLIT_GROUP = 1;
 
     @EmbeddedId
     @AttributeOverride(name = "value", column = @Column(name = "id"))
@@ -119,6 +129,16 @@ public class TabItem extends AuditedEntity {
     @Fetch(FetchMode.SUBSELECT)
     @OrderBy("modifierName")
     private List<TabItemModifier> modifiers = new ArrayList<>();
+
+    // ---- closing (task 3.2)
+
+    @Column(name = "split_group", nullable = false)
+    private short splitGroup = DEFAULT_SPLIT_GROUP;
+
+    @Column(name = "service_charge_waived", nullable = false)
+    private boolean serviceChargeWaived;
+
+    // ---- end closing
 
     protected TabItem() {
         // for JPA
@@ -305,5 +325,41 @@ public class TabItem extends AuditedEntity {
     /** Not cancelled: counts in the subtotal and keeps the tab from being cancelled. */
     public boolean isActive() {
         return status.isActive();
+    }
+
+    // ------------------------------------------------------------------ closing (task 3.2)
+
+    /** Takes the service charge off this item. Receives an item the {@link Tab} already checked. */
+    void waiveServiceCharge() {
+        this.serviceChargeWaived = true;
+    }
+
+    /** Puts the service charge back on this item. Receives an item the {@link Tab} already checked. */
+    void restoreServiceCharge() {
+        this.serviceChargeWaived = false;
+    }
+
+    /** Moves the whole line to a split group the {@link Tab} already validated. */
+    void assignToSplitGroup(int validSplitGroup) {
+        this.splitGroup = (short) validSplitGroup;
+    }
+
+    /** Whether the operator took the service charge off this item; it can be put back. */
+    public boolean serviceChargeWaived() {
+        return serviceChargeWaived;
+    }
+
+    /** The split group the whole line belongs to, 1 to 99. */
+    public int splitGroup() {
+        return splitGroup;
+    }
+
+    /**
+     * Whether the line total counts for the service charge: active, ordered with the charge, and not
+     * waived by the operator. The modifiers are in the line total, so they follow the item (decision
+     * #8 of task 1.2).
+     */
+    public boolean countsForServiceCharge() {
+        return isActive() && serviceChargeable && !serviceChargeWaived;
     }
 }

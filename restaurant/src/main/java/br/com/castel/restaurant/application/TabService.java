@@ -11,6 +11,7 @@ import br.com.castel.restaurant.domain.ModifierChoice;
 import br.com.castel.restaurant.domain.ModifierNotFoundException;
 import br.com.castel.restaurant.domain.ModifierRepository;
 import br.com.castel.restaurant.domain.Tab;
+import br.com.castel.restaurant.domain.TabBilling;
 import br.com.castel.restaurant.domain.TabId;
 import br.com.castel.restaurant.domain.TabItemId;
 import br.com.castel.restaurant.domain.TabItemOrder;
@@ -45,6 +46,7 @@ public class TabService {
     private final DiningTableRepository diningTables;
     private final MenuItemRepository menuItems;
     private final ModifierRepository modifiers;
+    private final TabBilling tabBilling;
     private final CurrentProperty currentProperty;
     private final AuditorAware auditorAware;
     private final Clock clock;
@@ -54,6 +56,7 @@ public class TabService {
             DiningTableRepository diningTables,
             MenuItemRepository menuItems,
             ModifierRepository modifiers,
+            TabBilling tabBilling,
             CurrentProperty currentProperty,
             AuditorAware auditorAware,
             Clock clock) {
@@ -61,6 +64,7 @@ public class TabService {
         this.diningTables = diningTables;
         this.menuItems = menuItems;
         this.modifiers = modifiers;
+        this.tabBilling = tabBilling;
         this.currentProperty = currentProperty;
         this.auditorAware = auditorAware;
         this.clock = clock;
@@ -120,11 +124,16 @@ public class TabService {
         return tabs.save(tab);
     }
 
-    /** @throws TabNotFoundException if the tab does not exist */
+    /**
+     * Cancels the tab, closing its folio in this transaction when it was reopened after its closing
+     * started (invariant 17 of task 3.2).
+     *
+     * @throws TabNotFoundException if the tab does not exist
+     */
     @Transactional
     public Tab cancel(TabId tabId, String reason) {
         Tab tab = tabs.findByIdForStatusChange(tabId).orElseThrow(() -> notFound(tabId));
-        tab.cancel(reason, auditorAware.currentAuditorId(), clock.instant());
+        tab.cancel(reason, tabBilling, auditorAware.currentAuditorId(), clock.instant());
         return tabs.save(tab);
     }
 

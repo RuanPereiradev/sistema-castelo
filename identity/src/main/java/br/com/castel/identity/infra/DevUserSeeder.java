@@ -101,6 +101,8 @@ public class DevUserSeeder implements ApplicationRunner {
     private void seedSettings(UUID propertyId) {
         seedSetting(propertyId, "billing.cash-drawer.required", "false", "BOOLEAN",
                 "CASH payments require an open cash drawer session");
+        seedSetting(propertyId, "restaurant.service-charge-percent", "10.00", "DECIMAL",
+                "Service charge on table-service tabs, in percent points");
     }
 
     private void seedSetting(UUID propertyId, String key, String value, String valueType, String description) {
