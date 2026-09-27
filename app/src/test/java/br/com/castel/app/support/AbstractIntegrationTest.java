@@ -4,6 +4,7 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.DriverManager;
 import java.sql.SQLException;
+import java.util.Map;
 import java.util.UUID;
 import org.flywaydb.core.Flyway;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
@@ -28,6 +29,12 @@ public abstract class AbstractIntegrationTest {
 
     /** The single property of the test installation, seeded before the first context starts. */
     protected static final UUID PROPERTY_ID = UUID.fromString("0b7e3b8e-3c52-4c1e-9d0e-4a1f00000001");
+
+    /** Whether a cash payment needs an open cash drawer session (task 2.4); seeded off, as the V8 seeds it. */
+    protected static final String CASH_DRAWER_REQUIRED_SETTING = "billing.cash-drawer.required";
+
+    /** Seeded by V9 for the properties that exist when it runs (decision G3 of task 3.2). */
+    protected static final String SERVICE_CHARGE_PERCENT_SETTING = "restaurant.service-charge-percent";
 
     @ServiceConnection
     static final PostgreSQLContainer<?> POSTGRES =
@@ -55,8 +62,52 @@ public abstract class AbstractIntegrationTest {
             statement.setObject(1, PROPERTY_ID);
             statement.setString(2, "Integration Property");
             statement.executeUpdate();
+            seedSettingsOf(connection);
         } catch (SQLException failure) {
             throw new IllegalStateException("Could not seed the single property of the test database", failure);
         }
     }
+
+    /**
+     * The settings a migration seeds for the properties that exist when it runs. The property is seeded
+     * here, after the migrations, so its settings are seeded here too, with the values of the migrations.
+     */
+    private static void seedSettingsOf(Connection connection) throws SQLException {
+        try (PreparedStatement statement = connection.prepareStatement(
+                "insert into setting (id, property_id, setting_key, setting_value, value_type) "
+                        + "values (?, ?, ?, 'false', 'BOOLEAN') on conflict (property_id, setting_key) do nothing")) {
+            statement.setObject(1, UUID.randomUUID());
+            statement.setObject(2, PROPERTY_ID);
+            statement.setString(3, CASH_DRAWER_REQUIRED_SETTING);
+            statement.executeUpdate();
+        }
+        try (PreparedStatement statement = connection.prepareStatement(
+                "insert into setting (id, property_id, setting_key, setting_value, value_type) "
+                        + "values (?, ?, ?, '10.00', 'DECIMAL') on conflict (property_id, setting_key) do nothing")) {
+            statement.setObject(1, UUID.randomUUID());
+            statement.setObject(2, PROPERTY_ID);
+            statement.setString(3, SERVICE_CHARGE_PERCENT_SETTING);
+            statement.executeUpdate();
+        }
+        // The delay limits of the kitchen display seeded by V10 (task 3.5, K11), in minutes.
+        Map<String, String> kitchenDisplayDelayLimits = Map.of(
+                "restaurant.kitchen-display.kitchen.warning-minutes", "15",
+                "restaurant.kitchen-display.kitchen.late-minutes", "25",
+                "restaurant.kitchen-display.pizza.warning-minutes", "20",
+                "restaurant.kitchen-display.pizza.late-minutes", "30",
+                "restaurant.kitchen-display.bar.warning-minutes", "5",
+                "restaurant.kitchen-display.bar.late-minutes", "10");
+        for (Map.Entry<String, String> limit : kitchenDisplayDelayLimits.entrySet()) {
+            try (PreparedStatement statement = connection.prepareStatement(
+                    "insert into setting (id, property_id, setting_key, setting_value, value_type) "
+                            + "values (?, ?, ?, ?, 'INTEGER') on conflict (property_id, setting_key) do nothing")) {
+                statement.setObject(1, UUID.randomUUID());
+                statement.setObject(2, PROPERTY_ID);
+                statement.setString(3, limit.getKey());
+                statement.setString(4, limit.getValue());
+                statement.executeUpdate();
+            }
+        }
+    }
+
 }

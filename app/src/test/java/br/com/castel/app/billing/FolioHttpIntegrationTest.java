@@ -135,6 +135,28 @@ class FolioHttpIntegrationTest extends AbstractIntegrationTest {
                 .isEqualTo("FOLIO_CLOSED");
     }
 
+    /** Decision R1 of task 3.2: only the tab reverses and closes its folio, whatever the role. */
+    @Test
+    void shouldRefuseReversingAndClosingTheFolioOfATabAtTheCounterButStillTakePayments() {
+        String adminToken = accessTokenFor(createUser(Role.ADMIN));
+        String frontDeskToken = accessTokenFor(createUser(Role.FRONT_DESK));
+        FolioId folioId = folioFacade.openTabFolio(FolioOwner.tab(UUID.randomUUID()));
+        ChargeId charge = folioFacade.post(folioId, new ChargeRequest(
+                Money.of("30.00"), "Tab card 8", ChargeSource.tab(UUID.randomUUID())));
+        String folioPath = FOLIOS + "/" + folioId.value();
+
+        send(pay(folioPath, frontDeskToken, "PIX", "30.00", uniqueKey()), 201);
+
+        assertThat(send(post(folioPath + "/charges/" + charge.value() + "/reversal", adminToken,
+                        "{\"reason\":\"Posted twice\"}"), 409).get("code").asString())
+                .isEqualTo("FOLIO_OWNED_BY_TAB");
+        assertThat(send(post(folioPath + "/close", adminToken, ""), 409).get("code").asString())
+                .isEqualTo("FOLIO_OWNED_BY_TAB");
+        FolioView view = folioFacade.findById(folioId);
+        assertThat(view.status()).isEqualTo(FolioStatus.OPEN);
+        assertThat(view.charges()).hasSize(1);
+    }
+
     @Test
     void shouldRegisterARetriedPaymentOnceEvenAfterTheFolioCloses() {
         String frontDeskToken = accessTokenFor(createUser(Role.FRONT_DESK));
@@ -154,7 +176,7 @@ class FolioHttpIntegrationTest extends AbstractIntegrationTest {
                 .isEqualTo("IDEMPOTENCY_KEY_REUSED");
 
         send(pay(folioPath, frontDeskToken, "CASH", "40.00", uniqueKey()), 201);
-        send(post(folioPath + "/close", frontDeskToken, ""), 200);
+        folioFacade.close(folioId);
         JsonNode retryAfterClosing = send(pay(folioPath, frontDeskToken, "PIX", "60.00", key), 201);
 
         assertThat(retryAfterClosing.get("id").asString()).isEqualTo(first.get("id").asString());
@@ -225,7 +247,9 @@ class FolioHttpIntegrationTest extends AbstractIntegrationTest {
     @Test
     void shouldRefuseReversingTheSameChargeAgainOnALaterRequest() {
         String frontDeskToken = accessTokenFor(createUser(Role.FRONT_DESK));
-        FolioId folioId = folioFacade.openTabFolio(FolioOwner.tab(UUID.randomUUID()));
+        String code = uniqueCode();
+        FolioId folioId = folioFacade.openStayFolio(
+                FolioOwner.reservation(UUID.randomUUID()), new FolioReference(code, "Room " + code));
         ChargeId charge = folioFacade.post(folioId, new ChargeRequest(
                 Money.of("30.00"), "Restaurant - tab 9", ChargeSource.tab(UUID.randomUUID())));
         String reversalPath = FOLIOS + "/" + folioId.value() + "/charges/" + charge.value() + "/reversal";

@@ -22,7 +22,8 @@ import org.springframework.transaction.annotation.Transactional;
  *
  * <p>Idempotent: a username that already exists is left untouched. There is no {@code Property}
  * aggregate yet, so a minimal row is inserted through {@link JdbcTemplate}, just enough to satisfy
- * {@code app_user}'s foreign key. Restricted to the {@code dev} profile and to
+ * {@code app_user}'s foreign key, together with the settings a migration could not seed because no
+ * property existed when it ran (decision G3 of lot 2). Restricted to the {@code dev} profile and to
  * {@code castel.dev.seed-enabled=true}; it must never run in {@code prod}.
  */
 @Component
@@ -89,6 +90,46 @@ public class DevUserSeeder implements ApplicationRunner {
                 propertyId,
                 "Castel Dev",
                 "America/Fortaleza");
+        seedSettings(propertyId);
         return propertyId;
+    }
+
+    /**
+     * The settings each migration seeds for the properties that already exist. On an empty database
+     * the migrations run before this property exists, so they are seeded here, with the same values.
+     */
+    private void seedSettings(UUID propertyId) {
+        seedSetting(propertyId, "billing.cash-drawer.required", "false", "BOOLEAN",
+                "CASH payments require an open cash drawer session");
+        seedSetting(propertyId, "restaurant.service-charge-percent", "10.00", "DECIMAL",
+                "Service charge on table-service tabs, in percent points");
+        seedKitchenDisplayDelayLimit(propertyId, "kitchen", "warning", "15");
+        seedKitchenDisplayDelayLimit(propertyId, "kitchen", "late", "25");
+        seedKitchenDisplayDelayLimit(propertyId, "pizza", "warning", "20");
+        seedKitchenDisplayDelayLimit(propertyId, "pizza", "late", "30");
+        seedKitchenDisplayDelayLimit(propertyId, "bar", "warning", "5");
+        seedKitchenDisplayDelayLimit(propertyId, "bar", "late", "10");
+    }
+
+    /**
+     * One delay limit of a station of the kitchen display (task 3.5, K11), in minutes since the
+     * order: the same keys, values and descriptions {@code V10__kitchen_queue_ready.sql} seeds.
+     */
+    private void seedKitchenDisplayDelayLimit(UUID propertyId, String station, String limit, String minutes) {
+        String meaning = "warning".equals(limit) ? "calls for attention" : "is late";
+        seedSetting(propertyId, "restaurant.kitchen-display." + station + "." + limit + "-minutes", minutes, "INTEGER",
+                "Minutes after the order when a " + station.toUpperCase(java.util.Locale.ROOT) + " ticket " + meaning);
+    }
+
+    private void seedSetting(UUID propertyId, String key, String value, String valueType, String description) {
+        jdbcTemplate.update(
+                "INSERT INTO setting (id, property_id, setting_key, setting_value, value_type, description) "
+                        + "VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT (property_id, setting_key) DO NOTHING",
+                UUID.randomUUID(),
+                propertyId,
+                key,
+                value,
+                valueType,
+                description);
     }
 }

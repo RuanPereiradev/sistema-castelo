@@ -23,6 +23,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.hibernate.annotations.DynamicUpdate;
 import org.hibernate.annotations.Fetch;
 import org.hibernate.annotations.FetchMode;
 
@@ -38,13 +39,23 @@ import org.hibernate.annotations.FetchMode;
  * rule before handing validated values here. An item is never removed; a cancelled item stays on the
  * tab with its author, moment and reason.
  *
- * <p>The columns of the kitchen display (task 3.5) and of the transfer between tabs (task 3.6) exist
- * in {@code tab_item} but are not mapped yet, except {@code delivered_at}: an item sold by weight is
- * born delivered (decision #9).
+ * <p>The moments of the kitchen display ({@code preparation_started_at}, {@code ready_at},
+ * {@code delivered_at}) are written by its transitions (task 3.5); an item sold by weight is born
+ * delivered (decision #9). The columns of the transfer between tabs (task 3.6) exist in
+ * {@code tab_item} but are not mapped yet.
+ *
+ * <p>Updated column by column ({@code @DynamicUpdate}, decision D9 of task 3.2): moving the item to a
+ * split group or waiving its service charge writes only those columns, so it never rewrites the
+ * status another transaction just changed. Two writers of the status itself — a cancellation and the
+ * kitchen display — are kept apart by the {@code FOR UPDATE} lock on the item's row, not by this.
  */
 @Entity
 @Table(name = "tab_item")
+@DynamicUpdate
 public class TabItem extends AuditedEntity {
+
+    /** Every item starts in the first split group; the operator moves it to another. */
+    public static final int DEFAULT_SPLIT_GROUP = 1;
 
     @EmbeddedId
     @AttributeOverride(name = "value", column = @Column(name = "id"))
@@ -100,6 +111,13 @@ public class TabItem extends AuditedEntity {
     @Column(name = "delivered_at")
     private Instant deliveredAt;
 
+    // ---- kitchen display
+    @Column(name = "preparation_started_at")
+    private Instant preparationStartedAt;
+
+    @Column(name = "ready_at")
+    private Instant readyAt;
+
     @Column(name = "cancelled_at")
     private Instant cancelledAt;
 
@@ -119,6 +137,16 @@ public class TabItem extends AuditedEntity {
     @Fetch(FetchMode.SUBSELECT)
     @OrderBy("modifierName")
     private List<TabItemModifier> modifiers = new ArrayList<>();
+
+    // ---- closing (task 3.2)
+
+    @Column(name = "split_group", nullable = false)
+    private short splitGroup = DEFAULT_SPLIT_GROUP;
+
+    @Column(name = "service_charge_waived", nullable = false)
+    private boolean serviceChargeWaived;
+
+    // ---- end closing
 
     protected TabItem() {
         // for JPA
@@ -216,6 +244,91 @@ public class TabItem extends AuditedEntity {
         return id.equals(otherId);
     }
 
+    // ---- kitchen display
+
+    /**
+     * @throws TabItemAlreadyCancelledException if the item was cancelled
+     * @throws InvalidTabItemTransitionException if the item is not {@code PENDING}
+     */
+    void startPreparation(Instant at) {
+        requireTransition(status.acceptsPreparationStart(), TabItemStatus.IN_PREPARATION);
+        this.status = TabItemStatus.IN_PREPARATION;
+        this.preparationStartedAt = at;
+    }
+
+    /**
+     * Ready from preparation, or straight from pending (K2), which leaves no preparation start.
+     *
+     * @throws TabItemAlreadyCancelledException if the item was cancelled
+     * @throws InvalidTabItemTransitionException if the item is not {@code PENDING} or {@code IN_PREPARATION}
+     */
+    void markReady(Instant at) {
+        requireTransition(status.acceptsReady(), TabItemStatus.READY);
+        this.status = TabItemStatus.READY;
+        this.readyAt = at;
+    }
+
+    /**
+     * Delivered from any status still on the queue (K4); the moments already recorded stay.
+     *
+     * @throws TabItemAlreadyCancelledException if the item was cancelled
+     * @throws InvalidTabItemTransitionException if the item was already delivered
+     */
+    void deliver(Instant at) {
+        requireTransition(status.acceptsDelivery(), TabItemStatus.DELIVERED);
+        this.status = TabItemStatus.DELIVERED;
+        this.deliveredAt = at;
+    }
+
+    /**
+     * Back to the status before the last tap, erasing its moment (K3): {@code IN_PREPARATION} goes
+     * back to {@code PENDING}; {@code READY} goes back to {@code IN_PREPARATION} when preparation was
+     * started, or to {@code PENDING} when ready skipped it (K2), so an item is never in preparation
+     * without the moment it started.
+     *
+     * @throws TabItemAlreadyCancelledException if the item was cancelled
+     * @throws InvalidTabItemTransitionException if the item is {@code PENDING} or {@code DELIVERED}
+     */
+    void undoLastStep() {
+        requireNotCancelled();
+        if (!status.acceptsUndo()) {
+            throw new InvalidTabItemTransitionException(
+                    "Tab item " + id.value() + " is " + status + " and has no step to undo");
+        }
+        this.status = status.undoneTo(preparationStartedAt != null);
+        this.readyAt = null;
+        if (!status.carriesPreparationStart()) {
+            this.preparationStartedAt = null;
+        }
+    }
+
+    private void requireTransition(boolean accepted, TabItemStatus target) {
+        requireNotCancelled();
+        if (!accepted) {
+            throw new InvalidTabItemTransitionException(
+                    "Tab item " + id.value() + " cannot go from " + status + " to " + target);
+        }
+    }
+
+    private void requireNotCancelled() {
+        if (!status.isActive()) {
+            throw new TabItemAlreadyCancelledException("Tab item " + id.value() + " is cancelled");
+        }
+    }
+
+    public Optional<Instant> preparationStartedAt() {
+        return Optional.ofNullable(preparationStartedAt);
+    }
+
+    public Optional<Instant> readyAt() {
+        return Optional.ofNullable(readyAt);
+    }
+
+    /** Shown on the kitchen display of its station: pending, in preparation or ready (K5). */
+    public boolean isOnKitchenQueue() {
+        return status.isOnKitchenQueue();
+    }
+
     // ------------------------------------------------------------------ reading
 
     public TabItemId id() {
@@ -305,5 +418,41 @@ public class TabItem extends AuditedEntity {
     /** Not cancelled: counts in the subtotal and keeps the tab from being cancelled. */
     public boolean isActive() {
         return status.isActive();
+    }
+
+    // ------------------------------------------------------------------ closing (task 3.2)
+
+    /** Takes the service charge off this item. Receives an item the {@link Tab} already checked. */
+    void waiveServiceCharge() {
+        this.serviceChargeWaived = true;
+    }
+
+    /** Puts the service charge back on this item. Receives an item the {@link Tab} already checked. */
+    void restoreServiceCharge() {
+        this.serviceChargeWaived = false;
+    }
+
+    /** Moves the whole line to a split group the {@link Tab} already validated. */
+    void assignToSplitGroup(int validSplitGroup) {
+        this.splitGroup = (short) validSplitGroup;
+    }
+
+    /** Whether the operator took the service charge off this item; it can be put back. */
+    public boolean serviceChargeWaived() {
+        return serviceChargeWaived;
+    }
+
+    /** The split group the whole line belongs to, 1 to 99. */
+    public int splitGroup() {
+        return splitGroup;
+    }
+
+    /**
+     * Whether the line total counts for the service charge: active, ordered with the charge, and not
+     * waived by the operator. The modifiers are in the line total, so they follow the item (decision
+     * #8 of task 1.2).
+     */
+    public boolean countsForServiceCharge() {
+        return isActive() && serviceChargeable && !serviceChargeWaived;
     }
 }
