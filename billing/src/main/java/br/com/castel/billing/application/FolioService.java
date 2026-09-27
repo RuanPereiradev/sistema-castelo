@@ -11,6 +11,10 @@ import br.com.castel.billing.api.FolioView;
 import br.com.castel.billing.api.PaymentId;
 import br.com.castel.billing.api.PaymentMethod;
 import br.com.castel.billing.api.ReceivedPaymentView;
+import br.com.castel.billing.domain.CashDrawerAssignment;
+import br.com.castel.billing.domain.CashDrawerSessionId;
+import br.com.castel.billing.domain.CashDrawerSessionNotOpenException;
+import br.com.castel.billing.domain.CashDrawerSessionRepository;
 import br.com.castel.billing.domain.Charge;
 import br.com.castel.billing.domain.Folio;
 import br.com.castel.billing.domain.FolioAlreadyOpenedForOwnerException;
@@ -22,6 +26,7 @@ import br.com.castel.billing.domain.Payment;
 import br.com.castel.sharedkernel.AuditorAware;
 import br.com.castel.sharedkernel.CurrentProperty;
 import br.com.castel.sharedkernel.Money;
+import br.com.castel.sharedkernel.Settings;
 import java.time.Clock;
 import java.util.Optional;
 import org.springframework.stereotype.Service;
@@ -37,18 +42,35 @@ import org.springframework.transaction.annotation.Transactional;
  * <p>The rules about the set of folios — one per owner, one open stay per reference code, an
  * idempotency key held by one folio — are checked here to answer a readable code, and held by the
  * database against a race; the repository translates a lost race into the same code.
+ *
+ * <p>Every payment passes through {@link #registerPayment}, which is where the cash drawer comes in
+ * (task 2.4): it locks the open cash drawer session {@code FOR KEY SHARE}, after the folio, and hands
+ * the folio a {@link CashDrawerAssignment}. The order of the locks across the system is tab, folio,
+ * cash drawer session.
  */
 @Service
 public class FolioService implements FolioFacade {
 
+    /** Whether a {@code CASH} payment needs an open cash drawer session (decision C2 of task 2.4). */
+    public static final String CASH_DRAWER_REQUIRED_SETTING = "billing.cash-drawer.required";
+
     private final FolioRepository folios;
+    private final CashDrawerSessionRepository cashDrawerSessions;
+    private final Settings settings;
     private final CurrentProperty currentProperty;
     private final AuditorAware auditorAware;
     private final Clock clock;
 
     public FolioService(
-            FolioRepository folios, CurrentProperty currentProperty, AuditorAware auditorAware, Clock clock) {
+            FolioRepository folios,
+            CashDrawerSessionRepository cashDrawerSessions,
+            Settings settings,
+            CurrentProperty currentProperty,
+            AuditorAware auditorAware,
+            Clock clock) {
         this.folios = folios;
+        this.cashDrawerSessions = cashDrawerSessions;
+        this.settings = settings;
         this.currentProperty = currentProperty;
         this.auditorAware = auditorAware;
         this.clock = clock;
@@ -165,21 +187,38 @@ public class FolioService implements FolioFacade {
      * retry on the same folio is recognised by the folio itself. Every payment passes here, the one
      * of {@link #receivePayment} included.
      *
+     * <p>The cash payment falls into the open cash drawer session, whose lock is taken here, after the
+     * folio's (invariant 26 of task 2.4). The session and the setting are read for every method, so
+     * this path decides nothing about the method: the folio does.
+     *
      * @throws IdempotencyKeyReusedException if another folio holds the key
+     * @throws CashDrawerSessionNotOpenException if cash control is on and a cash payment finds no open
+     *     session
      */
     @Transactional
     public ReceivedPayment registerPayment(FolioId folioId, PaymentMethod method, Money amount, String idempotencyKey) {
         String key = Payment.requireValidIdempotencyKey(idempotencyKey);
         Folio folio = loadForUpdate(folioId);
         rejectKeyHeldByAnother(key, folio);
-        Payment payment = folio.receive(method, amount, key, auditorAware.currentAuditorId(), clock.instant());
+        CashDrawerAssignment cashDrawer = CashDrawerAssignment.of(
+                cashDrawerSessions.findOpenForKeyShare(folio.propertyId()),
+                settings.asBoolean(CASH_DRAWER_REQUIRED_SETTING));
+        Payment payment =
+                folio.receive(method, amount, key, auditorAware.currentAuditorId(), clock.instant(), cashDrawer);
         folios.save(folio);
+        payment.cashDrawerSessionId().ifPresent(this::requireReadableCashDrawerSession);
         return new ReceivedPayment(payment, folio.balance());
     }
 
+    /**
+     * The cash drawer session of the payment, if any, is locked {@code FOR KEY SHARE}, open or closed:
+     * the refund then lands either before the sum of its closing or after the freezing (invariant 27
+     * of task 2.4).
+     */
     @Transactional
     public Folio refundPayment(FolioId folioId, PaymentId paymentId, String reason) {
         Folio folio = loadForUpdate(folioId);
+        folio.cashDrawerSessionOf(paymentId).ifPresent(cashDrawerSessions::lockForKeyShare);
         folio.refund(paymentId, reason, auditorAware.currentAuditorId(), clock.instant());
         return saveReadable(folio);
     }
@@ -256,6 +295,17 @@ public class FolioService implements FolioFacade {
         if (holder.filter(other -> !other.equals(folio.id())).isPresent()) {
             throw new IdempotencyKeyReusedException("The idempotency key was used on another folio");
         }
+    }
+
+    /**
+     * Reads the expected amount of the session the cash payment fell into, after the payment was
+     * written and inside its transaction (decision #18 of task 2.4). A payment that takes it out of
+     * the range of {@link Money} fails with {@code MONEY_OUT_OF_RANGE} and rolls back, instead of
+     * leaving a session no closing could answer, which would keep the property from opening another.
+     */
+    private void requireReadableCashDrawerSession(CashDrawerSessionId sessionId) {
+        Money cashPayments = cashDrawerSessions.sumConfirmedCashPayments(sessionId).total();
+        cashDrawerSessions.findById(sessionId).ifPresent(session -> session.expectedAmount(cashPayments));
     }
 
     private static FolioNotFoundException notFound(FolioId folioId) {

@@ -88,6 +88,7 @@ a URL, o privado com a senha.
 | `32-restaurant-dining-tables.http` | 1.5 | Cadastro de mesas, ordem natural da lista, leitura pelo garçom, inativas |
 | `33-restaurant-tabs.http` | 2.2 | Comanda: abrir em mesa e cartão, lançar por unidade e por peso, cancelar item e comanda |
 | `40-billing-folios.http` | 1.3 | Folio: lançamentos, estorno, pagamentos, estorno de pagamento, fechamento com saldo zero |
+| `41-billing-cash-sessions.http` | 2.4 | Caixa: abertura de turno, suprimento, dinheiro do folio no turno, sangria, fechamento cego com quebra |
 
 Numeração em ordem de execução sugerida. Cada task nova acrescenta o próximo
 número — a 0.8 traz o `30-restaurant-menu.http`.
