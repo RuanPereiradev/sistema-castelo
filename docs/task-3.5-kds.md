@@ -165,8 +165,10 @@ public boolean isOnKitchenQueue();
 // restaurant.domain — eventos (implementam DomainEvent)
 record TabItemOrdered(TabId tabId, TabItemId itemId, PrepStation station, TabItemStatus status, Instant occurredAt)
     static TabItemOrdered of(TabId tabId, TabItem item)          // occurredAt = orderedAt
+    boolean reachesKitchenQueue()                                // status.isOnKitchenQueue()
 record TabItemStatusChanged(TabId tabId, TabItemId itemId, PrepStation station,
                             TabItemStatus from, TabItemStatus to, Instant occurredAt)
+    boolean touchesReady()                                       // from ou to é READY
 record TabItemCancelled(TabId tabId, TabItemId itemId, PrepStation station, String reason, Instant occurredAt)
     static TabItemCancelled of(TabId tabId, TabItem cancelledItem) // occurredAt = cancelledAt
 
