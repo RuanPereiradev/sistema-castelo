@@ -1,0 +1,640 @@
+### Task 3.5 - KDS: fila por setor, transicoes do item e entrega
+### Ambiente: selecione "dev" no IntelliJ HTTP Client, com http-client.env.json
+### + http-client.private.env.json (copie o .example). Ver http/README.md.
+###
+### Pre-requisito: aplicacao rodando no perfil "dev" com o seed habilitado
+### (usuarios admin, garcom e cozinha, e os limites de atraso do KDS em setting).
+### Rode o arquivo inteiro, em ordem: a preparacao e o caminho feliz salvam os ids
+### que os cenarios negativos usam. No fim, itens e comandas sao cancelados e o
+### arquivo roda de novo.
+###
+### Tempo real (STOMP em /ws/kitchen) nao e verificado aqui: o frame STOMP termina
+### em NUL e o HTTP Client nao faz assert confiavel dele. A prova e o
+### KitchenDisplayWebSocketIntegrationTest; inspecao manual em docs/task-3.5-kds.md, secao 10.
+
+
+### ------------------------------------------------------------------
+### Preparacao: logins, cardapio, mesa e comandas
+### ------------------------------------------------------------------
+
+
+### 0. Login do admin
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{
+  "username": "{{adminUsername}}",
+  "password": "{{password}}"
+}
+
+> {%
+    client.test("login do admin retorna 200", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+    });
+    client.global.set("adminToken", response.body.accessToken);
+    client.global.set("suffix", Math.random().toString(36).substring(2, 8));
+    client.global.set("cardNumber", String(Math.floor(Math.random() * 999) + 1));
+%}
+
+
+### 1. Login do garcom
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{
+  "username": "{{waiterUsername}}",
+  "password": "{{password}}"
+}
+
+> {%
+    client.test("login do garcom retorna 200", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+    });
+    client.global.set("waiterToken", response.body.accessToken);
+%}
+
+
+### 2. Login da cozinha (usuario cozinha do seed de dev)
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{
+  "username": "cozinha",
+  "password": "{{password}}"
+}
+
+> {%
+    client.test("login da cozinha retorna 200", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+    });
+    client.global.set("kitchenToken", response.body.accessToken);
+%}
+
+
+### 3. Cria a categoria
+POST {{host}}/api/restaurant/menu-categories
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "name": "KDS {{suffix}}",
+  "displayOrder": 1
+}
+
+> {%
+    client.test("categoria criada", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+    });
+    client.global.set("categoryId", response.body.id);
+%}
+
+
+### 4. Pizza, setor PIZZA
+POST {{host}}/api/restaurant/menu-items
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "categoryId": "{{categoryId}}",
+  "name": "Pizza {{suffix}}",
+  "prepStation": "PIZZA",
+  "soldByWeight": false,
+  "price": "40.00"
+}
+
+> {%
+    client.test("pizza criado", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+    });
+    client.global.set("pizzaId", response.body.id);
+%}
+
+
+### 5. Refrigerante, setor BAR
+POST {{host}}/api/restaurant/menu-items
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "categoryId": "{{categoryId}}",
+  "name": "Refri {{suffix}}",
+  "prepStation": "BAR",
+  "soldByWeight": false,
+  "price": "6.00"
+}
+
+> {%
+    client.test("refri criado", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+    });
+    client.global.set("sodaId", response.body.id);
+%}
+
+
+### 6. Buffet por peso, setor KITCHEN
+POST {{host}}/api/restaurant/menu-items
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "categoryId": "{{categoryId}}",
+  "name": "Buffet {{suffix}}",
+  "prepStation": "KITCHEN",
+  "soldByWeight": true,
+  "price": "59.90"
+}
+
+> {%
+    client.test("buffet criado", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+    });
+    client.global.set("buffetId", response.body.id);
+%}
+
+
+### 7. Cria a mesa
+POST {{host}}/api/restaurant/dining-tables
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "label": "KDS {{suffix}}"
+}
+
+> {%
+    client.test("mesa criada", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+    });
+    client.global.set("diningTableId", response.body.id);
+%}
+
+
+### 8. Abre a comanda na mesa
+POST {{host}}/api/restaurant/tabs
+Authorization: Bearer {{waiterToken}}
+Content-Type: application/json
+
+{
+  "origin": "TABLE_SERVICE",
+  "diningTableId": "{{diningTableId}}"
+}
+
+> {%
+    client.test("comanda aberta", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+    });
+    client.global.set("tableTabId", response.body.id);
+%}
+
+
+### 9. Lanca a pizza
+POST {{host}}/api/restaurant/tabs/{{tableTabId}}/items
+Authorization: Bearer {{waiterToken}}
+Content-Type: application/json
+
+{
+  "menuItemId": "{{pizzaId}}",
+  "specialInstructions": "sem cebola"
+}
+
+> {%
+    client.test("pizza lancada", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+    });
+    client.global.set("pizzaItemId", response.body.items[response.body.items.length - 1].id);
+%}
+
+
+### 10. Lanca o refrigerante
+POST {{host}}/api/restaurant/tabs/{{tableTabId}}/items
+Authorization: Bearer {{waiterToken}}
+Content-Type: application/json
+
+{
+  "menuItemId": "{{sodaId}}"
+}
+
+> {%
+    client.test("refrigerante lancado", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+    });
+    client.global.set("sodaItemId", response.body.items[response.body.items.length - 1].id);
+%}
+
+
+### 11. Abre a comanda no cartao
+POST {{host}}/api/restaurant/tabs
+Authorization: Bearer {{waiterToken}}
+Content-Type: application/json
+
+{
+  "origin": "SELF_SERVICE",
+  "cardNumber": {{cardNumber}}
+}
+
+> {%
+    client.test("comanda do cartao aberta", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+    });
+    client.global.set("cardTabId", response.body.id);
+%}
+
+
+### 12. Lanca um prato por peso no cartao (nasce DELIVERED, nunca vai para a fila)
+POST {{host}}/api/restaurant/tabs/{{cardTabId}}/items
+Authorization: Bearer {{waiterToken}}
+Content-Type: application/json
+
+{
+  "menuItemId": "{{buffetId}}",
+  "weightGrams": 300
+}
+
+> {%
+    client.test("prato lancado", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+        client.assert(response.body.items[0].status === "DELIVERED", "prato DELIVERED");
+    });
+    client.global.set("plateItemId", response.body.items[0].id);
+%}
+
+
+### ------------------------------------------------------------------
+### Caminho feliz
+### ------------------------------------------------------------------
+
+
+### 13. Fila da pizzaria: tem a pizza, nao tem o refrigerante, traz os limites
+GET {{host}}/api/kitchen/queue?station=PIZZA
+Authorization: Bearer {{kitchenToken}}
+
+> {%
+    function hasItem(queue, id) { return queue.items.some(function(ticket) { return ticket.itemId === id; }); }
+    client.test("fila PIZZA", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        client.assert(hasItem(response.body, client.global.get("pizzaItemId")), "pizza na fila");
+        client.assert(!hasItem(response.body, client.global.get("sodaItemId")), "refrigerante fora da fila");
+        client.assert(response.body.warningAfterMinutes === 20 && response.body.lateAfterMinutes === 30, "limites 20/30");
+        client.assert(response.body.serverTime, "serverTime presente");
+    });
+%}
+
+
+### 14. Fila do bar: tem o refrigerante
+GET {{host}}/api/kitchen/queue?station=BAR
+Authorization: Bearer {{kitchenToken}}
+
+> {%
+    function hasItem(queue, id) { return queue.items.some(function(ticket) { return ticket.itemId === id; }); }
+    client.test("fila BAR", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        client.assert(hasItem(response.body, client.global.get("sodaItemId")), "refrigerante na fila");
+    });
+%}
+
+
+### 15. Fila da cozinha: o prato por peso nao aparece
+GET {{host}}/api/kitchen/queue?station=KITCHEN
+Authorization: Bearer {{kitchenToken}}
+
+> {%
+    function hasItem(queue, id) { return queue.items.some(function(ticket) { return ticket.itemId === id; }); }
+    client.test("fila KITCHEN", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        client.assert(!hasItem(response.body, client.global.get("plateItemId")), "prato por peso fora da fila");
+    });
+%}
+
+
+### 16. Negativo: desfazer item PENDING (a pizza ainda nao comecou)
+POST {{host}}/api/kitchen/items/{{pizzaItemId}}/undo
+Authorization: Bearer {{kitchenToken}}
+
+> {%
+    client.test("pendente nao desfaz", function() {
+        client.assert(response.status === 409, "esperado 409, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_TAB_ITEM_TRANSITION", "code INVALID_TAB_ITEM_TRANSITION, recebido " + response.body.code);
+    });
+%}
+
+
+### 17. Cozinha inicia o preparo da pizza
+POST {{host}}/api/kitchen/items/{{pizzaItemId}}/start
+Authorization: Bearer {{kitchenToken}}
+
+> {%
+    client.test("pizza em preparo", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        client.assert(response.body.status === "IN_PREPARATION", "IN_PREPARATION");
+        client.assert(response.body.preparationStartedAt, "preparationStartedAt gravado");
+        client.assert(response.body.specialInstructions === "sem cebola", "observacao no ticket");
+    });
+%}
+
+
+### 18. Cozinha marca a pizza pronta
+POST {{host}}/api/kitchen/items/{{pizzaItemId}}/ready
+Authorization: Bearer {{kitchenToken}}
+
+> {%
+    client.test("pizza pronta", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        client.assert(response.body.status === "READY" && response.body.readyAt, "READY com readyAt");
+    });
+%}
+
+
+### 19. Cozinha desfaz o pronto (toque errado)
+POST {{host}}/api/kitchen/items/{{pizzaItemId}}/undo
+Authorization: Bearer {{kitchenToken}}
+
+> {%
+    client.test("pronto desfeito", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        client.assert(response.body.status === "IN_PREPARATION" && response.body.readyAt === null, "volta a IN_PREPARATION sem readyAt");
+    });
+%}
+
+
+### 20. Cozinha marca a pizza pronta de novo
+POST {{host}}/api/kitchen/items/{{pizzaItemId}}/ready
+Authorization: Bearer {{kitchenToken}}
+
+> {%
+    client.test("pizza pronta de novo", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        client.assert(response.body.status === "READY", "READY");
+    });
+%}
+
+
+### 21. A pizza pronta continua na fila ate a entrega
+GET {{host}}/api/kitchen/queue?station=PIZZA
+Authorization: Bearer {{kitchenToken}}
+
+> {%
+    function hasItem(queue, id) { return queue.items.some(function(ticket) { return ticket.itemId === id; }); }
+    client.test("pronta na fila", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        client.assert(hasItem(response.body, client.global.get("pizzaItemId")), "pizza READY na fila");
+    });
+%}
+
+
+### 22. Garcom entrega a pizza
+POST {{host}}/api/restaurant/tabs/{{tableTabId}}/items/{{pizzaItemId}}/deliver
+Authorization: Bearer {{waiterToken}}
+
+> {%
+    client.test("pizza entregue", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        var pizza = response.body.items.filter(function(item) { return item.id === client.global.get("pizzaItemId"); })[0];
+        client.assert(pizza.status === "DELIVERED" && pizza.deliveredAt, "DELIVERED com deliveredAt");
+    });
+%}
+
+
+### 23. A pizza entregue saiu da fila
+GET {{host}}/api/kitchen/queue?station=PIZZA
+Authorization: Bearer {{kitchenToken}}
+
+> {%
+    function hasItem(queue, id) { return queue.items.some(function(ticket) { return ticket.itemId === id; }); }
+    client.test("fora da fila", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        client.assert(!hasItem(response.body, client.global.get("pizzaItemId")), "pizza fora da fila");
+    });
+%}
+
+
+### 24. Bar marca o refrigerante pronto direto, sem preparo
+POST {{host}}/api/kitchen/items/{{sodaItemId}}/ready
+Authorization: Bearer {{kitchenToken}}
+
+> {%
+    client.test("refrigerante pronto", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        client.assert(response.body.status === "READY" && response.body.preparationStartedAt === null, "READY sem preparationStartedAt");
+    });
+%}
+
+
+### ------------------------------------------------------------------
+### Cenarios negativos
+### ------------------------------------------------------------------
+
+
+### 25. Iniciar preparo de item ja pronto
+POST {{host}}/api/kitchen/items/{{sodaItemId}}/start
+Authorization: Bearer {{kitchenToken}}
+
+> {%
+    client.test("transicao invalida", function() {
+        client.assert(response.status === 409, "esperado 409, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_TAB_ITEM_TRANSITION", "code INVALID_TAB_ITEM_TRANSITION, recebido " + response.body.code);
+    });
+%}
+
+
+### 26. Desfazer item entregue (DELIVERED nunca volta)
+POST {{host}}/api/kitchen/items/{{pizzaItemId}}/undo
+Authorization: Bearer {{kitchenToken}}
+
+> {%
+    client.test("entregue nao desfaz", function() {
+        client.assert(response.status === 409, "esperado 409, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_TAB_ITEM_TRANSITION", "code INVALID_TAB_ITEM_TRANSITION, recebido " + response.body.code);
+    });
+%}
+
+
+### 27. Entregar de novo
+POST {{host}}/api/restaurant/tabs/{{tableTabId}}/items/{{pizzaItemId}}/deliver
+Authorization: Bearer {{waiterToken}}
+
+> {%
+    client.test("ja entregue", function() {
+        client.assert(response.status === 409, "esperado 409, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_TAB_ITEM_TRANSITION", "code INVALID_TAB_ITEM_TRANSITION, recebido " + response.body.code);
+    });
+%}
+
+
+### 28. Garcom cancela o refrigerante pronto
+POST {{host}}/api/restaurant/tabs/{{tableTabId}}/items/{{sodaItemId}}/cancel
+Authorization: Bearer {{waiterToken}}
+Content-Type: application/json
+
+{
+  "reason": "cliente desistiu"
+}
+
+> {%
+    client.test("refrigerante cancelado", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+    });
+%}
+
+
+### 29. Transicao em item cancelado
+POST {{host}}/api/kitchen/items/{{sodaItemId}}/ready
+Authorization: Bearer {{kitchenToken}}
+
+> {%
+    client.test("item cancelado", function() {
+        client.assert(response.status === 409, "esperado 409, recebido " + response.status);
+        client.assert(response.body.code === "TAB_ITEM_ALREADY_CANCELLED", "code TAB_ITEM_ALREADY_CANCELLED, recebido " + response.body.code);
+    });
+%}
+
+
+### 30. Item inexistente
+POST {{host}}/api/kitchen/items/0192f5a0-0000-7000-8000-000000000000/start
+Authorization: Bearer {{kitchenToken}}
+
+> {%
+    client.test("item nao encontrado", function() {
+        client.assert(response.status === 404, "esperado 404, recebido " + response.status);
+        client.assert(response.body.code === "TAB_ITEM_NOT_FOUND", "code TAB_ITEM_NOT_FOUND, recebido " + response.body.code);
+    });
+%}
+
+
+### 31. Setor desconhecido
+GET {{host}}/api/kitchen/queue?station=GRILL
+Authorization: Bearer {{kitchenToken}}
+
+> {%
+    client.test("setor invalido", function() {
+        client.assert(response.status === 400, "esperado 400, recebido " + response.status);
+        client.assert(response.body.code === "VALIDATION_FAILED", "code VALIDATION_FAILED, recebido " + response.body.code);
+    });
+%}
+
+
+### 32. Fila sem setor
+GET {{host}}/api/kitchen/queue
+Authorization: Bearer {{kitchenToken}}
+
+> {%
+    client.test("setor ausente", function() {
+        client.assert(response.status === 400, "esperado 400, recebido " + response.status);
+        client.assert(response.body.code === "VALIDATION_FAILED", "code VALIDATION_FAILED, recebido " + response.body.code);
+    });
+%}
+
+
+### 33. Fila sem token
+GET {{host}}/api/kitchen/queue?station=PIZZA
+
+> {%
+    client.test("sem token", function() {
+        client.assert(response.status === 401, "esperado 401, recebido " + response.status);
+        client.assert(response.body.code === "AUTHENTICATION_REQUIRED", "code AUTHENTICATION_REQUIRED, recebido " + response.body.code);
+    });
+%}
+
+
+### 34. Garcom na fila da cozinha
+GET {{host}}/api/kitchen/queue?station=PIZZA
+Authorization: Bearer {{waiterToken}}
+
+> {%
+    client.test("garcom barrado", function() {
+        client.assert(response.status === 403, "esperado 403, recebido " + response.status);
+        client.assert(response.body.code === "ACCESS_DENIED", "code ACCESS_DENIED, recebido " + response.body.code);
+    });
+%}
+
+
+### 35. Cozinha tentando entregar
+POST {{host}}/api/restaurant/tabs/{{tableTabId}}/items/{{pizzaItemId}}/deliver
+Authorization: Bearer {{kitchenToken}}
+
+> {%
+    client.test("cozinha barrada", function() {
+        client.assert(response.status === 403, "esperado 403, recebido " + response.status);
+        client.assert(response.body.code === "ACCESS_DENIED", "code ACCESS_DENIED, recebido " + response.body.code);
+    });
+%}
+
+
+### 36. Entrega em comanda inexistente
+POST {{host}}/api/restaurant/tabs/0192f5a0-0000-7000-8000-000000000000/items/{{pizzaItemId}}/deliver
+Authorization: Bearer {{waiterToken}}
+
+> {%
+    client.test("comanda nao encontrada", function() {
+        client.assert(response.status === 404, "esperado 404, recebido " + response.status);
+        client.assert(response.body.code === "TAB_NOT_FOUND", "code TAB_NOT_FOUND, recebido " + response.body.code);
+    });
+%}
+
+
+### ------------------------------------------------------------------
+### Limpeza: cancela itens e comandas, para o arquivo rodar de novo
+### ------------------------------------------------------------------
+
+
+### 37. Cancela a pizza entregue
+POST {{host}}/api/restaurant/tabs/{{tableTabId}}/items/{{pizzaItemId}}/cancel
+Authorization: Bearer {{waiterToken}}
+Content-Type: application/json
+
+{
+  "reason": "limpeza do teste"
+}
+
+> {%
+    client.test("pizza cancelada", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+    });
+%}
+
+
+### 38. Cancela a comanda da mesa
+POST {{host}}/api/restaurant/tabs/{{tableTabId}}/cancel
+Authorization: Bearer {{waiterToken}}
+Content-Type: application/json
+
+{
+  "reason": "limpeza do teste"
+}
+
+> {%
+    client.test("comanda da mesa cancelada", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+    });
+%}
+
+
+### 39. Cancela o prato por peso
+POST {{host}}/api/restaurant/tabs/{{cardTabId}}/items/{{plateItemId}}/cancel
+Authorization: Bearer {{waiterToken}}
+Content-Type: application/json
+
+{
+  "reason": "limpeza do teste"
+}
+
+> {%
+    client.test("prato cancelado", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+    });
+%}
+
+
+### 40. Cancela a comanda do cartao
+POST {{host}}/api/restaurant/tabs/{{cardTabId}}/cancel
+Authorization: Bearer {{waiterToken}}
+Content-Type: application/json
+
+{
+  "reason": "limpeza do teste"
+}
+
+> {%
+    client.test("comanda do cartao cancelada", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+    });
+%}

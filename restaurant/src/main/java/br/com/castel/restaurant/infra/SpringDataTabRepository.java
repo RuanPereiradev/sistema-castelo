@@ -48,4 +48,10 @@ interface SpringDataTabRepository extends JpaRepository<Tab, TabId> {
             + "and t.status in (br.com.castel.restaurant.domain.TabStatus.OPEN, "
             + "br.com.castel.restaurant.domain.TabStatus.CLOSING)")
     boolean existsActiveOnDiningTable(@Param("diningTableId") DiningTableId diningTableId);
+
+    // ---- kitchen display
+
+    /** The id of the tab holding the item, read without any lock. */
+    @Query(value = "select cast(tab_id as varchar) from tab_item where id = :itemId", nativeQuery = true)
+    Optional<String> findTabIdOfItem(@Param("itemId") UUID itemId);
 }

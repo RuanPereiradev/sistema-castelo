@@ -137,7 +137,7 @@ cash_drawer_session 1──N payment
 | V7 | `V7__tab.sql` | 2.2 | `tab`, `tab_item`, `tab_item_modifier` |
 | V8 | `V8__cash.sql` | 2.4 | `cash_drawer_session`, `cash_movement` + FK em `payment` |
 | V9 | `V9__tab_closing.sql` | 3.2 | altera `tab` (`folio_id`, `tab_charge_id`, fechamento, destino, taxa de serviço, `guest_count`) e `tab_item` (`split_group`, `service_charge_waived`) |
-| V10 | `V10__kitchen_queue_ready.sql` | 3.5 | recria `idx_kds_queue` incluindo `READY` |
+| V10 | `V10__kitchen_queue_ready.sql` | 3.5 | recria `idx_kds_queue` incluindo `READY`; `CHECK`s de instante em `tab_item`; semeia em `setting` os limites de atraso do KDS |
 | V11 | `V11__hotel_inventory.sql` | 1.1 | `room_type`, `room`, `rate_plan` |
 | V12 | `V12__reservation.sql` | 2.1 | `guest`, `daily_inventory`, `reservation`, `reservation_child`, `room_night` |
 
@@ -912,6 +912,9 @@ CREATE INDEX idx_kds_queue
 - `tab_item.tab_id` não tem `ON DELETE CASCADE`: comanda nunca é apagada, só
   cancelada (`cancelled_*`, #10). Item cancelado também fica para sempre.
 - `idx_kds_queue` é o índice que sustenta as três telas de KDS.
+- **KDS mapeado pela 3.5:** `preparation_started_at`, `ready_at` e
+  `delivered_at` são gravados pelas transições do item; desfazer um passo apaga o
+  instante do passo desfeito. Sem autor por transição (K6): fica o `updated_by`.
 
 **Transferência de item.** Mover um item entre comandas troca `tab_id` e grava
 `transferred_from_tab_id` com a origem. Sem esse rastro, ninguém consegue depois
@@ -985,6 +988,31 @@ independente. Divisão por valor igual também é só cálculo, sem tocar em
 (`CLOSING → OPEN`) o estorna e zera a coluna, e o próximo fechamento aponta para
 o novo. O folio `TAB` é reaproveitado. `folio_id` não é único: na 3.3 várias
 comandas apontam para o mesmo folio `STAY`.
+
+### 11.2 V10 — fila do KDS com `READY` (task 3.5)
+
+O `READY` continua na tela até a entrega (K5), então o índice da fila passa a
+cobri-lo. Os dois `CHECK`s são a segunda linha de defesa do instante de cada
+status (§1.3). Os limites de atraso por setor (K11) moram em `setting`,
+semeados para toda propriedade existente; a propriedade criada depois (seed de
+dev) recebe as chaves do `DevUserSeeder`.
+
+```sql
+DROP INDEX idx_kds_queue;
+CREATE INDEX idx_kds_queue
+    ON tab_item (prep_station, status, ordered_at)
+    WHERE status IN ('PENDING','IN_PREPARATION','READY');
+
+ALTER TABLE tab_item
+    ADD CONSTRAINT ck_tab_item_ready     CHECK (status <> 'READY'     OR ready_at     IS NOT NULL),
+    ADD CONSTRAINT ck_tab_item_delivered CHECK (status <> 'DELIVERED' OR delivered_at IS NOT NULL);
+```
+
+| Chave (`INTEGER`, minutos) | Padrão |
+|---|---|
+| `restaurant.kitchen-display.kitchen.warning-minutes` / `.late-minutes` | 15 / 25 |
+| `restaurant.kitchen-display.pizza.warning-minutes` / `.late-minutes` | 20 / 30 |
+| `restaurant.kitchen-display.bar.warning-minutes` / `.late-minutes` | 5 / 10 |
 
 ---
 

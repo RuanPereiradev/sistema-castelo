@@ -52,4 +52,22 @@ public interface TabRepository {
 
     /** Whether the table has an {@code OPEN} or {@code CLOSING} tab (decision #8). */
     boolean existsActiveOnDiningTable(DiningTableId diningTableId);
+
+    // ---- kitchen display
+
+    /**
+     * The tab and the item locked the way {@link #findByIdForItemCancellation} locks them — tab
+     * {@code FOR KEY SHARE}, then the item {@code FOR UPDATE} — for a transition of the kitchen
+     * display. A transition and a cancellation of the same item queue on the item's row, so the
+     * second one sees the status the first left.
+     */
+    Optional<Tab> findByIdForItemChange(TabId id, TabItemId itemId);
+
+    /**
+     * The tab holding the item, locked like {@link #findByIdForItemChange}, for a route that only
+     * knows the item. The id of the tab is read without a lock first; the tab is always locked
+     * before the item, never the other way round, so this never deadlocks against the closing.
+     * Empty when no tab holds the item.
+     */
+    Optional<Tab> findByItemIdForItemChange(TabItemId itemId);
 }

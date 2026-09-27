@@ -103,6 +103,22 @@ public class DevUserSeeder implements ApplicationRunner {
                 "CASH payments require an open cash drawer session");
         seedSetting(propertyId, "restaurant.service-charge-percent", "10.00", "DECIMAL",
                 "Service charge on table-service tabs, in percent points");
+        seedKitchenDisplayDelayLimit(propertyId, "kitchen", "warning", "15");
+        seedKitchenDisplayDelayLimit(propertyId, "kitchen", "late", "25");
+        seedKitchenDisplayDelayLimit(propertyId, "pizza", "warning", "20");
+        seedKitchenDisplayDelayLimit(propertyId, "pizza", "late", "30");
+        seedKitchenDisplayDelayLimit(propertyId, "bar", "warning", "5");
+        seedKitchenDisplayDelayLimit(propertyId, "bar", "late", "10");
+    }
+
+    /**
+     * One delay limit of a station of the kitchen display (task 3.5, K11), in minutes since the
+     * order: the same keys, values and descriptions {@code V10__kitchen_queue_ready.sql} seeds.
+     */
+    private void seedKitchenDisplayDelayLimit(UUID propertyId, String station, String limit, String minutes) {
+        String meaning = "warning".equals(limit) ? "calls for attention" : "is late";
+        seedSetting(propertyId, "restaurant.kitchen-display." + station + "." + limit + "-minutes", minutes, "INTEGER",
+                "Minutes after the order when a " + station.toUpperCase(java.util.Locale.ROOT) + " ticket " + meaning);
     }
 
     private void seedSetting(UUID propertyId, String key, String value, String valueType, String description) {
