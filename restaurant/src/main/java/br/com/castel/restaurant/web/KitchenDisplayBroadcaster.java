@@ -6,6 +6,7 @@ import br.com.castel.restaurant.domain.TabItemCancelled;
 import br.com.castel.restaurant.domain.TabItemId;
 import br.com.castel.restaurant.domain.TabItemOrdered;
 import br.com.castel.restaurant.domain.TabItemStatusChanged;
+import br.com.castel.restaurant.domain.TabItemTransferred;
 import java.util.function.Consumer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -29,8 +30,8 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
  *
  * <ul>
  *   <li>{@code /topic/kitchen/{station}}: every change of an item on the queue of the station (K8)
- *   <li>{@code /topic/restaurant/ready-items}: an item entering or leaving {@code READY}, and every
- *       cancellation, for the waiters (K10)
+ *   <li>{@code /topic/restaurant/ready-items}: an item entering or leaving {@code READY}, every
+ *       cancellation, and an item that moved while {@code READY}, for the waiters (K10)
  * </ul>
  *
  * <p>A failure reading the ticket <b>fails the request</b> (review, round 3): it propagates out of the
@@ -89,6 +90,25 @@ public class KitchenDisplayBroadcaster {
             KitchenDisplayMessage message = KitchenDisplayMessage.cancelled(event.occurredAt(), ticket, event.reason());
             messaging.convertAndSend(kitchenTopicOf(event.station()), message);
             messaging.convertAndSend(READY_ITEMS_TOPIC, message);
+        });
+    }
+
+    /**
+     * An item that moved to another tab (task 3.6): the ticket is pushed again, now under the table
+     * of the tab it arrived on. An item already delivered — a plate sold by weight among them — is
+     * not on any queue and generates nothing.
+     */
+    @TransactionalEventListener(phase = TransactionPhase.BEFORE_COMMIT)
+    public void onItemTransferred(TabItemTransferred event) {
+        if (!event.reachesKitchenQueue()) {
+            return;
+        }
+        sendAfterCommit(event.itemId(), ticket -> {
+            KitchenDisplayMessage message = KitchenDisplayMessage.transferred(event.occurredAt(), ticket);
+            messaging.convertAndSend(kitchenTopicOf(event.station()), message);
+            if (event.isReady()) {
+                messaging.convertAndSend(READY_ITEMS_TOPIC, message);
+            }
         });
     }
 

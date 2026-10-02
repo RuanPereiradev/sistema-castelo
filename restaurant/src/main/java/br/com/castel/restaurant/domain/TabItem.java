@@ -21,6 +21,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import org.hibernate.annotations.DynamicUpdate;
@@ -41,8 +42,8 @@ import org.hibernate.annotations.FetchMode;
  *
  * <p>The moments of the kitchen display ({@code preparation_started_at}, {@code ready_at},
  * {@code delivered_at}) are written by its transitions (task 3.5); an item sold by weight is born
- * delivered (decision #9). The columns of the transfer between tabs (task 3.6) exist in
- * {@code tab_item} but are not mapped yet.
+ * delivered (decision #9). The columns of the transfer between tabs (task 3.6) point at the last
+ * tab the item came from; {@code TabItemTransfer} keeps every hop.
  *
  * <p>Updated column by column ({@code @DynamicUpdate}, decision D9 of task 3.2): moving the item to a
  * split group or waiving its service charge writes only those columns, so it never rewrites the
@@ -60,6 +61,15 @@ public class TabItem extends AuditedEntity {
     @EmbeddedId
     @AttributeOverride(name = "value", column = @Column(name = "id"))
     private TabItemId id;
+
+    /*
+     * The tab holding the item. Mapped here, and no longer only as the join column of Tab.items,
+     * because task 3.6 moves an item between tabs and a collection whose join column is read-only
+     * writes nothing (section 7.3 of the spec). One writer for the column: this attribute. The
+     * collection keeps the same column read-only, so no redundant UPDATE is added to each order.
+     */
+    @AttributeOverride(name = "value", column = @Column(name = "tab_id", nullable = false))
+    private TabId tabId;
 
     @AttributeOverride(name = "value", column = @Column(name = "menu_item_id", nullable = false, updatable = false))
     private MenuItemId menuItemId;
@@ -147,6 +157,24 @@ public class TabItem extends AuditedEntity {
     private boolean serviceChargeWaived;
 
     // ---- end closing
+
+    // ---- transfer and merge (task 3.6)
+
+    /*
+     * The shortcut to the LAST tab the item came from, read by the screen and by the pre-bill
+     * without a join, and overwritten on every move. The whole trail, hop by hop, is in
+     * tab_item_transfer (decision T11).
+     */
+    @AttributeOverride(name = "value", column = @Column(name = "transferred_from_tab_id"))
+    private TabId transferredFromTabId;
+
+    @Column(name = "transferred_at")
+    private Instant transferredAt;
+
+    @Column(name = "transferred_by")
+    private UUID transferredBy;
+
+    // ---- end transfer and merge
 
     protected TabItem() {
         // for JPA
@@ -454,5 +482,62 @@ public class TabItem extends AuditedEntity {
      */
     public boolean countsForServiceCharge() {
         return isActive() && serviceChargeable && !serviceChargeWaived;
+    }
+
+    // ------------------------------------------------------------------ transfer and merge (task 3.6)
+
+    /** Which tab holds the item right now. Set when it is ordered and again whenever it moves. */
+    void attachTo(TabId holdingTab) {
+        this.tabId = Objects.requireNonNull(holdingTab, "holdingTab");
+    }
+
+    /**
+     * Moves the whole line to another tab. Receives an item the {@link Tab} already checked: both
+     * tabs {@code OPEN}, the item not cancelled.
+     *
+     * <p>Nothing frozen is touched — the line total, the prices, the modifiers,
+     * {@code serviceChargeable}, the station, the status and the moments of the kitchen display all
+     * travel as they are. What changes is where the line belongs:
+     *
+     * <ul>
+     *   <li>{@code tabId}, to the destination;
+     *   <li>the shortcut to where it came from, overwriting the previous hop (decision T11);
+     *   <li>the split group, back to the first one, because group 2 of table 4 is not group 2 of
+     *       table 5 and keeping the number would put the line on the bill of unrelated people
+     *       (decision T9);
+     *   <li>the waived service charge, which is only ever turned on here: an item leaving a tab whose
+     *       charge is off arrives waived, so its effective value does not change with nobody deciding
+     *       it (decision T7). The waiter of the destination turns it back on if they want.
+     * </ul>
+     *
+     * @param waiveServiceCharge whether the charge has to be waived on arrival; never un-waives
+     */
+    void transferTo(TabId destination, TabId source, boolean waiveServiceCharge, UUID by, Instant at) {
+        attachTo(destination);
+        this.transferredFromTabId = Objects.requireNonNull(source, "source");
+        this.transferredBy = Objects.requireNonNull(by, "by");
+        this.transferredAt = Objects.requireNonNull(at, "at");
+        this.splitGroup = DEFAULT_SPLIT_GROUP;
+        if (waiveServiceCharge) {
+            this.serviceChargeWaived = true;
+        }
+    }
+
+    /** The tab holding the item. */
+    public TabId tabId() {
+        return tabId;
+    }
+
+    /** The last tab the item came from; empty while it never moved. */
+    public Optional<TabId> transferredFromTabId() {
+        return Optional.ofNullable(transferredFromTabId);
+    }
+
+    public Optional<Instant> transferredAt() {
+        return Optional.ofNullable(transferredAt);
+    }
+
+    public Optional<UUID> transferredBy() {
+        return Optional.ofNullable(transferredBy);
     }
 }

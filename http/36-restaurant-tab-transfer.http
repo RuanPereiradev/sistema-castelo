@@ -1,0 +1,1327 @@
+### Task 3.6 - comanda: transferencia de itens, juncao e troca de mesa
+### Ambiente: selecione "dev" no IntelliJ HTTP Client, com http-client.env.json
+### + http-client.private.env.json (copie o .example). Ver http/README.md.
+###
+### Pre-requisito: aplicacao rodando no perfil "dev" com o seed habilitado
+### (usuarios admin, garcom, recepcao e cozinha; o seed grava
+### restaurant.service-charge-percent = 10.00). Rode o arquivo inteiro, em
+### ordem: a preparacao e o caminho feliz salvam os ids que os cenarios
+### negativos usam.
+###
+### Valores: pizza 40,00 e refrigerante 6,00 com taxa; couvert 12,00 sem taxa;
+### buffet 59,90 por quilo. Taxa de 10% calculada uma vez sobre a soma.
+###
+### O que este arquivo prova:
+###   - linha inteira muda de comanda, com o dinheiro conservado nas duas (T4)
+###   - a cozinha continua avancando o item depois da transferencia (3.5)
+###   - taxa dispensada viaja com o item (T7) e o grupo volta ao 1 (T9)
+###   - juncao soma o guestCount (T8) e libera a mesa da absorvida (T14)
+###   - troca de mesa responde comanda NOVA, com id diferente (T5)
+###   - rastro de dois saltos: transferredFromTabId e o ultimo (T11)
+###   - a recepcao opera as tres rotas; a cozinha recebe 403 (T12)
+###
+### Tempo real (STOMP, tipo TRANSFERRED) nao e verificado aqui, pelo mesmo
+### motivo do 35: a prova e o KitchenDisplayWebSocketIntegrationTest.
+
+
+### ------------------------------------------------------------------
+### Preparacao: logins, cardapio, mesas e comandas
+### ------------------------------------------------------------------
+
+
+### 0. Login do admin
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{
+  "username": "{{adminUsername}}",
+  "password": "{{password}}"
+}
+
+> {%
+    client.test("login do admin retorna 200", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+    });
+    client.global.set("adminToken", response.body.accessToken);
+    client.global.set("suffix", Math.random().toString(36).substring(2, 8));
+    client.global.set("cardNumber", String(Math.floor(Math.random() * 999) + 1));
+%}
+
+
+### 1. Login do garcom
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{
+  "username": "{{waiterUsername}}",
+  "password": "{{password}}"
+}
+
+> {%
+    client.test("login do garcom retorna 200", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+    });
+    client.global.set("waiterToken", response.body.accessToken);
+%}
+
+
+### 2. Login da recepcao: perfil novo nestas rotas (T12)
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{
+  "username": "{{frontDeskUsername}}",
+  "password": "{{password}}"
+}
+
+> {%
+    client.test("login da recepcao retorna 200", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+    });
+    client.global.set("frontDeskToken", response.body.accessToken);
+%}
+
+
+### 3. Login da cozinha
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{
+  "username": "cozinha",
+  "password": "{{password}}"
+}
+
+> {%
+    client.test("login da cozinha retorna 200", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+    });
+    client.global.set("kitchenToken", response.body.accessToken);
+%}
+
+
+### 4. Cria a categoria
+POST {{host}}/api/restaurant/menu-categories
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "name": "Transferencia {{suffix}}",
+  "displayOrder": 1
+}
+
+> {%
+    client.test("categoria criada", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+    });
+    client.global.set("categoryId", response.body.id);
+%}
+
+
+### 5. Pizza 40,00, com taxa, setor PIZZA
+POST {{host}}/api/restaurant/menu-items
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "categoryId": "{{categoryId}}",
+  "name": "Pizza {{suffix}}",
+  "prepStation": "PIZZA",
+  "soldByWeight": false,
+  "price": "40.00"
+}
+
+> {%
+    client.test("pizza criada", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+    });
+    client.global.set("pizzaId", response.body.id);
+%}
+
+
+### 6. Refrigerante 6,00, com taxa, setor BAR
+POST {{host}}/api/restaurant/menu-items
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "categoryId": "{{categoryId}}",
+  "name": "Refrigerante {{suffix}}",
+  "prepStation": "BAR",
+  "soldByWeight": false,
+  "price": "6.00"
+}
+
+> {%
+    client.test("refrigerante criado", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+    });
+    client.global.set("sodaId", response.body.id);
+%}
+
+
+### 7. Couvert 12,00, sem taxa
+POST {{host}}/api/restaurant/menu-items
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "categoryId": "{{categoryId}}",
+  "name": "Couvert {{suffix}}",
+  "prepStation": "KITCHEN",
+  "soldByWeight": false,
+  "price": "12.00",
+  "serviceChargeEligible": false
+}
+
+> {%
+    client.test("couvert criado sem taxa", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+    });
+    client.global.set("couvertId", response.body.id);
+%}
+
+
+### 8. Buffet 59,90 por quilo: o prato nasce DELIVERED
+POST {{host}}/api/restaurant/menu-items
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "categoryId": "{{categoryId}}",
+  "name": "Buffet {{suffix}}",
+  "prepStation": "KITCHEN",
+  "soldByWeight": true,
+  "price": "59.90"
+}
+
+> {%
+    client.test("buffet criado", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+    });
+    client.global.set("buffetId", response.body.id);
+%}
+
+
+### 9. Mesa A: a origem
+POST {{host}}/api/restaurant/dining-tables
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "label": "Transf A {{suffix}}"
+}
+
+> {%
+    client.test("mesa A criada", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+    });
+    client.global.set("tableAId", response.body.id);
+%}
+
+
+### 10. Mesa B: o destino
+POST {{host}}/api/restaurant/dining-tables
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "label": "Transf B {{suffix}}"
+}
+
+> {%
+    client.test("mesa B criada", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+    });
+    client.global.set("tableBId", response.body.id);
+%}
+
+
+### 11. Mesa C: o destino da troca de mesa
+POST {{host}}/api/restaurant/dining-tables
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "label": "Transf C {{suffix}}"
+}
+
+> {%
+    client.test("mesa C criada", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+    });
+    client.global.set("tableCId", response.body.id);
+%}
+
+
+### 12. Mesa D, desativada: destino invalido para o /move
+POST {{host}}/api/restaurant/dining-tables
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "label": "Transf D {{suffix}}"
+}
+
+> {%
+    client.test("mesa D criada", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+    });
+    client.global.set("tableDId", response.body.id);
+%}
+
+
+### 13. Desativa a mesa D
+POST {{host}}/api/restaurant/dining-tables/{{tableDId}}/deactivate
+Authorization: Bearer {{adminToken}}
+
+> {%
+    client.test("mesa D desativada", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        client.assert(response.body.active === false, "mesa deveria estar inativa");
+    });
+%}
+
+
+### 14. Comanda A, na mesa A
+POST {{host}}/api/restaurant/tabs
+Authorization: Bearer {{waiterToken}}
+Content-Type: application/json
+
+{
+  "origin": "TABLE_SERVICE",
+  "diningTableId": "{{tableAId}}"
+}
+
+> {%
+    client.test("comanda A aberta", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+    });
+    client.global.set("tabAId", response.body.id);
+%}
+
+
+### 15. Pizza na comanda A: 40,00
+POST {{host}}/api/restaurant/tabs/{{tabAId}}/items
+Authorization: Bearer {{waiterToken}}
+Content-Type: application/json
+
+{
+  "menuItemId": "{{pizzaId}}",
+  "quantity": 1
+}
+
+> {%
+    client.test("pizza lancada na A", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+    });
+    const item = response.body.items.find(function(i) { return i.itemName.indexOf("Pizza") === 0; });
+    client.global.set("pizzaItemId", item.id);
+%}
+
+
+### 16. Dois refrigerantes na comanda A: 12,00
+POST {{host}}/api/restaurant/tabs/{{tabAId}}/items
+Authorization: Bearer {{waiterToken}}
+Content-Type: application/json
+
+{
+  "menuItemId": "{{sodaId}}",
+  "quantity": 2
+}
+
+> {%
+    client.test("refrigerantes lancados na A", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+        client.assert(response.body.subtotal === "52.00", "subtotal A " + response.body.subtotal);
+    });
+    const item = response.body.items.find(function(i) { return i.itemName.indexOf("Refrigerante") === 0; });
+    client.global.set("sodaItemId", item.id);
+%}
+
+
+### 17. Couvert na comanda A, sem taxa: 12,00
+POST {{host}}/api/restaurant/tabs/{{tabAId}}/items
+Authorization: Bearer {{waiterToken}}
+Content-Type: application/json
+
+{
+  "menuItemId": "{{couvertId}}",
+  "quantity": 1
+}
+
+> {%
+    client.test("couvert lancado na A", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+        client.assert(response.body.subtotal === "64.00", "subtotal A " + response.body.subtotal);
+    });
+    const item = response.body.items.find(function(i) { return i.itemName.indexOf("Couvert") === 0; });
+    client.global.set("couvertItemId", item.id);
+%}
+
+
+### 18. Comanda B, na mesa B, com um prato por peso de 437 g: 26,18
+POST {{host}}/api/restaurant/tabs
+Authorization: Bearer {{waiterToken}}
+Content-Type: application/json
+
+{
+  "origin": "TABLE_SERVICE",
+  "diningTableId": "{{tableBId}}"
+}
+
+> {%
+    client.test("comanda B aberta", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+    });
+    client.global.set("tabBId", response.body.id);
+%}
+
+
+### 19. Prato por peso na comanda B: nasce DELIVERED
+POST {{host}}/api/restaurant/tabs/{{tabBId}}/items
+Authorization: Bearer {{waiterToken}}
+Content-Type: application/json
+
+{
+  "menuItemId": "{{buffetId}}",
+  "weightGrams": 437
+}
+
+> {%
+    client.test("prato por peso lancado na B", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+        const item = response.body.items[0];
+        client.assert(item.lineTotal === "26.18", "lineTotal " + item.lineTotal);
+        client.assert(item.status === "DELIVERED", "prato por peso nasce DELIVERED");
+    });
+    client.global.set("buffetItemId", response.body.items[0].id);
+%}
+
+
+### 20. Comanda do cartao: o self-service nao cobra taxa
+POST {{host}}/api/restaurant/tabs
+Authorization: Bearer {{waiterToken}}
+Content-Type: application/json
+
+{
+  "origin": "SELF_SERVICE",
+  "cardNumber": {{cardNumber}}
+}
+
+> {%
+    client.test("comanda do cartao aberta", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+        client.assert(response.body.serviceChargeApplied === false, "self-service nao cobra taxa");
+    });
+    client.global.set("cardTabId", response.body.id);
+%}
+
+
+### ------------------------------------------------------------------
+### Caminho feliz: transferencia, cozinha, taxa, juncao, troca de mesa
+### ------------------------------------------------------------------
+
+
+### 21. Transfere a pizza de A para B: 40,00 saem de A e entram em B
+POST {{host}}/api/restaurant/tabs/{{tabAId}}/transfer
+Authorization: Bearer {{waiterToken}}
+Content-Type: application/json
+
+{
+  "toTabId": "{{tabBId}}",
+  "itemIds": ["{{pizzaItemId}}"]
+}
+
+> {%
+    client.test("pizza transferida, dinheiro conservado", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        client.assert(response.body.movedItems === 1, "um item movido");
+        client.assert(response.body.source.subtotal === "24.00", "subtotal A " + response.body.source.subtotal);
+        client.assert(response.body.destination.subtotal === "66.18", "subtotal B " + response.body.destination.subtotal);
+        const moved = response.body.destination.items.find(function(i) { return i.id === client.global.get("pizzaItemId"); });
+        client.assert(moved, "a pizza deveria estar na B");
+        client.assert(moved.transferredFromTabId === client.global.get("tabAId"), "origem gravada");
+        client.assert(moved.transferredAt !== null, "instante gravado");
+        client.assert(moved.transferredBy !== null, "autor gravado");
+        client.assert(moved.splitGroup === 1, "grupo volta ao 1");
+        client.assert(moved.lineTotal === "40.00", "lineTotal intacto");
+        client.assert(moved.serviceChargeable === true, "retrato da taxa intacto");
+        const gone = response.body.source.items.some(function(i) { return i.id === client.global.get("pizzaItemId"); });
+        client.assert(!gone, "a pizza nao deveria estar mais na A");
+    });
+%}
+
+
+### 22. A fila da pizzaria mostra a pizza sob a mesa B
+GET {{host}}/api/kitchen/queue?station=PIZZA
+Authorization: Bearer {{kitchenToken}}
+
+> {%
+    client.test("pizza na fila, com a mesa nova", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        const ticket = response.body.items.find(function(t) { return t.itemId === client.global.get("pizzaItemId"); });
+        client.assert(ticket, "pizza na fila PIZZA");
+        client.assert(ticket.tabId === client.global.get("tabBId"), "ticket na comanda B");
+        client.assert(ticket.diningTableLabel === "Transf B {{suffix}}", "rotulo " + ticket.diningTableLabel);
+    });
+%}
+
+
+### 23. A cozinha comeca a pizza depois da transferencia (limitacao da 3.5 resolvida)
+POST {{host}}/api/kitchen/items/{{pizzaItemId}}/start
+Authorization: Bearer {{kitchenToken}}
+
+> {%
+    client.test("cozinha avanca item transferido", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        client.assert(response.body.status === "IN_PREPARATION", "status " + response.body.status);
+    });
+%}
+
+
+### 24. Tira a taxa da comanda A toda
+PUT {{host}}/api/restaurant/tabs/{{tabAId}}/service-charge
+Authorization: Bearer {{waiterToken}}
+Content-Type: application/json
+
+{
+  "applied": false
+}
+
+> {%
+    client.test("taxa desligada na A", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        client.assert(response.body.serviceChargeApplied === false, "taxa deveria estar desligada");
+        client.assert(response.body.serviceCharge === "0.00", "taxa " + response.body.serviceCharge);
+    });
+%}
+
+
+### 25. Transfere o refrigerante de A para B: chega com a taxa dispensada (T7)
+POST {{host}}/api/restaurant/tabs/{{tabAId}}/transfer
+Authorization: Bearer {{waiterToken}}
+Content-Type: application/json
+
+{
+  "toTabId": "{{tabBId}}",
+  "itemIds": ["{{sodaItemId}}"]
+}
+
+> {%
+    client.test("a dispensa da taxa viaja com o item", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        const moved = response.body.destination.items.find(function(i) { return i.id === client.global.get("sodaItemId"); });
+        client.assert(moved.serviceChargeWaived === true, "deveria chegar dispensado");
+        client.assert(moved.serviceChargeable === true, "o retrato do lancamento nao muda");
+        client.assert(response.body.source.subtotal === "12.00", "subtotal A " + response.body.source.subtotal);
+        client.assert(response.body.destination.subtotal === "78.18", "subtotal B " + response.body.destination.subtotal);
+    });
+%}
+
+
+### 26. A taxa da comanda B nao cobra o item que chegou dispensado
+GET {{host}}/api/restaurant/tabs/{{tabBId}}/bill
+Authorization: Bearer {{waiterToken}}
+
+> {%
+    client.test("base da taxa em B: pizza 40,00 + buffet 26,18, sem o refrigerante", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        client.assert(response.body.subtotal === "78.18", "subtotal " + response.body.subtotal);
+        client.assert(response.body.serviceChargeBase === "66.18", "base " + response.body.serviceChargeBase);
+        client.assert(response.body.serviceCharge === "6.62", "taxa " + response.body.serviceCharge);
+        client.assert(response.body.total === "84.80", "total " + response.body.total);
+    });
+%}
+
+
+### 27. Duas pessoas na comanda A
+PUT {{host}}/api/restaurant/tabs/{{tabAId}}/guest-count
+Authorization: Bearer {{waiterToken}}
+Content-Type: application/json
+
+{
+  "guestCount": 2
+}
+
+> {%
+    client.test("guestCount 2 em A", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        client.assert(response.body.guestCount === 2, "guestCount " + response.body.guestCount);
+    });
+%}
+
+
+### 28. Tres pessoas na comanda B
+PUT {{host}}/api/restaurant/tabs/{{tabBId}}/guest-count
+Authorization: Bearer {{waiterToken}}
+Content-Type: application/json
+
+{
+  "guestCount": 3
+}
+
+> {%
+    client.test("guestCount 3 em B", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        client.assert(response.body.guestCount === 3, "guestCount " + response.body.guestCount);
+    });
+%}
+
+
+### 29. Junta A em B: B fica, A vira MERGED, guestCount soma (T8, T14)
+POST {{host}}/api/restaurant/tabs/{{tabBId}}/merge
+Authorization: Bearer {{waiterToken}}
+Content-Type: application/json
+
+{
+  "mergedTabId": "{{tabAId}}"
+}
+
+> {%
+    client.test("A absorvida por B", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        client.assert(response.body.id === client.global.get("tabBId"), "a comanda da rota e a que fica");
+        client.assert(response.body.status === "OPEN", "B continua aberta");
+        client.assert(response.body.guestCount === 5, "2 + 3 = 5, recebido " + response.body.guestCount);
+        client.assert(response.body.subtotal === "90.18", "subtotal B " + response.body.subtotal);
+        const couvert = response.body.items.find(function(i) { return i.id === client.global.get("couvertItemId"); });
+        client.assert(couvert, "o couvert deveria ter vindo");
+        client.assert(couvert.transferredFromTabId === client.global.get("tabAId"), "origem do couvert");
+    });
+%}
+
+
+### 30. A comanda A aponta para B e nao ocupa mais a mesa
+GET {{host}}/api/restaurant/tabs/{{tabAId}}
+Authorization: Bearer {{waiterToken}}
+
+> {%
+    client.test("A em MERGED, apontando para B", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        client.assert(response.body.status === "MERGED", "status " + response.body.status);
+        client.assert(response.body.mergedIntoTabId === client.global.get("tabBId"), "ponteiro " + response.body.mergedIntoTabId);
+        client.assert(response.body.mergedAt !== null, "mergedAt");
+        client.assert(response.body.mergedBy !== null, "mergedBy");
+        client.assert(response.body.subtotal === "0.00", "A ficou sem item ativo");
+    });
+%}
+
+
+### 31. A mesa A nao tem mais comanda ativa
+GET {{host}}/api/restaurant/tabs?diningTableId={{tableAId}}
+Authorization: Bearer {{waiterToken}}
+
+> {%
+    client.test("mesa A livre", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        client.assert(response.body.length === 0, "esperado nenhuma comanda, recebido " + response.body.length);
+    });
+%}
+
+
+### 32. E uma comanda nova abre na mesa A
+POST {{host}}/api/restaurant/tabs
+Authorization: Bearer {{waiterToken}}
+Content-Type: application/json
+
+{
+  "origin": "TABLE_SERVICE",
+  "diningTableId": "{{tableAId}}"
+}
+
+> {%
+    client.test("mesa A aceita comanda nova", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+    });
+    client.global.set("tabA2Id", response.body.id);
+%}
+
+
+### 33. A recepcao troca a comanda B para a mesa C (T5, T12)
+POST {{host}}/api/restaurant/tabs/{{tabBId}}/move
+Authorization: Bearer {{frontDeskToken}}
+Content-Type: application/json
+
+{
+  "diningTableId": "{{tableCId}}"
+}
+
+> {%
+    client.test("comanda trocada de mesa pela recepcao, com id novo", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+        client.assert(response.body.id !== client.global.get("tabBId"), "a comanda deveria ter id novo");
+        client.assert(response.body.status === "OPEN", "status " + response.body.status);
+        client.assert(response.body.diningTableId === client.global.get("tableCId"), "mesa C");
+        client.assert(response.body.subtotal === "90.18", "subtotal " + response.body.subtotal);
+        client.assert(response.body.guestCount === 5, "guestCount " + response.body.guestCount);
+        const pizza = response.body.items.find(function(i) { return i.id === client.global.get("pizzaItemId"); });
+        client.assert(pizza.status === "IN_PREPARATION", "a pizza segue em preparo");
+        client.assert(pizza.transferredFromTabId === client.global.get("tabBId"), "ultimo salto: B");
+    });
+    client.global.set("tabCId", response.body.id);
+%}
+
+
+### 34. A comanda B virou MERGED, apontando para a comanda da mesa C
+GET {{host}}/api/restaurant/tabs/{{tabBId}}
+Authorization: Bearer {{waiterToken}}
+
+> {%
+    client.test("B em MERGED, apontando para C", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        client.assert(response.body.status === "MERGED", "status " + response.body.status);
+        client.assert(response.body.mergedIntoTabId === client.global.get("tabCId"), "ponteiro " + response.body.mergedIntoTabId);
+    });
+%}
+
+
+### 35. A mesa B esta livre
+GET {{host}}/api/restaurant/tabs?diningTableId={{tableBId}}
+Authorization: Bearer {{waiterToken}}
+
+> {%
+    client.test("mesa B livre depois da troca", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        client.assert(response.body.length === 0, "esperado nenhuma comanda, recebido " + response.body.length);
+    });
+%}
+
+
+### 36. A fila da pizzaria mostra a pizza sob a mesa C: dois saltos
+GET {{host}}/api/kitchen/queue?station=PIZZA
+Authorization: Bearer {{kitchenToken}}
+
+> {%
+    client.test("a pizza chegou na mesa C", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        const ticket = response.body.items.find(function(t) { return t.itemId === client.global.get("pizzaItemId"); });
+        client.assert(ticket, "pizza ainda na fila");
+        client.assert(ticket.diningTableLabel === "Transf C {{suffix}}", "rotulo " + ticket.diningTableLabel);
+    });
+%}
+
+
+### 37. Mesa para cartao: o item perde a taxa, porque o self-service nao cobra (T3)
+POST {{host}}/api/restaurant/tabs/{{tabCId}}/transfer
+Authorization: Bearer {{waiterToken}}
+Content-Type: application/json
+
+{
+  "toTabId": "{{cardTabId}}",
+  "itemIds": ["{{buffetItemId}}"]
+}
+
+> {%
+    client.test("prato por peso vai para o cartao, sem taxa no destino", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        client.assert(response.body.destination.subtotal === "26.18", "subtotal cartao " + response.body.destination.subtotal);
+        client.assert(response.body.destination.serviceCharge === "0.00", "o cartao nao cobra taxa");
+        client.assert(response.body.destination.total === "26.18", "total cartao " + response.body.destination.total);
+        const moved = response.body.destination.items.find(function(i) { return i.id === client.global.get("buffetItemId"); });
+        client.assert(moved.status === "DELIVERED", "o prato por peso continua entregue");
+    });
+%}
+
+
+### ------------------------------------------------------------------
+### Rastro: a tabela guarda todo salto, a coluna guarda o ultimo
+### ------------------------------------------------------------------
+
+
+### 38. A pizza fez dois saltos; a coluna mostra so o ultimo (T11)
+GET {{host}}/api/restaurant/tabs/{{tabCId}}
+Authorization: Bearer {{waiterToken}}
+
+> {%
+    client.test("transferredFromTabId e o ultimo salto", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        const pizza = response.body.items.find(function(i) { return i.id === client.global.get("pizzaItemId"); });
+        client.assert(pizza.transferredFromTabId === client.global.get("tabBId"), "A -> B -> C: o ultimo e B");
+        const couvert = response.body.items.find(function(i) { return i.id === client.global.get("couvertItemId"); });
+        client.assert(couvert.transferredFromTabId === client.global.get("tabBId"), "o couvert tambem veio de B");
+    });
+%}
+
+
+### ------------------------------------------------------------------
+### Cenarios negativos
+### ------------------------------------------------------------------
+
+
+### 39. Transferir para a propria comanda -> 422 INVALID_TAB_TRANSFER
+POST {{host}}/api/restaurant/tabs/{{tabCId}}/transfer
+Authorization: Bearer {{waiterToken}}
+Content-Type: application/json
+
+{
+  "toTabId": "{{tabCId}}",
+  "itemIds": ["{{pizzaItemId}}"]
+}
+
+> {%
+    client.test("comanda nao e seu proprio destino", function() {
+        client.assert(response.status === 422, "esperado 422, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_TAB_TRANSFER", "code " + response.body.code);
+    });
+%}
+
+
+### 40. Transferir sem item -> 422 INVALID_TAB_TRANSFER
+POST {{host}}/api/restaurant/tabs/{{tabCId}}/transfer
+Authorization: Bearer {{waiterToken}}
+Content-Type: application/json
+
+{
+  "toTabId": "{{tabA2Id}}",
+  "itemIds": []
+}
+
+> {%
+    client.test("transferencia sem item", function() {
+        client.assert(response.status === 422, "esperado 422, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_TAB_TRANSFER", "code " + response.body.code);
+    });
+%}
+
+
+### 41. Transferir com a lista ausente -> 422 INVALID_TAB_TRANSFER
+POST {{host}}/api/restaurant/tabs/{{tabCId}}/transfer
+Authorization: Bearer {{waiterToken}}
+Content-Type: application/json
+
+{
+  "toTabId": "{{tabA2Id}}"
+}
+
+> {%
+    client.test("lista de itens ausente responde o mesmo codigo", function() {
+        client.assert(response.status === 422, "esperado 422, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_TAB_TRANSFER", "code " + response.body.code);
+    });
+%}
+
+
+### 42. Transferir sem toTabId -> 400
+POST {{host}}/api/restaurant/tabs/{{tabCId}}/transfer
+Authorization: Bearer {{waiterToken}}
+Content-Type: application/json
+
+{
+  "itemIds": ["{{pizzaItemId}}"]
+}
+
+> {%
+    client.test("destino ausente e erro de requisicao", function() {
+        client.assert(response.status === 400, "esperado 400, recebido " + response.status);
+    });
+%}
+
+
+### 43. Juntar a comanda com ela mesma -> 422 INVALID_TAB_MERGE
+POST {{host}}/api/restaurant/tabs/{{tabCId}}/merge
+Authorization: Bearer {{waiterToken}}
+Content-Type: application/json
+
+{
+  "mergedTabId": "{{tabCId}}"
+}
+
+> {%
+    client.test("comanda nao se junta a si mesma", function() {
+        client.assert(response.status === 422, "esperado 422, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_TAB_MERGE", "code " + response.body.code);
+    });
+%}
+
+
+### 44. Transferir item de outra comanda -> 404 TAB_ITEM_NOT_FOUND
+POST {{host}}/api/restaurant/tabs/{{tabCId}}/transfer
+Authorization: Bearer {{waiterToken}}
+Content-Type: application/json
+
+{
+  "toTabId": "{{tabA2Id}}",
+  "itemIds": ["{{buffetItemId}}"]
+}
+
+> {%
+    client.test("item que esta no cartao nao sai da comanda C", function() {
+        client.assert(response.status === 404, "esperado 404, recebido " + response.status);
+        client.assert(response.body.code === "TAB_ITEM_NOT_FOUND", "code " + response.body.code);
+    });
+%}
+
+
+### 45. Prepara um item cancelado na comanda nova da mesa A
+POST {{host}}/api/restaurant/tabs/{{tabA2Id}}/items
+Authorization: Bearer {{waiterToken}}
+Content-Type: application/json
+
+{
+  "menuItemId": "{{couvertId}}",
+  "quantity": 1
+}
+
+> {%
+    client.test("couvert lancado na A2", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+    });
+    client.global.set("cancelledItemId", response.body.items[0].id);
+%}
+
+
+### 46. Cancela o item
+POST {{host}}/api/restaurant/tabs/{{tabA2Id}}/items/{{cancelledItemId}}/cancel
+Authorization: Bearer {{waiterToken}}
+Content-Type: application/json
+
+{
+  "reason": "cliente desistiu"
+}
+
+> {%
+    client.test("item cancelado", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+    });
+%}
+
+
+### 47. Transferir item cancelado -> 409 TAB_ITEM_ALREADY_CANCELLED
+POST {{host}}/api/restaurant/tabs/{{tabA2Id}}/transfer
+Authorization: Bearer {{waiterToken}}
+Content-Type: application/json
+
+{
+  "toTabId": "{{tabCId}}",
+  "itemIds": ["{{cancelledItemId}}"]
+}
+
+> {%
+    client.test("item cancelado fica onde foi cancelado", function() {
+        client.assert(response.status === 409, "esperado 409, recebido " + response.status);
+        client.assert(response.body.code === "TAB_ITEM_ALREADY_CANCELLED", "code " + response.body.code);
+    });
+%}
+
+
+### 48. Tudo ou nada: um item valido junto com um inexistente nao move nenhum
+POST {{host}}/api/restaurant/tabs/{{tabCId}}/transfer
+Authorization: Bearer {{waiterToken}}
+Content-Type: application/json
+
+{
+  "toTabId": "{{tabA2Id}}",
+  "itemIds": ["{{pizzaItemId}}", "00000000-0000-0000-0000-0000000000ff"]
+}
+
+> {%
+    client.test("um id invalido derruba a transferencia inteira", function() {
+        client.assert(response.status === 404, "esperado 404, recebido " + response.status);
+        client.assert(response.body.code === "TAB_ITEM_NOT_FOUND", "code " + response.body.code);
+    });
+%}
+
+
+### 49. E a pizza continua na comanda C
+GET {{host}}/api/restaurant/tabs/{{tabCId}}
+Authorization: Bearer {{waiterToken}}
+
+> {%
+    client.test("nada se moveu", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        const pizza = response.body.items.find(function(i) { return i.id === client.global.get("pizzaItemId"); });
+        client.assert(pizza, "a pizza deveria estar na C");
+        client.assert(response.body.subtotal === "64.00", "subtotal C " + response.body.subtotal);
+    });
+%}
+
+
+### 50. Juntar numa comanda MERGED -> 409 TAB_NOT_OPEN
+POST {{host}}/api/restaurant/tabs/{{tabBId}}/merge
+Authorization: Bearer {{waiterToken}}
+Content-Type: application/json
+
+{
+  "mergedTabId": "{{tabA2Id}}"
+}
+
+> {%
+    client.test("MERGED nao recebe juncao", function() {
+        client.assert(response.status === 409, "esperado 409, recebido " + response.status);
+        client.assert(response.body.code === "TAB_NOT_OPEN", "code " + response.body.code);
+    });
+%}
+
+
+### 51. Transferir de uma comanda MERGED -> 409 TAB_NOT_OPEN
+POST {{host}}/api/restaurant/tabs/{{tabBId}}/transfer
+Authorization: Bearer {{waiterToken}}
+Content-Type: application/json
+
+{
+  "toTabId": "{{tabCId}}",
+  "itemIds": ["{{pizzaItemId}}"]
+}
+
+> {%
+    client.test("MERGED nao da item", function() {
+        client.assert(response.status === 409, "esperado 409, recebido " + response.status);
+        client.assert(response.body.code === "TAB_NOT_OPEN", "code " + response.body.code);
+    });
+%}
+
+
+### 52. Lancar numa comanda MERGED -> 409 TAB_NOT_OPEN
+POST {{host}}/api/restaurant/tabs/{{tabBId}}/items
+Authorization: Bearer {{waiterToken}}
+Content-Type: application/json
+
+{
+  "menuItemId": "{{sodaId}}",
+  "quantity": 1
+}
+
+> {%
+    client.test("MERGED nao toma item novo", function() {
+        client.assert(response.status === 409, "esperado 409, recebido " + response.status);
+        client.assert(response.body.code === "TAB_NOT_OPEN", "code " + response.body.code);
+    });
+%}
+
+
+### 53. Inicia o fechamento da comanda A2, para provar o CLOSING
+POST {{host}}/api/restaurant/tabs/{{tabA2Id}}/items
+Authorization: Bearer {{waiterToken}}
+Content-Type: application/json
+
+{
+  "menuItemId": "{{sodaId}}",
+  "quantity": 1
+}
+
+> {%
+    client.test("refrigerante lancado na A2", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+    });
+%}
+
+
+### 54. A2 entra em CLOSING
+POST {{host}}/api/restaurant/tabs/{{tabA2Id}}/closing
+Authorization: Bearer {{waiterToken}}
+
+> {%
+    client.test("A2 em CLOSING", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        client.assert(response.body.status === "CLOSING", "status " + response.body.status);
+    });
+%}
+
+
+### 55. Transferir de uma comanda em CLOSING -> 409 TAB_NOT_OPEN (T1)
+POST {{host}}/api/restaurant/tabs/{{tabA2Id}}/transfer
+Authorization: Bearer {{waiterToken}}
+Content-Type: application/json
+
+{
+  "toTabId": "{{tabCId}}",
+  "itemIds": ["{{cancelledItemId}}"]
+}
+
+> {%
+    client.test("CLOSING nao da item: reabra primeiro", function() {
+        client.assert(response.status === 409, "esperado 409, recebido " + response.status);
+        client.assert(response.body.code === "TAB_NOT_OPEN", "code " + response.body.code);
+    });
+%}
+
+
+### 56. Transferir PARA uma comanda em CLOSING -> 409 TAB_NOT_OPEN
+POST {{host}}/api/restaurant/tabs/{{tabCId}}/transfer
+Authorization: Bearer {{waiterToken}}
+Content-Type: application/json
+
+{
+  "toTabId": "{{tabA2Id}}",
+  "itemIds": ["{{pizzaItemId}}"]
+}
+
+> {%
+    client.test("CLOSING nao recebe item", function() {
+        client.assert(response.status === 409, "esperado 409, recebido " + response.status);
+        client.assert(response.body.code === "TAB_NOT_OPEN", "code " + response.body.code);
+    });
+%}
+
+
+### 57. Trocar para uma mesa que ja tem comanda -> 409 TAB_ALREADY_OPEN_FOR_DINING_TABLE
+POST {{host}}/api/restaurant/tabs/{{tabCId}}/move
+Authorization: Bearer {{waiterToken}}
+Content-Type: application/json
+
+{
+  "diningTableId": "{{tableAId}}"
+}
+
+> {%
+    client.test("mesa A ocupada pela A2", function() {
+        client.assert(response.status === 409, "esperado 409, recebido " + response.status);
+        client.assert(response.body.code === "TAB_ALREADY_OPEN_FOR_DINING_TABLE", "code " + response.body.code);
+    });
+%}
+
+
+### 58. Trocar para uma mesa desativada -> 409 INACTIVE_DINING_TABLE
+POST {{host}}/api/restaurant/tabs/{{tabCId}}/move
+Authorization: Bearer {{waiterToken}}
+Content-Type: application/json
+
+{
+  "diningTableId": "{{tableDId}}"
+}
+
+> {%
+    client.test("mesa desativada nao recebe comanda", function() {
+        client.assert(response.status === 409, "esperado 409, recebido " + response.status);
+        client.assert(response.body.code === "INACTIVE_DINING_TABLE", "code " + response.body.code);
+    });
+%}
+
+
+### 59. Trocar para uma mesa que nao existe -> 404 DINING_TABLE_NOT_FOUND
+POST {{host}}/api/restaurant/tabs/{{tabCId}}/move
+Authorization: Bearer {{waiterToken}}
+Content-Type: application/json
+
+{
+  "diningTableId": "00000000-0000-0000-0000-0000000000ff"
+}
+
+> {%
+    client.test("mesa inexistente", function() {
+        client.assert(response.status === 404, "esperado 404, recebido " + response.status);
+        client.assert(response.body.code === "DINING_TABLE_NOT_FOUND", "code " + response.body.code);
+    });
+%}
+
+
+### 60. Comanda de origem que nao existe -> 404 TAB_NOT_FOUND
+POST {{host}}/api/restaurant/tabs/00000000-0000-0000-0000-0000000000ff/transfer
+Authorization: Bearer {{waiterToken}}
+Content-Type: application/json
+
+{
+  "toTabId": "{{tabCId}}",
+  "itemIds": ["{{pizzaItemId}}"]
+}
+
+> {%
+    client.test("comanda de origem inexistente", function() {
+        client.assert(response.status === 404, "esperado 404, recebido " + response.status);
+        client.assert(response.body.code === "TAB_NOT_FOUND", "code " + response.body.code);
+    });
+%}
+
+
+### 61. Comanda de destino que nao existe -> 404 TAB_NOT_FOUND
+POST {{host}}/api/restaurant/tabs/{{tabCId}}/transfer
+Authorization: Bearer {{waiterToken}}
+Content-Type: application/json
+
+{
+  "toTabId": "00000000-0000-0000-0000-0000000000ff",
+  "itemIds": ["{{pizzaItemId}}"]
+}
+
+> {%
+    client.test("comanda de destino inexistente", function() {
+        client.assert(response.status === 404, "esperado 404, recebido " + response.status);
+        client.assert(response.body.code === "TAB_NOT_FOUND", "code " + response.body.code);
+    });
+%}
+
+
+### 62. A cozinha nao transfere -> 403
+POST {{host}}/api/restaurant/tabs/{{tabCId}}/transfer
+Authorization: Bearer {{kitchenToken}}
+Content-Type: application/json
+
+{
+  "toTabId": "{{cardTabId}}",
+  "itemIds": ["{{pizzaItemId}}"]
+}
+
+> {%
+    client.test("KITCHEN recebe 403 na transferencia", function() {
+        client.assert(response.status === 403, "esperado 403, recebido " + response.status);
+    });
+%}
+
+
+### 63. A cozinha nao junta -> 403
+POST {{host}}/api/restaurant/tabs/{{tabCId}}/merge
+Authorization: Bearer {{kitchenToken}}
+Content-Type: application/json
+
+{
+  "mergedTabId": "{{cardTabId}}"
+}
+
+> {%
+    client.test("KITCHEN recebe 403 na juncao", function() {
+        client.assert(response.status === 403, "esperado 403, recebido " + response.status);
+    });
+%}
+
+
+### 64. A cozinha nao troca de mesa -> 403
+POST {{host}}/api/restaurant/tabs/{{tabCId}}/move
+Authorization: Bearer {{kitchenToken}}
+Content-Type: application/json
+
+{
+  "diningTableId": "{{tableBId}}"
+}
+
+> {%
+    client.test("KITCHEN recebe 403 na troca de mesa", function() {
+        client.assert(response.status === 403, "esperado 403, recebido " + response.status);
+    });
+%}
+
+
+### 65. Sem token -> 401
+POST {{host}}/api/restaurant/tabs/{{tabCId}}/transfer
+Content-Type: application/json
+
+{
+  "toTabId": "{{cardTabId}}",
+  "itemIds": ["{{pizzaItemId}}"]
+}
+
+> {%
+    client.test("sem token responde 401", function() {
+        client.assert(response.status === 401, "esperado 401, recebido " + response.status);
+    });
+%}
+
+
+### ------------------------------------------------------------------
+### Limpeza: nada fica ocupando mesa nem cartao
+### ------------------------------------------------------------------
+
+
+### 66. Fecha a comanda A2, que ja esta em CLOSING: 6,00 + 10% = 6,60
+POST {{host}}/api/restaurant/tabs/{{tabA2Id}}/payments
+Authorization: Bearer {{waiterToken}}
+Idempotency-Key: transfer-cleanup-{{suffix}}-a2
+Content-Type: application/json
+
+{
+  "method": "PIX",
+  "amount": "6.60"
+}
+
+> {%
+    client.test("A2 paga", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+    });
+%}
+
+
+### 67. A2 fechada
+POST {{host}}/api/restaurant/tabs/{{tabA2Id}}/close
+Authorization: Bearer {{waiterToken}}
+
+> {%
+    client.test("A2 fechada", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        client.assert(response.body.status === "CLOSED", "status " + response.body.status);
+    });
+%}
+
+
+### 68. Pre-conta da comanda C: 64,00 + 10% sobre 40,00 = 68,00
+POST {{host}}/api/restaurant/tabs/{{tabCId}}/closing
+Authorization: Bearer {{waiterToken}}
+
+> {%
+    client.test("pre-conta de C", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        client.assert(response.body.subtotal === "64.00", "subtotal " + response.body.subtotal);
+        client.assert(response.body.serviceChargeBase === "40.00", "base " + response.body.serviceChargeBase);
+        client.assert(response.body.total === "68.00", "total " + response.body.total);
+    });
+%}
+
+
+### 69. Paga e fecha a comanda C
+POST {{host}}/api/restaurant/tabs/{{tabCId}}/payments
+Authorization: Bearer {{waiterToken}}
+Idempotency-Key: transfer-cleanup-{{suffix}}-c
+Content-Type: application/json
+
+{
+  "method": "PIX",
+  "amount": "68.00"
+}
+
+> {%
+    client.test("C paga", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+    });
+%}
+
+
+### 70. C fechada, mesa C livre
+POST {{host}}/api/restaurant/tabs/{{tabCId}}/close
+Authorization: Bearer {{waiterToken}}
+
+> {%
+    client.test("C fechada", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        client.assert(response.body.status === "CLOSED", "status " + response.body.status);
+    });
+%}
+
+
+### 71. Pre-conta do cartao: 26,18, sem taxa
+POST {{host}}/api/restaurant/tabs/{{cardTabId}}/closing
+Authorization: Bearer {{waiterToken}}
+
+> {%
+    client.test("pre-conta do cartao", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        client.assert(response.body.total === "26.18", "total " + response.body.total);
+    });
+%}
+
+
+### 72. Paga e fecha o cartao
+POST {{host}}/api/restaurant/tabs/{{cardTabId}}/payments
+Authorization: Bearer {{waiterToken}}
+Idempotency-Key: transfer-cleanup-{{suffix}}-card
+Content-Type: application/json
+
+{
+  "method": "PIX",
+  "amount": "26.18"
+}
+
+> {%
+    client.test("cartao pago", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+    });
+%}
+
+
+### 73. Cartao fechado
+POST {{host}}/api/restaurant/tabs/{{cardTabId}}/close
+Authorization: Bearer {{waiterToken}}
+
+> {%
+    client.test("cartao fechado", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        client.assert(response.body.status === "CLOSED", "status " + response.body.status);
+    });
+%}

@@ -122,8 +122,13 @@ public class Tab extends AuditedEntity {
      * Fetched by subselect, like the modifiers of each item: Hibernate refuses to join-fetch two
      * lists in one query.
      */
+    /*
+     * The join column is read-only here: TabItem owns tab_id, so that task 3.6 can move a line to
+     * another tab with one UPDATE from the child, and so that ordering an item still writes no
+     * redundant UPDATE of the collection.
+     */
     @OneToMany(cascade = CascadeType.ALL, fetch = FetchType.EAGER)
-    @JoinColumn(name = "tab_id", nullable = false, updatable = false)
+    @JoinColumn(name = "tab_id", nullable = false, insertable = false, updatable = false)
     @Fetch(FetchMode.SUBSELECT)
     private List<TabItem> items = new ArrayList<>();
 
@@ -160,6 +165,20 @@ public class Tab extends AuditedEntity {
 
     @Column(name = "closed_by")
     private UUID closedBy;
+
+    // ---- transfer and merge (task 3.6)
+
+    /** The tab that absorbed this one; set only on {@code MERGED}, which is final (decision T10). */
+    @Column(name = "merged_into_tab_id")
+    private UUID mergedIntoTabId;
+
+    @Column(name = "merged_at")
+    private Instant mergedAt;
+
+    @Column(name = "merged_by")
+    private UUID mergedBy;
+
+    // ---- end transfer and merge
 
     // ---- end closing
 
@@ -259,6 +278,7 @@ public class Tab extends AuditedEntity {
         TabItem item = menuItem.soldByWeight()
                 ? orderByWeight(menuItem, order, serviceChargeable, orderedBy, orderedAt)
                 : orderByUnit(menuItem, order, serviceChargeable, orderedBy, orderedAt);
+        item.attachTo(id);
         items.add(item);
         return item;
     }
@@ -902,6 +922,171 @@ public class Tab extends AuditedEntity {
                     "A reopening reason takes at most " + MAXIMUM_REOPENING_REASON_LENGTH + " characters");
         }
         return trimmed;
+    }
+
+    // ------------------------------------------------------------------ transfer and merge (task 3.6)
+
+    /**
+     * Moves whole lines of this tab to another one (decision T4). All or nothing: the two tabs, then
+     * every item, are checked before anything moves, so a single id that does not belong here leaves
+     * both tabs untouched.
+     *
+     * <p>Both tabs must be {@code OPEN} (decision T1): a {@code CLOSING} tab has its total already
+     * posted on the folio, and the waiter reopens it first. Only whole lines move; splitting the
+     * quantity of one line is a task of its own.
+     *
+     * <p>Money is conserved: the sum of the two subtotals is the same before and after, and this
+     * tab's subtotal falls by exactly the line totals that left. Nothing frozen is recalculated.
+     *
+     * <p>A tab left with no active item stays {@code OPEN}, holding its table (decision T6): the
+     * waiter cancels it or merges it. Cancelling it here would be a change of status in disguise,
+     * which would have to wait for every ordering in progress.
+     *
+     * @param itemIds the lines to move; repeated ids collapse, and the order of the move is the
+     *     order of the items on the tab, so the trail reads the same way every time
+     * @return one row of the trail and one event per item moved
+     * @throws InvalidTabTransferException if the destination is this tab, or no item was named
+     * @throws TabNotOpenException if either tab is not {@code OPEN}
+     * @throws TabItemNotFoundException if any item is not on this tab
+     * @throws TabItemAlreadyCancelledException if any item is cancelled
+     */
+    public TabTransferResult transferItemsTo(Tab destination, Set<TabItemId> itemIds, UUID by, Instant at) {
+        Objects.requireNonNull(destination, "destination");
+        Objects.requireNonNull(itemIds, "itemIds");
+        Objects.requireNonNull(by, "by");
+        Objects.requireNonNull(at, "at");
+        if (destination.id.equals(id)) {
+            throw new InvalidTabTransferException("Tab " + id.value() + " cannot be its own destination");
+        }
+        if (itemIds.isEmpty()) {
+            throw new InvalidTabTransferException("A transfer needs at least one item");
+        }
+        requireStatusAccepting(status.acceptsItemTransfer(), "has no item to give away");
+        destination.requireStatusAccepting(destination.status.acceptsItemTransfer(), "takes no transferred item");
+        List<TabItem> moving = itemIds.stream().map(this::item).sorted(ITEM_ORDER).toList();
+        for (TabItem item : moving) {
+            if (!item.status().acceptsTransfer()) {
+                throw new TabItemAlreadyCancelledException("Tab item " + item.id().value() + " is cancelled");
+            }
+        }
+        return moveTo(destination, moving, TabTransferKind.TRANSFER, by, at);
+    }
+
+    /**
+     * Absorbs another tab into this one: every active item of it comes here and it goes to
+     * {@code MERGED}, which is final (decision T10). The waiter chooses which tab stays — this one
+     * (decision T14).
+     *
+     * <p>A tab that was reopened carries a folio, and it is closed here: billing refuses a balance
+     * other than zero with {@code FOLIO_BALANCE_NOT_ZERO}, the same rule a cancellation obeys
+     * (invariant 17 of task 3.2), so a tab never leaves the floor with money pending. The
+     * {@code ADMIN} refunds the payment first.
+     *
+     * <p>Cancelled items stay on the absorbed tab, where their author and reason belong; a tab with
+     * no active item at all is accepted. The number of guests is added up when both tabs have one,
+     * since it is only the default of an even split and the waiter corrects it at any time
+     * (decision T8).
+     *
+     * @return one row of the trail and one event per item moved
+     * @throws InvalidTabMergeException if the tab is being merged into itself
+     * @throws TabNotOpenException if either tab is not {@code OPEN}
+     */
+    public TabTransferResult mergeWith(Tab mergedTab, TabBilling billing, UUID by, Instant at) {
+        return absorb(mergedTab, TabTransferKind.MERGE, billing, by, at);
+    }
+
+    /**
+     * Moves this tab to another dining table (decision T5), which is a brand new tab on that table
+     * absorbing this one. The tab changes id, and the front follows {@link #mergedIntoTabId()}.
+     *
+     * <p>Done this way, and not by overwriting {@code dining_table_id}, because the trail comes for
+     * free: this tab stays as {@code MERGED} pointing at the new one, and every item carries where
+     * it came from. A self-service card moves to a table through the same path.
+     *
+     * <p>The new tab is not stored here. The caller adds it, and the partial unique index of
+     * {@code tab} is what answers that the destination table is already taken.
+     *
+     * @throws InactiveDiningTableException if the destination table is deactivated
+     * @throws TabNotOpenException if this tab is not {@code OPEN}
+     */
+    public TabMove moveToTable(DiningTable destinationTable, TabBilling billing, UUID by, Instant at) {
+        Objects.requireNonNull(destinationTable, "destinationTable");
+        Objects.requireNonNull(by, "by");
+        Objects.requireNonNull(at, "at");
+        Tab newTab = Tab.openForTable(propertyId, destinationTable, by, at);
+        return new TabMove(newTab, newTab.absorb(this, TabTransferKind.MOVE, billing, by, at));
+    }
+
+    /** What a merge and a table move share; only the kind recorded on the trail differs. */
+    private TabTransferResult absorb(Tab mergedTab, TabTransferKind kind, TabBilling billing, UUID by, Instant at) {
+        Objects.requireNonNull(mergedTab, "mergedTab");
+        Objects.requireNonNull(billing, "billing");
+        Objects.requireNonNull(by, "by");
+        Objects.requireNonNull(at, "at");
+        if (mergedTab.id.equals(id)) {
+            throw new InvalidTabMergeException("Tab " + id.value() + " cannot be merged into itself");
+        }
+        requireStatusAccepting(status.acceptsMerge(), "takes no merge");
+        mergedTab.requireStatusAccepting(mergedTab.status.acceptsMerge(), "cannot be merged");
+        mergedTab.folioId().ifPresent(billing::closeFolio);
+        List<TabItem> moving = mergedTab.items.stream()
+                .filter(TabItem::isActive)
+                .sorted(ITEM_ORDER)
+                .toList();
+        TabTransferResult result = mergedTab.moveTo(this, moving, kind, by, at);
+        this.guestCount = mergedGuestCount(mergedTab);
+        mergedTab.mergedIntoTabId = id.value();
+        mergedTab.mergedAt = at;
+        mergedTab.mergedBy = by;
+        mergedTab.status = TabStatus.MERGED;
+        return result;
+    }
+
+    /**
+     * The guests of the merged tab, added to this tab's when both have a number; otherwise this
+     * tab's own stays, whatever it is (decision T8).
+     */
+    private Short mergedGuestCount(Tab mergedTab) {
+        if (guestCount == null || mergedTab.guestCount == null) {
+            return guestCount;
+        }
+        int merged = guestCount + mergedTab.guestCount;
+        return (short) Math.min(merged, MAXIMUM_GUEST_COUNT);
+    }
+
+    /**
+     * Hands the items over, line by line, and writes the trail. Receives items this tab holds and
+     * already checked.
+     *
+     * <p>An item that leaves a tab whose service charge is off arrives waived, so the money the
+     * customer owes for that line does not change with nobody deciding it (decision T7).
+     */
+    private TabTransferResult moveTo(Tab destination, List<TabItem> moving, TabTransferKind kind,
+            UUID by, Instant at) {
+        boolean waiveOnArrival = !serviceChargeApplied;
+        List<TabItemTransfer> transfers = new ArrayList<>(moving.size());
+        List<TabItemTransferred> events = new ArrayList<>(moving.size());
+        for (TabItem item : moving) {
+            item.transferTo(destination.id, id, waiveOnArrival && item.serviceChargeable(), by, at);
+            items.remove(item);
+            destination.items.add(item);
+            transfers.add(TabItemTransfer.record(item.id(), id, destination.id, kind, by, at));
+            events.add(TabItemTransferred.of(id, destination.id, item, at));
+        }
+        return new TabTransferResult(transfers, events);
+    }
+
+    /** The tab that absorbed this one; empty unless it is {@code MERGED}. */
+    public Optional<TabId> mergedIntoTabId() {
+        return Optional.ofNullable(mergedIntoTabId).map(TabId::new);
+    }
+
+    public Optional<Instant> mergedAt() {
+        return Optional.ofNullable(mergedAt);
+    }
+
+    public Optional<UUID> mergedBy() {
+        return Optional.ofNullable(mergedBy);
     }
 
     /** Written on the folio, where the operator reads it; English, as every text of the backend. */

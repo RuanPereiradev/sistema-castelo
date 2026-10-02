@@ -2,6 +2,7 @@ package br.com.castel.restaurant.domain;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 /** Persistence port for {@link Tab}. Implemented in {@code restaurant.infra}. */
@@ -68,6 +69,34 @@ public interface TabRepository {
      * knows the item. The id of the tab is read without a lock first; the tab is always locked
      * before the item, never the other way round, so this never deadlocks against the closing.
      * Empty when no tab holds the item.
+     *
+     * <p>The read of the tab and the lock of the item are retried when the item changes tab in
+     * between, which task 3.6 made possible: the lock filters by tab, so it finds nothing and the
+     * item has to be looked for where it is now.
      */
     Optional<Tab> findByItemIdForItemChange(TabItemId itemId);
+
+    // ---- transfer and merge (task 3.6)
+
+    /**
+     * The two tabs of a transfer, both locked {@code FOR KEY SHARE}, and the rows of the items being
+     * moved locked {@code FOR UPDATE} afterwards. Empty when either tab does not exist.
+     *
+     * <p>{@code FOR KEY SHARE} on both because a transfer is "take one line off here, put it on
+     * there": waiters go on ordering on either tab and do not wait for it, while a change of status
+     * ({@code startClosing}, {@code cancel}, a merge) does wait and is waited for.
+     *
+     * <p>An item that is not on the source tab locks nothing; the aggregate answers for it.
+     */
+    Optional<TabsForTransfer> findForTransfer(TabId source, TabId destination, Set<TabItemId> itemIds);
+
+    /**
+     * The two tabs of a merge: the one being absorbed locked {@code FOR UPDATE}, because it changes
+     * status and must wait for every ordering in progress so that no item is left stranded on a
+     * {@code MERGED} tab (decision #18 of task 2.2), and the one that stays locked
+     * {@code FOR KEY SHARE}. Empty when either tab does not exist.
+     *
+     * <p>{@link TabsForTransfer#source()} is the tab being absorbed.
+     */
+    Optional<TabsForTransfer> findForMerge(TabId receiving, TabId merged);
 }

@@ -84,4 +84,16 @@ public enum TabItemStatus {
     public boolean carriesPreparationStart() {
         return this != PENDING;
     }
+
+    // ---- transfer and merge (task 3.6)
+
+    /**
+     * Anything not cancelled moves to another tab, a plate sold by weight included: it is born
+     * {@code DELIVERED} and still belongs to whoever pays for it. A cancelled item stays on the tab
+     * where it was cancelled, with its author and reason, because that is where the record of the
+     * cancellation belongs.
+     */
+    public boolean acceptsTransfer() {
+        return isActive();
+    }
 }

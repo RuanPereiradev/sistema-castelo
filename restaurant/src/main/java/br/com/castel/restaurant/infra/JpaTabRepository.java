@@ -7,9 +7,14 @@ import br.com.castel.restaurant.domain.TabAlreadyOpenForDiningTableException;
 import br.com.castel.restaurant.domain.TabId;
 import br.com.castel.restaurant.domain.TabItemId;
 import br.com.castel.restaurant.domain.TabRepository;
+import br.com.castel.restaurant.domain.TabsForTransfer;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
+import java.util.function.Function;
+import java.util.stream.Stream;
 import org.hibernate.exception.ConstraintViolationException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Repository;
@@ -27,6 +32,12 @@ class JpaTabRepository implements TabRepository {
 
     static final String OPEN_BY_TABLE_INDEX = "idx_tab_open_by_table";
     static final String OPEN_BY_CARD_INDEX = "idx_tab_open_by_card";
+
+    /** How many times the tab of an item is looked for again when the item moves in between. */
+    static final int ITEM_LOOKUP_ATTEMPTS = 3;
+
+    private static final Comparator<TabId> TAB_LOCK_ORDER = Comparator.comparing(TabId::value);
+    private static final Comparator<TabItemId> ITEM_LOCK_ORDER = Comparator.comparing(TabItemId::value);
 
     private final SpringDataTabRepository springData;
 
@@ -94,10 +105,76 @@ class JpaTabRepository implements TabRepository {
         return findByIdForItemCancellation(id, itemId);
     }
 
+    /**
+     * Reads where the item is, locks that tab, then locks the item on it. The lock of the item
+     * filters by tab, so it finds nothing when the item changed tab between the two statements —
+     * which task 3.6 made possible. That is not an error: the item exists, somewhere else. The read
+     * is repeated, and only a run of attempts all losing the race answers empty, which the caller
+     * reports as the item not being found.
+     *
+     * <p>The order is always the tab and then the item, never the other way round, so this never
+     * deadlocks against the closing or against a transfer.
+     */
     @Override
     public Optional<Tab> findByItemIdForItemChange(TabItemId itemId) {
-        return springData.findTabIdOfItem(itemId.value())
-                .flatMap(tabId -> findByIdForItemChange(TabId.of(tabId), itemId));
+        for (int attempt = 0; attempt < ITEM_LOOKUP_ATTEMPTS; attempt++) {
+            Optional<String> holder = springData.findTabIdOfItem(itemId.value());
+            if (holder.isEmpty()) {
+                return Optional.empty();
+            }
+            TabId tabId = TabId.of(holder.get());
+            if (springData.lockForKeyShare(tabId.value()).isEmpty()) {
+                return Optional.empty();
+            }
+            if (springData.lockItemForUpdate(tabId.value(), itemId.value()).isPresent()) {
+                return springData.findById(tabId);
+            }
+        }
+        return Optional.empty();
+    }
+
+    // ---- transfer and merge (task 3.6)
+
+    @Override
+    public Optional<TabsForTransfer> findForTransfer(TabId source, TabId destination, Set<TabItemId> itemIds) {
+        if (!lockBoth(source, destination, id -> springData.lockForKeyShare(id.value()))) {
+            return Optional.empty();
+        }
+        itemIds.stream()
+                .sorted(ITEM_LOCK_ORDER)
+                .forEach(itemId -> springData.lockItemForUpdate(source.value(), itemId.value()));
+        return load(source, destination);
+    }
+
+    @Override
+    public Optional<TabsForTransfer> findForMerge(TabId receiving, TabId merged) {
+        boolean locked = lockBoth(receiving, merged, id -> id.equals(merged)
+                ? springData.lockForUpdate(id.value())
+                : springData.lockForKeyShare(id.value()));
+        return locked ? load(merged, receiving) : Optional.empty();
+    }
+
+    /**
+     * Takes the lock of each tab in one fixed order, so two opposite moves — merging A into B while
+     * B is merged into A — queue instead of deadlocking. The order is the natural order of the two
+     * ids and is the same for every operation of this task; what matters is that it is total and
+     * shared, not which of the two ids it calls smaller.
+     *
+     * @param lock how each tab is locked, which differs between a transfer and a merge
+     * @return whether both rows exist
+     */
+    private boolean lockBoth(TabId one, TabId other, Function<TabId, Optional<String>> lock) {
+        return Stream.of(one, other)
+                .sorted(TAB_LOCK_ORDER)
+                .map(lock)
+                .allMatch(Optional::isPresent);
+    }
+
+    /** Loads the two aggregates after their rows are locked, the way every other lock here does. */
+    private Optional<TabsForTransfer> load(TabId source, TabId destination) {
+        return springData.findById(source)
+                .flatMap(loaded -> springData.findById(destination)
+                        .map(other -> new TabsForTransfer(loaded, other)));
     }
 
     /** The conflict of the domain for the index that refused the row; anything else goes on as it was. */

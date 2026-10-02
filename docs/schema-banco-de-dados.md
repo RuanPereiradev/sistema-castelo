@@ -138,8 +138,9 @@ cash_drawer_session 1──N payment
 | V8 | `V8__cash.sql` | 2.4 | `cash_drawer_session`, `cash_movement` + FK em `payment` |
 | V9 | `V9__tab_closing.sql` | 3.2 | altera `tab` (`folio_id`, `tab_charge_id`, fechamento, destino, taxa de serviço, `guest_count`) e `tab_item` (`split_group`, `service_charge_waived`) |
 | V10 | `V10__kitchen_queue_ready.sql` | 3.5 | recria `idx_kds_queue` incluindo `READY`; `CHECK`s de instante em `tab_item`; semeia em `setting` os limites de atraso do KDS |
-| V11 | `V11__hotel_inventory.sql` | 1.1 | `room_type`, `room`, `rate_plan` |
-| V12 | `V12__reservation.sql` | 2.1 | `guest`, `daily_inventory`, `reservation`, `reservation_child`, `room_night` |
+| V11 | `V11__tab_item_transfer.sql` | 3.6 | `tab_item_transfer` |
+| V12 | `V12__hotel_inventory.sql` | 1.1 | `room_type`, `room`, `rate_plan` |
+| V13 | `V13__reservation.sql` | 2.1 | `guest`, `daily_inventory`, `reservation`, `reservation_child`, `room_night` |
 
 Renumerada em 2026-09-24 (decisão #5 da task 1.2): o restaurante é construído
 antes do hotel, e a versão segue a ordem de execução. Com o hotel no meio, o
@@ -148,6 +149,10 @@ Flyway recusaria V5/V7 depois de V6/V8 já aplicadas em qualquer banco.
 Renumerada de novo em 2026-09-26 (lote 2, aprovado pelo Ruan): a 3.2 passa de
 V11 para V9, a 3.5 ganha a V10, e o hotel vai para V11/V12. Mesma razão: a
 versão segue a ordem de execução.
+
+Renumerada uma terceira vez em 2026-10-02 (task 3.6, decisão T11b): o rastro da
+transferência de itens virou tabela própria e a 3.6 ganhou a V11; o hotel desce
+para V12/V13. Mesma razão de sempre.
 
 ---
 
@@ -539,7 +544,7 @@ nulável: pagamento por QR code não tem operador, e a constraint
 
 ---
 
-## 8. V11 — inventário do hotel
+## 8. V12 — inventário do hotel
 
 ```sql
 CREATE TABLE room_type (
@@ -629,7 +634,7 @@ CREATE TABLE dining_table (
 
 ---
 
-## 10. V12 — reservas
+## 10. V13 — reservas
 
 ```sql
 CREATE TABLE guest (
@@ -1016,6 +1021,49 @@ ALTER TABLE tab_item
 
 ---
 
+### 11.3 V11 — rastro da transferência de itens (task 3.6)
+
+A V7 já trouxe `tab_item.transferred_from_tab_id`, `transferred_at` e
+`transferred_by`, mas eles guardam **só o último salto**: o item que foi da mesa
+4 para a 5 e depois para a 7 aponta apenas para a 5. A 3.6 acrescenta a tabela
+do histórico completo (decisão T11), append-only, com uma linha por movimento.
+
+As colunas da V7 continuam sendo gravadas: são o atalho que a tela da comanda e
+a pré-conta leem sem `JOIN`.
+
+`kind` (T15) diz qual operação moveu o item. Sem ele, uma troca de mesa de oito
+itens ficaria indistinguível de oito transferências avulsas feitas uma a uma.
+
+```sql
+CREATE TABLE tab_item_transfer (
+    id             UUID PRIMARY KEY,
+    tab_item_id    UUID        NOT NULL REFERENCES tab_item(id),
+    from_tab_id    UUID        NOT NULL REFERENCES tab(id),
+    to_tab_id      UUID        NOT NULL REFERENCES tab(id),
+    kind           VARCHAR(20) NOT NULL
+                   CHECK (kind IN ('TRANSFER','MERGE','MOVE')),
+    transferred_by UUID        NOT NULL,
+    transferred_at TIMESTAMPTZ NOT NULL,
+    created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
+    created_by     UUID,
+    updated_at     TIMESTAMPTZ,
+    updated_by     UUID,
+    CONSTRAINT ck_tab_item_transfer_distinct CHECK (from_tab_id <> to_tab_id)
+);
+
+CREATE INDEX idx_tab_item_transfer_by_item ON tab_item_transfer (tab_item_id, transferred_at);
+CREATE INDEX idx_tab_item_transfer_from ON tab_item_transfer (from_tab_id);
+CREATE INDEX idx_tab_item_transfer_to   ON tab_item_transfer (to_tab_id);
+```
+
+Nenhuma linha é alterada ou apagada, nem no cancelamento da comanda, e por isso
+`updated_at`/`updated_by` ficam sempre nulos: o bloco de auditoria entra porque
+toda tabela transacional o carrega, e aqui ele repete `transferred_by`/`_at`.
+
+Sem `ON DELETE CASCADE`: nada em `tab_item` é apagado no sistema.
+
+---
+
 ## 12. V8 — caixa
 
 Reescrita pela task 2.4 antes da migration (decisões C1–C10 e G3,
@@ -1115,6 +1163,8 @@ A integridade abaixo é responsabilidade exclusiva da aplicação:
 | Item fora da `availability_window` | Depende do horário do pedido |
 | Item transferido não volta para comanda fechada | Depende do status da comanda de destino |
 | Junção não cria ciclo entre comandas | `CHECK` só barra o auto-merge direto |
+| `tab_item_transfer` cobre todo salto do item | A aplicação grava a linha; nenhum trigger a exige |
+| `tab_item.transferred_from_tab_id` é o último salto do rastro | Atalho de leitura, não derivado pelo banco |
 | `payment_intent` confirmado gera exatamente um `payment` | Regra de duas tabelas, garantida pelo webhook |
 | Σ da taxa rateada por `split_group` bate com a taxa da comanda | Calculado, não gravado |
 | `tab_charge_id` tem o valor do `total()` da comanda | Cálculo sobre itens, lançamento em outro módulo |

@@ -11,6 +11,9 @@ import java.util.UUID;
  * One item of the tab as the waiter reads it, with the prices frozen at the moment of the order.
  * Money travels as a decimal string, the weight in whole grams, authors as UUIDs; what does not
  * apply to the item is null.
+ *
+ * <p>{@code transferredFromTabId} is the <em>last</em> tab the line came from, which is what the
+ * screen shows; the whole trail, hop by hop, is in {@code tab_item_transfer}.
  */
 public record TabItemResponse(
         String id,
@@ -38,7 +41,11 @@ public record TabItemResponse(
         String cancellationReason,
         // ---- closing (task 3.2)
         boolean serviceChargeWaived,
-        int splitGroup) {
+        int splitGroup,
+        // ---- transfer and merge (task 3.6)
+        String transferredFromTabId,
+        String transferredAt,
+        String transferredBy) {
 
     public static TabItemResponse from(TabItem item) {
         return new TabItemResponse(
@@ -66,7 +73,10 @@ public record TabItemResponse(
                 item.cancelledBy().map(UUID::toString).orElse(null),
                 item.cancellationReason().orElse(null),
                 item.serviceChargeWaived(),
-                item.splitGroup());
+                item.splitGroup(),
+                item.transferredFromTabId().map(id -> id.value().toString()).orElse(null),
+                item.transferredAt().map(Instant::toString).orElse(null),
+                item.transferredBy().map(UUID::toString).orElse(null));
     }
 
     /** A modifier as it went on the item: name and price frozen. */
