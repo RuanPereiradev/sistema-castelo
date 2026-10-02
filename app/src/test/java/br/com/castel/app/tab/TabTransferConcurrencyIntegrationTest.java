@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import br.com.castel.billing.api.FolioFacade;
 import br.com.castel.billing.api.FolioId;
 import br.com.castel.identity.api.Role;
+import java.math.BigDecimal;
 import java.net.http.HttpResponse;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
@@ -167,10 +168,10 @@ class TabTransferConcurrencyIntegrationTest extends AbstractTabClosingIntegratio
             assertThat(List.of(first.get("status").asString(), last.get("status").asString()))
                     .as("one absorbed the other, and only one of them")
                     .containsExactlyInAnyOrder("OPEN", "MERGED");
-            assertThat(Double.parseDouble(first.get("subtotal").asString())
-                            + Double.parseDouble(last.get("subtotal").asString()))
+            assertThat(new BigDecimal(first.get("subtotal").asString())
+                            .add(new BigDecimal(last.get("subtotal").asString())))
                     .as("no money was lost or duplicated")
-                    .isEqualTo(12.00);
+                    .isEqualByComparingTo("12.00");
         }
     }
 

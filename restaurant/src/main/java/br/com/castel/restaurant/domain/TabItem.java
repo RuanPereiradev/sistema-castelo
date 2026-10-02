@@ -504,20 +504,26 @@ public class TabItem extends AuditedEntity {
      *   <li>the shortcut to where it came from, overwriting the previous hop (decision T11);
      *   <li>the split group, back to the first one, because group 2 of table 4 is not group 2 of
      *       table 5 and keeping the number would put the line on the bill of unrelated people
-     *       (decision T9);
+     *       (decision T9) — unless the whole party moved to another table, where there is no other
+     *       group and the split the operator built survives (decision T18);
      *   <li>the waived service charge, which is only ever turned on here: an item leaving a tab whose
      *       charge is off arrives waived, so its effective value does not change with nobody deciding
      *       it (decision T7). The waiter of the destination turns it back on if they want.
      * </ul>
      *
      * @param waiveServiceCharge whether the charge has to be waived on arrival; never un-waives
+     * @param keepSplitGroup whether the line keeps the split group it had, which only a table move
+     *     does (decision T18)
      */
-    void transferTo(TabId destination, TabId source, boolean waiveServiceCharge, UUID by, Instant at) {
+    void transferTo(TabId destination, TabId source, boolean waiveServiceCharge, boolean keepSplitGroup,
+            UUID by, Instant at) {
         attachTo(destination);
         this.transferredFromTabId = Objects.requireNonNull(source, "source");
         this.transferredBy = Objects.requireNonNull(by, "by");
         this.transferredAt = Objects.requireNonNull(at, "at");
-        this.splitGroup = DEFAULT_SPLIT_GROUP;
+        if (!keepSplitGroup) {
+            this.splitGroup = DEFAULT_SPLIT_GROUP;
+        }
         if (waiveServiceCharge) {
             this.serviceChargeWaived = true;
         }

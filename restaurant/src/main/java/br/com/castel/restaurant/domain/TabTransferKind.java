@@ -21,8 +21,16 @@ public enum TabTransferKind {
     /** Every active item of a tab that changed table, which is a merge into a brand new tab. */
     MOVE;
 
-    /** Whether the source tab is left behind as {@code MERGED} instead of staying open. */
-    public boolean emptiesTheSource() {
-        return this != TRANSFER;
+    /**
+     * Whether the tab the items arrive on is the same party that left, rather than a second group
+     * (decision T18).
+     *
+     * <p>Only a table move is: the tab on the destination table is an artefact of how the move is
+     * built, so what the operator chose on the tab being absorbed carries over — the split of each
+     * line, the number of guests, the service charge they turned off. A transfer and a merge put
+     * items on a tab that has a party of its own, whose own choices rule.
+     */
+    public boolean carriesTheSameParty() {
+        return this == MOVE;
     }
 }

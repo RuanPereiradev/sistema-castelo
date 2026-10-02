@@ -139,6 +139,9 @@ class TabTransferHttpIntegrationTest extends AbstractTabClosingIntegrationTest {
         assertThat(moved.get("guestCount").asInt())
                 .as("the same party at another table keeps its number of guests (T17)")
                 .isEqualTo(5);
+        assertThat(moved.get("openedAt").asString())
+                .as("and the moment they sat down, which the floor list orders by (T21)")
+                .isEqualTo(send(get(TABS + "/" + tabId, waiterToken), 200).get("openedAt").asString());
         assertThat(itemOf(moved, itemId)).isNotNull();
         assertThat(tabIdOf(itemId)).isEqualTo(moved.get("id").asString());
         JsonNode old = send(get(TABS + "/" + tabId, waiterToken), 200);

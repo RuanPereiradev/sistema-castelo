@@ -83,7 +83,11 @@ public class TabTransferController {
                 transfers.moveToTable(TabId.of(tabId), DiningTableId.of(request.getDiningTableId())), currentRate);
     }
 
-    /** Keeps the order the request listed, so the trail of one call reads the same way every time. */
+    /**
+     * Repeated ids collapse. The order here does not decide anything: the aggregate moves the lines
+     * in the order they sit on the tab, so the trail of one call reads the same way every time
+     * whatever order the request listed.
+     */
     private static Set<TabItemId> itemIdsOf(List<String> itemIds) {
         if (itemIds == null) {
             return Set.of();

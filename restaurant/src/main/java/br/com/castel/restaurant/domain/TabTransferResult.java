@@ -17,10 +17,6 @@ public record TabTransferResult(List<TabItemTransfer> transfers, List<TabItemTra
         events = List.copyOf(Objects.requireNonNull(events, "events"));
     }
 
-    static TabTransferResult empty() {
-        return new TabTransferResult(List.of(), List.of());
-    }
-
     /** How many items moved. */
     public int movedItems() {
         return transfers.size();

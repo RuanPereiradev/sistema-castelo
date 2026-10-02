@@ -106,9 +106,12 @@ Colunas já existentes na V7, agora mapeadas:
 Mapeamento:
 - `Tab`: `mergedIntoTabId` (UUID), `mergedAt`, `mergedBy`.
 - `TabItem`: `transferredFromTabId`, `transferredAt`, `transferredBy` e **`tabId` como coluna
-  básica** `@Column(name = "tab_id", insertable = false)`, gravada só na transferência
-  (§7.3). A lista `Tab.items` continua `updatable = false`, sem o `UPDATE` redundante por
-  item lançado.
+  básica própria**, `@Column(name = "tab_id", nullable = false)` com `insertable` e `updatable`
+  nos padrões. O `@JoinColumn` de `Tab.items` virou `insertable = false, updatable = false`:
+  um único escritor da coluna, e mover uma linha é **um** `UPDATE` do filho. `Tab.addItem`
+  chama `item.attachTo(id)` para o `INSERT` gravar a coluna. Ligar `updatable = true` na
+  coleção também funcionaria, mas somaria um `UPDATE` redundante a cada item lançado, que é
+  exatamente o que a 2.2 evitou.
 - `TabItemTransfer`: entidade própria, **fora do agregado `Tab`**, com repositório
   próprio. O agregado devolve as linhas a gravar; o caso de uso as salva.
 
@@ -134,7 +137,8 @@ tasks de hotel, e a renumeração (1.1 → V12, 2.1 → V13) é registrada no
      e os instantes do KDS viajam como estão. Item por peso (nasce `DELIVERED`) pode ir.
    - `transferredFromTabId = source`, `transferredAt`, `transferredBy` (sobrescreve a origem anterior: é o atalho do último salto, T11).
    - uma linha nova em `tab_item_transfer` por item movido, com o `kind` da operação (T15), que **não** é sobrescrita (T11).
-   - `splitGroup` volta a `1` (T9).
+   - `splitGroup` volta a `1` (T9) — **menos na troca de mesa**, onde a divisão por item
+     sobrevive, porque é uma festa só e a comanda nova não tem outro grupo (T18).
    - `serviceChargeWaived`: mantém; e, se a origem está com a taxa desligada
      (`serviceChargeApplied = false`) e o item é `serviceChargeable`, passa a `true`,
      para o valor efetivo do item não mudar em silêncio (T7).
@@ -154,6 +158,7 @@ tasks de hotel, e a renumeração (1.1 → V12, 2.1 → V13) é registrada no
    Comanda absorvida sem item ativo é aceita.
 6. `guestCount`: soma quando as duas têm; senão fica o desta (T8). **Na troca de mesa** a
    comanda nova herda o da absorvida, porque nasce sem número e são as mesmas pessoas (T17).
+   A soma respeita o teto de 999 da coluna: 600 + 600 fica 999.
 7. `mergedTab` → `MERGED`, `merged_into_tab_id = this`, `merged_at`, `merged_by`.
 8. `serviceChargeApplied` desta não muda; a absorvida com a taxa desligada leva os
    itens com `serviceChargeWaived` (regra 7, T7).
@@ -172,7 +177,17 @@ tasks de hotel, e a renumeração (1.1 → V12, 2.1 → V13) é registrada no
 - O rastro: a antiga fica `MERGED` apontando para a nova, os itens com
   `transferred_from_tab_id` e uma linha por item em `tab_item_transfer`.
 - A comanda muda de `id`; o front segue o `mergedIntoTabId` (limitação aceita, T5).
-- O `guestCount` vem junto (T17): é a mesma mesa de gente noutra mesa.
+- O que o operador escolheu vem junto: o `guestCount` (T17), a divisão por item e a taxa de
+  serviço que ele desligou (T18). A comanda nova é artefato de implementação, não um grupo
+  novo, então nada disso pode cair em silêncio — uma comanda de mesa nasce cobrando taxa, e
+  sem isso a cobrança reapareceria sozinha no próximo item lançado.
+- O status da comanda é checado **antes** da mesa de destino (T19): comanda em `CLOSING`
+  responde `TAB_NOT_OPEN`, não `INACTIVE_DINING_TABLE`.
+- O `openedAt`/`openedBy` vem da comanda antiga (T21): é quando a festa sentou, e a lista do
+  salão ordena por isso. Quem trocou fica no `merged_by` e no rastro.
+- **Um lugar só decide o que viaja** (T20): a fábrica privada `Tab.continuationOf(...)`. O
+  `TabFieldCarryOverTest` classifica os 21 campos do `Tab` por reflexão e quebra quando
+  aparece campo novo sem decisão, para não haver um quarto caso de valor perdido em silêncio.
 - Comanda com folio cai na regra da T2.
 
 **Taxa de serviço e origem** (T3)
@@ -218,7 +233,8 @@ record TabItemTransferred(TabId fromTabId, TabId toTabId, TabItemId itemId, Prep
 TabsForTransfer findForTransfer(TabId source, TabId destination, Set<TabItemId> itemIds);  // TabRepository
 TabsForTransfer findForMerge(TabId receiving, TabId merged);                                // TabRepository
 void saveAll(List<TabItemTransfer> transfers);                                              // TabItemTransferRepository
-List<TabItemTransfer> findByTabItemId(TabItemId itemId);                                    // TabItemTransferRepository
+// A leitura do rastro não entra aqui: o relatório que a consome está fora do escopo (§1),
+// e um método de repositório sem chamador é código morto. Chega com aquele relatório.
 
 // Exceções: InvalidTabTransferException ("INVALID_TAB_TRANSFER", 422),
 //           InvalidTabMergeException ("INVALID_TAB_MERGE", 422)

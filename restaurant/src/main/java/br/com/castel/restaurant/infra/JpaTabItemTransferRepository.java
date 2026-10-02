@@ -1,6 +1,5 @@
 package br.com.castel.restaurant.infra;
 
-import br.com.castel.restaurant.domain.TabItemId;
 import br.com.castel.restaurant.domain.TabItemTransfer;
 import br.com.castel.restaurant.domain.TabItemTransferRepository;
 import java.util.List;
@@ -26,10 +25,5 @@ class JpaTabItemTransferRepository implements TabItemTransferRepository {
     @Override
     public void saveAll(List<TabItemTransfer> transfers) {
         springData.saveAll(transfers);
-    }
-
-    @Override
-    public List<TabItemTransfer> findByTabItemId(TabItemId itemId) {
-        return springData.findByTabItemId(itemId);
     }
 }

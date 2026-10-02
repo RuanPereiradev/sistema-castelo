@@ -568,6 +568,36 @@ Content-Type: application/json
 %}
 
 
+### 28a. Guarda o momento em que a comanda B foi aberta, para a troca de mesa conferir (T21)
+GET {{host}}/api/restaurant/tabs/{{tabBId}}
+Authorization: Bearer {{waiterToken}}
+
+> {%
+    client.test("comanda B lida", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+    });
+    client.global.set("tabBOpenedAt", response.body.openedAt);
+%}
+
+
+### 28b. Poe a pizza no grupo 2 da comanda B, para a troca de mesa ter o que preservar (T18)
+PUT {{host}}/api/restaurant/tabs/{{tabBId}}/split-groups
+Authorization: Bearer {{waiterToken}}
+Content-Type: application/json
+
+{
+  "assignments": [
+    { "itemId": "{{pizzaItemId}}", "splitGroup": 2 }
+  ]
+}
+
+> {%
+    client.test("pizza no grupo 2", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+    });
+%}
+
+
 ### 29. Junta A em B: B fica, A vira MERGED, guestCount soma (T8, T14)
 POST {{host}}/api/restaurant/tabs/{{tabBId}}/merge
 Authorization: Bearer {{waiterToken}}
@@ -587,6 +617,9 @@ Content-Type: application/json
         const couvert = response.body.items.find(function(i) { return i.id === client.global.get("couvertItemId"); });
         client.assert(couvert, "o couvert deveria ter vindo");
         client.assert(couvert.transferredFromTabId === client.global.get("tabAId"), "origem do couvert");
+        client.assert(couvert.splitGroup === 1, "T9: na juncao de verdade o grupo volta ao 1");
+        const pizzaAfterMerge = response.body.items.find(function(i) { return i.id === client.global.get("pizzaItemId"); });
+        client.assert(pizzaAfterMerge.splitGroup === 2, "o item que ja era de B fica no grupo dele");
     });
 %}
 
@@ -657,6 +690,10 @@ Content-Type: application/json
         const pizza = response.body.items.find(function(i) { return i.id === client.global.get("pizzaItemId"); });
         client.assert(pizza.status === "IN_PREPARATION", "a pizza segue em preparo");
         client.assert(pizza.transferredFromTabId === client.global.get("tabBId"), "ultimo salto: B");
+        client.assert(pizza.splitGroup === 2, "T18: a divisao por item sobrevive a troca de mesa");
+        client.assert(response.body.serviceChargeApplied === true, "B cobrava taxa, C tambem");
+        client.assert(response.body.openedAt === client.global.get("tabBOpenedAt"),
+            "T21: a comanda nova mantem o momento em que a festa sentou");
     });
     client.global.set("tabCId", response.body.id);
 %}
@@ -1225,6 +1262,121 @@ Content-Type: application/json
 %}
 
 
+### 65b. Juntar comanda reaberta com pagamento -> 409 FOLIO_BALANCE_NOT_ZERO (T2)
+### Abre uma comanda, fecha, paga parte, reabre: o folio dela fica com saldo.
+### Nenhuma comanda sai do salao com dinheiro pendente.
+POST {{host}}/api/restaurant/tabs
+Authorization: Bearer {{waiterToken}}
+Content-Type: application/json
+
+{
+  "origin": "TABLE_SERVICE",
+  "diningTableId": "{{tableBId}}"
+}
+
+> {%
+    client.test("comanda com saldo aberta na mesa B, livre desde a troca", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+    });
+    client.global.set("balanceTabId", response.body.id);
+%}
+
+
+### 65c. Lanca o couvert: 12,00, sem taxa
+POST {{host}}/api/restaurant/tabs/{{balanceTabId}}/items
+Authorization: Bearer {{waiterToken}}
+Content-Type: application/json
+
+{
+  "menuItemId": "{{couvertId}}",
+  "quantity": 1
+}
+
+> {%
+    client.test("couvert lancado", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+    });
+%}
+
+
+### 65d. Pre-conta: 12,00
+POST {{host}}/api/restaurant/tabs/{{balanceTabId}}/closing
+Authorization: Bearer {{waiterToken}}
+
+> {%
+    client.test("pre-conta de 12,00", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        client.assert(response.body.total === "12.00", "total " + response.body.total);
+    });
+%}
+
+
+### 65e. Paga 5,00: o folio fica com saldo
+POST {{host}}/api/restaurant/tabs/{{balanceTabId}}/payments
+Authorization: Bearer {{waiterToken}}
+Idempotency-Key: transfer-balance-{{suffix}}
+Content-Type: application/json
+
+{
+  "method": "PIX",
+  "amount": "5.00"
+}
+
+> {%
+    client.test("pagamento parcial registrado", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+    });
+%}
+
+
+### 65f. Reabre a comanda: o lancamento e estornado, o pagamento fica como credito
+POST {{host}}/api/restaurant/tabs/{{balanceTabId}}/reopen
+Authorization: Bearer {{waiterToken}}
+Content-Type: application/json
+
+{
+  "reason": "cliente pediu mais uma coisa"
+}
+
+> {%
+    client.test("comanda reaberta", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        client.assert(response.body.status === "OPEN", "status " + response.body.status);
+    });
+%}
+
+
+### 65g. Juntar essa comanda -> 409 FOLIO_BALANCE_NOT_ZERO
+POST {{host}}/api/restaurant/tabs/{{tabCId}}/merge
+Authorization: Bearer {{waiterToken}}
+Content-Type: application/json
+
+{
+  "mergedTabId": "{{balanceTabId}}"
+}
+
+> {%
+    client.test("comanda com folio em saldo nao e absorvida", function() {
+        client.assert(response.status === 409, "esperado 409, recebido " + response.status);
+        client.assert(response.body.code === "FOLIO_BALANCE_NOT_ZERO", "code " + response.body.code);
+    });
+%}
+
+
+### 65h. E nada mudou: a comanda segue OPEN, com o item dela
+GET {{host}}/api/restaurant/tabs/{{balanceTabId}}
+Authorization: Bearer {{waiterToken}}
+
+> {%
+    client.test("a recusa nao mexeu em nada", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        client.assert(response.body.status === "OPEN", "status " + response.body.status);
+        client.assert(response.body.subtotal === "12.00", "subtotal " + response.body.subtotal);
+        client.assert(response.body.mergedIntoTabId === null, "nao deveria apontar para ninguem");
+    });
+%}
+
+
 ### ------------------------------------------------------------------
 ### Limpeza: nada fica ocupando mesa nem cartao
 ### ------------------------------------------------------------------
@@ -1298,6 +1450,49 @@ Authorization: Bearer {{waiterToken}}
 
 > {%
     client.test("C fechada", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        client.assert(response.body.status === "CLOSED", "status " + response.body.status);
+    });
+%}
+
+
+### 70b. Limpeza da comanda com saldo: paga o que falta e fecha
+POST {{host}}/api/restaurant/tabs/{{balanceTabId}}/closing
+Authorization: Bearer {{waiterToken}}
+
+> {%
+    client.test("pre-conta de novo: 12,00, com 5,00 ja pagos", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        client.assert(response.body.total === "12.00", "total " + response.body.total);
+        client.assert(response.body.balance === "7.00", "saldo " + response.body.balance);
+    });
+%}
+
+
+### 70c. Paga os 7,00 que faltam
+POST {{host}}/api/restaurant/tabs/{{balanceTabId}}/payments
+Authorization: Bearer {{waiterToken}}
+Idempotency-Key: transfer-balance-rest-{{suffix}}
+Content-Type: application/json
+
+{
+  "method": "PIX",
+  "amount": "7.00"
+}
+
+> {%
+    client.test("saldo quitado", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+    });
+%}
+
+
+### 70d. Fecha a comanda com saldo
+POST {{host}}/api/restaurant/tabs/{{balanceTabId}}/close
+Authorization: Bearer {{waiterToken}}
+
+> {%
+    client.test("comanda com saldo fechada", function() {
         client.assert(response.status === 200, "esperado 200, recebido " + response.status);
         client.assert(response.body.status === "CLOSED", "status " + response.body.status);
     });

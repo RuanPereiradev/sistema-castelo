@@ -382,12 +382,7 @@ class TabMergeTest {
             assertThat(newTab.subtotal()).isEqualTo(Money.of("40.00"));
         }
 
-        /**
-         * The same people sat at another table, so the number of guests is theirs and has to travel:
-         * section 10 of the spec asks for the new tab "with the items and the guestCount". Applied
-         * literally, decision T8 ("otherwise the receiving tab's own stays") drops it, because the new
-         * tab is born without a number — see the report.
-         */
+        /** Decision T17: the same party at another table keeps its number of guests. */
         @Test
         void shouldCarryTheNumberOfGuestsToTheNewTable() {
             Tab current = tableTab();
@@ -397,6 +392,80 @@ class TabMergeTest {
             TabMove move = current.moveToTable(activeTable(), billing, WAITER, MERGED_AT);
 
             assertThat(move.newTab().guestCount()).contains(3);
+        }
+
+        /**
+         * Decision T18: the split the operator built survives a change of table. The reason decision
+         * T9 sends a transferred line back to group 1 — group 2 of table 4 is not group 2 of table 5 —
+         * does not exist here: there is one single party, and the new tab has no other group.
+         */
+        @Test
+        void shouldCarryTheSplitOfEachLineToTheNewTable() {
+            Tab current = tableTab();
+            TabItem couple = orderDish(current, "40.00");
+            TabItem friend = orderDish(current, "30.00");
+            current.assignToSplitGroup(Map.of(couple.id(), 1, friend.id(), 3));
+
+            TabMove move = current.moveToTable(activeTable(), billing, WAITER, MERGED_AT);
+
+            Tab newTab = move.newTab();
+            assertThat(newTab.item(couple.id()).splitGroup()).isEqualTo(1);
+            assertThat(newTab.item(friend.id()).splitGroup()).isEqualTo(3);
+        }
+
+        /**
+         * Decision T18: a tab on a table is born charging service, so a new one would make the charge
+         * the operator took off reappear by itself on the next item ordered — which is what decision
+         * T7 exists to prevent on a single item.
+         */
+        @Test
+        void shouldCarryTheServiceChargeTheOperatorTurnedOffToTheNewTable() {
+            Tab current = tableTab();
+            orderDish(current, "100.00");
+            current.removeServiceCharge();
+
+            Tab newTab = current.moveToTable(activeTable(), billing, WAITER, MERGED_AT).newTab();
+
+            assertThat(newTab.serviceChargeApplied()).isFalse();
+            assertThat(newTab.total(TEN_PERCENT)).isEqualTo(Money.of("100.00"));
+            newTab.addItem(dish("10.00"), oneUnit(), WAITER, ORDERED_AT, FORTALEZA);
+            assertThat(newTab.total(TEN_PERCENT))
+                    .as("the charge the operator took off does not come back on the next item")
+                    .isEqualTo(Money.of("110.00"));
+        }
+
+        /**
+         * Decision T21: the moment the party sat down is theirs, not the moment of the move. The
+         * floor list orders by it and shows it, so taking the moment of the move would say "table 7,
+         * open just now" about people who have been there two hours. Who moved the tab is on the old
+         * one, in {@code mergedBy}.
+         */
+        @Test
+        void shouldCarryTheMomentThePartySatDownToTheNewTable() {
+            Tab current = tableTab();
+            orderDish(current, "40.00");
+
+            TabMove move = current.moveToTable(activeTable(), billing, OTHER_WAITER, MERGED_AT);
+
+            Tab newTab = move.newTab();
+            assertThat(newTab.openedAt()).isEqualTo(current.openedAt());
+            assertThat(newTab.openedBy()).isEqualTo(current.openedBy());
+            assertThat(current.mergedBy())
+                    .as("who moved the tab is recorded on the tab that was left behind")
+                    .contains(OTHER_WAITER);
+        }
+
+        /** A real merge is two parties: there the receiving tab's own choices rule (T9, T18). */
+        @Test
+        void shouldSendAMergedLineBackToTheFirstSplitGroup() {
+            Tab receiving = tableTab();
+            Tab absorbed = tableTab();
+            TabItem item = orderDish(absorbed, "40.00");
+            absorbed.assignToSplitGroup(Map.of(item.id(), 4));
+
+            receiving.mergeWith(absorbed, billing, WAITER, MERGED_AT);
+
+            assertThat(receiving.item(item.id()).splitGroup()).isEqualTo(1);
         }
 
         @Test

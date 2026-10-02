@@ -2,7 +2,13 @@ package br.com.castel.restaurant.domain;
 
 import java.util.List;
 
-/** Persistence port for {@link TabItemTransfer}. Implemented in {@code restaurant.infra}. */
+/**
+ * Persistence port for {@link TabItemTransfer}. Implemented in {@code restaurant.infra}.
+ *
+ * <p>Write only, for now: the trail is kept so that the question "why did table 4 close with less"
+ * can be answered, and the report that asks it is out of this task's scope. The read arrives with
+ * that report, together with the use case that needs it.
+ */
 public interface TabItemTransferRepository {
 
     /**
@@ -11,7 +17,4 @@ public interface TabItemTransferRepository {
      * needs {@code FOR KEY SHARE} on the rows its foreign keys point at.
      */
     void saveAll(List<TabItemTransfer> transfers);
-
-    /** Every movement of one item, oldest first: the trail of all its hops. */
-    List<TabItemTransfer> findByTabItemId(TabItemId itemId);
 }

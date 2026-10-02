@@ -1003,7 +1003,9 @@ public class Tab extends AuditedEntity {
      * free: this tab stays as {@code MERGED} pointing at the new one, and every item carries where
      * it came from. A self-service card moves to a table through the same path.
      *
-     * <p>The number of guests comes along (decision T17): it is the same party at another table.
+     * <p>What the operator chose comes along (decisions T17 and T18): the number of guests, the
+     * split of each line, and the service charge they turned off. The tab on the destination table
+     * is an artefact of how this is built, not a second group, so none of those may fall silently.
      *
      * <p>The new tab is not stored here. The caller adds it, and the partial unique index of
      * {@code tab} is what answers that the destination table is already taken.
@@ -1021,8 +1023,43 @@ public class Tab extends AuditedEntity {
          * the wrong thing.
          */
         requireStatusAccepting(status.acceptsMerge(), "cannot change table");
-        Tab newTab = Tab.openForTable(propertyId, destinationTable, by, at);
+        Tab newTab = continuationOf(this, destinationTable, by, at);
         return new TabMove(newTab, newTab.absorb(this, TabTransferKind.MOVE, billing, by, at));
+    }
+
+    /**
+     * The same tab on another table: a new row, because that is how a change of table keeps its
+     * trail (decision T5), carrying everything of the old one that is not about where it sits.
+     *
+     * <p>This factory is the <b>single place</b> that decides, field by field, what survives a
+     * change of table, and {@code TabFieldCarryOverTest} fails when a field is added to this class
+     * without being classified. Three bugs were found one at a time — the guests (T17), the split
+     * of each line and the service charge the operator turned off (T18) — because each field had to
+     * be taught to travel on its own and the next one was always forgotten. The three kinds are:
+     *
+     * <ul>
+     *   <li><b>Where it sits</b> ({@code id}, {@code origin}, {@code diningTableId},
+     *       {@code cardNumber}, {@code publicToken}): what the move exists to change. Never carried.
+     *   <li><b>What the operator chose</b> ({@code openedBy}, {@code openedAt},
+     *       {@code serviceChargeApplied}, {@code guestCount}, and on each line its split group and
+     *       waived charge): always carried. Losing one is always a bug, because nobody decided it.
+     *   <li><b>Settling the bill</b> (the folio, the charge, the frozen rate, the closing, the
+     *       cancellation, the merge): null on an {@code OPEN} tab by construction, so there is
+     *       nothing to carry. The folio of the tab being absorbed is closed by the merge (T2).
+     * </ul>
+     *
+     * <p>{@code openedAt} and {@code openedBy} are the party's, not the move's (decision T21): the
+     * floor list orders by that moment and shows it, so taking the moment of the move would say
+     * "table 7, open just now" about people who have been there two hours. Who moved the tab is in
+     * {@code merged_by} of the old one and in every row of {@code tab_item_transfer}.
+     */
+    private static Tab continuationOf(Tab current, DiningTable destinationTable, UUID by, Instant at) {
+        Tab moved = Tab.openForTable(current.propertyId, destinationTable, by, at);
+        moved.openedBy = current.openedBy;
+        moved.openedAt = current.openedAt;
+        moved.serviceChargeApplied = current.serviceChargeApplied;
+        /* guestCount is carried by absorb, which has to add it up on a real merge (T8, T17). */
+        return moved;
     }
 
     /** What a merge and a table move share; only the kind recorded on the trail differs. */
@@ -1062,11 +1099,12 @@ public class Tab extends AuditedEntity {
      */
     private Short guestCountAfterAbsorbing(Tab mergedTab, TabTransferKind kind) {
         if (guestCount == null) {
-            return kind == TabTransferKind.MOVE ? mergedTab.guestCount : null;
+            return kind.carriesTheSameParty() ? mergedTab.guestCount : null;
         }
         if (mergedTab.guestCount == null) {
             return guestCount;
         }
+        /* The ceiling wins over the sum: 999 is what a tab can hold, and no room seats more. */
         int merged = guestCount + mergedTab.guestCount;
         return (short) Math.min(merged, MAXIMUM_GUEST_COUNT);
     }
@@ -1076,7 +1114,8 @@ public class Tab extends AuditedEntity {
      * already checked.
      *
      * <p>An item that leaves a tab whose service charge is off arrives waived, so the money the
-     * customer owes for that line does not change with nobody deciding it (decision T7).
+     * customer owes for that line does not change with nobody deciding it (decision T7). The split
+     * of the line survives only when the whole party moved table (decision T18).
      */
     private TabTransferResult moveTo(Tab destination, List<TabItem> moving, TabTransferKind kind,
             UUID by, Instant at) {
@@ -1084,7 +1123,8 @@ public class Tab extends AuditedEntity {
         List<TabItemTransfer> transfers = new ArrayList<>(moving.size());
         List<TabItemTransferred> events = new ArrayList<>(moving.size());
         for (TabItem item : moving) {
-            item.transferTo(destination.id, id, waiveOnArrival && item.serviceChargeable(), by, at);
+            item.transferTo(destination.id, id, waiveOnArrival && item.serviceChargeable(),
+                    kind.carriesTheSameParty(), by, at);
             items.remove(item);
             destination.items.add(item);
             transfers.add(TabItemTransfer.record(item.id(), id, destination.id, kind, by, at));
