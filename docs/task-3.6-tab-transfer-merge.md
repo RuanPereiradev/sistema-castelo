@@ -46,6 +46,7 @@ comandas travadas. Teste denso nesses três pontos.
 - `TabTransferService`, `TabTransferController`, DTOs; `TabResponse`/`TabItemResponse` com os campos novos.
 - §11 e §13 do schema atualizados (tabela nova; ciclo impossível pelo status).
 - `http/36-restaurant-tab-transfer.http` e a linha no `http/README.md` (orquestrador).
+- Cenário `FOLIO_OWNED_BY_TAB` numa comanda real no `http/34` (T16).
 - Testes de unidade (agente de teste) e integração (DEV) com concorrência.
 
 **Fora**
@@ -347,8 +348,10 @@ aleatório.
 
 **Limpeza:** fecha ou cancela o que ficou aberto.
 
-**Pendência herdada da 3.2 (rodada 2):** incluir o cenário `FOLIO_OWNED_BY_TAB` numa
-comanda real no `http/34`. Ver §12 — não está aprovada como escopo desta task.
+**`http/34`, bloco aditivo no fim (T16):** cenário `FOLIO_OWNED_BY_TAB` numa comanda
+real, fechando a pendência herdada da rodada 2 da 3.2 — hoje o código de erro só é
+exercitado com folio sintético. Única alteração desta task em arquivo de outra; nada
+nos blocos existentes muda.
 
 ---
 
@@ -417,10 +420,9 @@ exceções ~40, schema/MIGRATIONS à parte); testes ~830 (alvo 1:1 do `CLAUDE.md
 
 ## 12. Em aberto antes da primeira linha de código
 
-- **Cenário `FOLIO_OWNED_BY_TAB` no `http/34`**, pendência herdada da rodada 2 da 3.2.
-  Estava no cabeçalho do rascunho, mas **não** na lista de escopo aprovada da 3.6.
-
-A coluna `kind` da tabela de rastro, que estava aqui, foi decidida: entra (T15).
+Nenhum ponto em aberto. As duas perguntas que a reescrita da spec levantou foram
+decididas: a coluna `kind` da tabela de rastro entra (T15) e o cenário
+`FOLIO_OWNED_BY_TAB` numa comanda real entra no `http/34` (T16).
 
 ---
 
