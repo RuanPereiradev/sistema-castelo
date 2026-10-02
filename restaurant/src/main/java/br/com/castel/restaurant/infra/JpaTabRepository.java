@@ -114,6 +114,14 @@ class JpaTabRepository implements TabRepository {
      *
      * <p>The order is always the tab and then the item, never the other way round, so this never
      * deadlocks against the closing or against a transfer.
+     *
+     * <p>A losing attempt leaves its {@code FOR KEY SHARE} on the tab it looked at, so after two
+     * races this holds that lock on two tabs, in whatever order the item happened to move — not the
+     * ascending order {@link #lockBoth} imposes. That is harmless, and the reason is worth writing
+     * down: this path never asks for an exclusive lock on a tab, and {@code FOR KEY SHARE} does not
+     * conflict with {@code FOR KEY SHARE}, so it cannot be the waiting end of a cycle. A future
+     * change that made it take {@code FOR UPDATE} on a tab would have to take the locks in the
+     * shared order instead.
      */
     @Override
     public Optional<Tab> findByItemIdForItemChange(TabItemId itemId) {

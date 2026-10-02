@@ -313,7 +313,19 @@ POST /api/restaurant/tabs/{tabId}/move      {diningTableId}           201 TabRes
    lê o `tab_id` de novo e repete (até 3 vezes); só então `TAB_ITEM_NOT_FOUND`.
    Depois de travado o item, ele não muda de comanda: a transferência precisa do
    `FOR UPDATE` do item e a junção do `FOR UPDATE` da comanda.
-5. **Compatibilidade:**
+5. **Trava antes da recusa.** O repositório trava as duas comandas e os itens antes de o
+   agregado checar destino ≠ origem e lista não vazia (§3, regras 1 e 2). Uma requisição
+   malformada paga trava para receber 422. Fica assim: antecipar a checagem exigiria `if` de
+   regra de negócio dentro do `@Service`, que o `CLAUDE.md` proíbe — a invariante mora no
+   agregado. A transação cai e solta tudo, então não há bug, só contenção que ninguém legítimo
+   paga.
+6. **Acúmulo de travas na nova tentativa do KDS.** Uma tentativa perdida deixa o
+   `FOR KEY SHARE` na comanda que ela olhou, então depois de duas corridas o caminho segura a
+   trava de duas comandas fora da ordem crescente que o resto da task impõe. É inofensivo
+   porque esse caminho **nunca** pede trava exclusiva de comanda, e `FOR KEY SHARE` não
+   conflita com `FOR KEY SHARE`: ele nunca é a ponta que espera num ciclo. Mudança futura que
+   o fizesse tomar `FOR UPDATE` numa comanda teria de passar pela ordem compartilhada.
+7. **Compatibilidade:**
    - `startClosing`/`reopen`/`close`/`cancel` (`FOR UPDATE`) e transferência/junção se esperam.
      Quem chega depois vê o status novo (`TAB_NOT_OPEN`).
    - Pagamento (`FOR KEY SHARE`) numa `OPEN` é `TAB_NOT_CLOSING` de qualquer jeito.
