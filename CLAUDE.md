@@ -76,11 +76,18 @@ aqui, **pergunte antes de nomear**.
 | Porta da comanda para o billing | `TabBilling` |
 | Ficha do item na tela da cozinha | `KitchenTicket` |
 | Fila de um setor na cozinha | `KitchenQueue` |
-| Eventos do item | `TabItemOrdered` · `TabItemStatusChanged` · `TabItemCancelled` |
+| Eventos do item | `TabItemOrdered` · `TabItemStatusChanged` · `TabItemCancelled` · `TabItemTransferred` |
 | Setor de preparo | `PrepStation` |
 | Janela de horário | `AvailabilityWindow` |
 | Taxa de serviço | `serviceCharge` |
 | Vendido por peso | `soldByWeight` / `pricePerKilo` |
+| Transferir itens | `transferItemsTo()` |
+| Juntar comandas | `mergeWith()` |
+| Comanda absorvida na junção | `mergedTab` / `mergedIntoTabId` |
+| Trocar de mesa | `moveToTable()` (rota `/move`) |
+| Movimento de item entre comandas | `TabItemTransfer` (tabela `tab_item_transfer`) |
+| Tipo do movimento | `TabTransferKind` |
+| Origem do item transferido | `transferredFromTabId` |
 
 ### Financeiro
 
@@ -124,6 +131,7 @@ ReservationStatus  PENDING · CONFIRMED · CHECKED_IN · CHECKED_OUT · CANCELLE
 RoomStatus         AVAILABLE · OCCUPIED · MAINTENANCE
 TabStatus          OPEN · CLOSING · CLOSED · CANCELLED · MERGED
 TabOrigin          TABLE_SERVICE · SELF_SERVICE
+TabTransferKind    TRANSFER · MERGE · MOVE
 TabItemStatus      PENDING · IN_PREPARATION · READY · DELIVERED · CANCELLED
 TabDestination     DIRECT_PAYMENT · ROOM_ACCOUNT
 PrepStation        KITCHEN · PIZZA · BAR

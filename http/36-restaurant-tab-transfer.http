@@ -1054,6 +1054,25 @@ Content-Type: application/json
 %}
 
 
+### 56b. Trocar de mesa uma comanda em CLOSING -> 409 TAB_NOT_OPEN
+### A comanda responde pelo proprio status antes de olhar a mesa de destino:
+### mandar o garcom consertar a mesa quando o problema e o fechamento seria pior.
+POST {{host}}/api/restaurant/tabs/{{tabA2Id}}/move
+Authorization: Bearer {{waiterToken}}
+Content-Type: application/json
+
+{
+  "diningTableId": "{{tableBId}}"
+}
+
+> {%
+    client.test("CLOSING nao troca de mesa", function() {
+        client.assert(response.status === 409, "esperado 409, recebido " + response.status);
+        client.assert(response.body.code === "TAB_NOT_OPEN", "code " + response.body.code);
+    });
+%}
+
+
 ### 57. Trocar para uma mesa que ja tem comanda -> 409 TAB_ALREADY_OPEN_FOR_DINING_TABLE
 POST {{host}}/api/restaurant/tabs/{{tabCId}}/move
 Authorization: Bearer {{waiterToken}}

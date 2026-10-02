@@ -1003,6 +1003,8 @@ public class Tab extends AuditedEntity {
      * free: this tab stays as {@code MERGED} pointing at the new one, and every item carries where
      * it came from. A self-service card moves to a table through the same path.
      *
+     * <p>The number of guests comes along (decision T17): it is the same party at another table.
+     *
      * <p>The new tab is not stored here. The caller adds it, and the partial unique index of
      * {@code tab} is what answers that the destination table is already taken.
      *
@@ -1013,6 +1015,12 @@ public class Tab extends AuditedEntity {
         Objects.requireNonNull(destinationTable, "destinationTable");
         Objects.requireNonNull(by, "by");
         Objects.requireNonNull(at, "at");
+        /*
+         * This tab's own status comes first: a tab that is already closing cannot move whatever the
+         * destination table is, and answering about the table instead would send the waiter to fix
+         * the wrong thing.
+         */
+        requireStatusAccepting(status.acceptsMerge(), "cannot change table");
         Tab newTab = Tab.openForTable(propertyId, destinationTable, by, at);
         return new TabMove(newTab, newTab.absorb(this, TabTransferKind.MOVE, billing, by, at));
     }
@@ -1034,7 +1042,7 @@ public class Tab extends AuditedEntity {
                 .sorted(ITEM_ORDER)
                 .toList();
         TabTransferResult result = mergedTab.moveTo(this, moving, kind, by, at);
-        this.guestCount = mergedGuestCount(mergedTab);
+        this.guestCount = guestCountAfterAbsorbing(mergedTab, kind);
         mergedTab.mergedIntoTabId = id.value();
         mergedTab.mergedAt = at;
         mergedTab.mergedBy = by;
@@ -1043,11 +1051,20 @@ public class Tab extends AuditedEntity {
     }
 
     /**
-     * The guests of the merged tab, added to this tab's when both have a number; otherwise this
-     * tab's own stays, whatever it is (decision T8).
+     * On a merge, the guests of the two tabs are added up when both have a number; otherwise this
+     * tab's own stays, whatever it is (decision T8). The waiter chose which tab stays, and the
+     * number is only the default of an even split, which they correct at any time.
+     *
+     * <p>A change of table is different (decision T17): the same people sat somewhere else, and
+     * this tab is a brand new one that cannot have a number yet, so it inherits the one it absorbs.
+     * Letting the letter of T8 apply here would drop the count and send the even split of the
+     * pre-bill back to its default with nobody deciding it.
      */
-    private Short mergedGuestCount(Tab mergedTab) {
-        if (guestCount == null || mergedTab.guestCount == null) {
+    private Short guestCountAfterAbsorbing(Tab mergedTab, TabTransferKind kind) {
+        if (guestCount == null) {
+            return kind == TabTransferKind.MOVE ? mergedTab.guestCount : null;
+        }
+        if (mergedTab.guestCount == null) {
             return guestCount;
         }
         int merged = guestCount + mergedTab.guestCount;

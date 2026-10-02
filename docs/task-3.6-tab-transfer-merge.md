@@ -152,7 +152,8 @@ tasks de hotel, e a renumeração (1.1 → V12, 2.1 → V13) é registrada no
    `FOLIO_BALANCE_NOT_ZERO` (T2, mesma regra do `cancel` com folio).
 5. Todo item **ativo** da absorvida é transferido pela regra 7. Os cancelados ficam nela.
    Comanda absorvida sem item ativo é aceita.
-6. `guestCount`: soma quando as duas têm; senão fica o desta (T8).
+6. `guestCount`: soma quando as duas têm; senão fica o desta (T8). **Na troca de mesa** a
+   comanda nova herda o da absorvida, porque nasce sem número e são as mesmas pessoas (T17).
 7. `mergedTab` → `MERGED`, `merged_into_tab_id = this`, `merged_at`, `merged_by`.
 8. `serviceChargeApplied` desta não muda; a absorvida com a taxa desligada leva os
    itens com `serviceChargeWaived` (regra 7, T7).
@@ -171,6 +172,7 @@ tasks de hotel, e a renumeração (1.1 → V12, 2.1 → V13) é registrada no
 - O rastro: a antiga fica `MERGED` apontando para a nova, os itens com
   `transferred_from_tab_id` e uma linha por item em `tab_item_transfer`.
 - A comanda muda de `id`; o front segue o `mergedIntoTabId` (limitação aceita, T5).
+- O `guestCount` vem junto (T17): é a mesma mesa de gente noutra mesa.
 - Comanda com folio cai na regra da T2.
 
 **Taxa de serviço e origem** (T3)
@@ -361,7 +363,7 @@ nos blocos existentes muda.
 - *Matriz de status:* origem × destino em {OPEN, CLOSING, CLOSED, CANCELLED, MERGED} para transferir e juntar (só OPEN × OPEN passa); `MERGED` × toda operação existente (lançar, cancelar item, cancelar, taxa, grupo, pessoas, startClosing, pagar, reabrir, fechar, transições do KDS em item que ficou).
 - *Item:* status × transferir (5 casos; cancelado recusa; por peso aceita); tudo ou nada (um item inexistente não move nenhum); ordem das checagens.
 - *Dinheiro:* conservação de Σ subtotal; `lineTotal` e adicionais intactos; base da taxa no destino (mesa→mesa, mesa→cartão = 0, cartão→mesa sem taxa); origem com a taxa desligada → item chega dispensado; taxa sobre a soma no destino (3 × 3,35 → 1,01).
-- *Junção:* `guestCount` (3+2, null+2, 3+null); folio da absorvida fechado com saldo zero e recusado com saldo ≠ 0 (nada mudou); cancelados ficam; absorvida sem item ativo; `merged_*` gravados; ciclo impossível.
+- *Junção:* `guestCount` (3+2, null+2, 3+null) e, na troca de mesa, o número herdado (T17); folio da absorvida fechado com saldo zero e recusado com saldo ≠ 0 (nada mudou); cancelados ficam; absorvida sem item ativo; `merged_*` gravados; ciclo impossível.
 - *Rastro:* uma linha de `tab_item_transfer` por item movido, com `from`/`to`/`kind`/autor/instante; a transferência avulsa grava `TRANSFER`, a junção `MERGE` e a troca de mesa `MOVE`; dois saltos geram duas linhas e o `transferredFromTabId` fica com o último; a junção gera uma linha por item ativo; nada é sobrescrito.
 - *Eventos:* um por item movido, `from`/`to` certos, `reachesKitchenQueue`/`isReady`.
 

@@ -13,10 +13,10 @@
 | | |
 |---|---|
 | Branch | `task/3.6-tab-transfer-merge` |
-| Rodada atual | 0 (decisões de negócio fechadas; spec final escrita) |
+| Rodada atual | 1 (implementação) |
 | Spec | `docs/task-3.6-tab-transfer-merge.md` — final, reescrita a partir das T1–T14 em 2026-10-02 |
-| Build | não rodado — nenhuma linha de código escrita |
-| Testes | 0 |
+| Build | `./mvnw clean install` — a confirmar no fim da rodada |
+| Testes | 574 de unidade no `restaurant` (74 novos) + 16 de integração no `app` (1 no STOMP) |
 
 ---
 
@@ -42,6 +42,7 @@ marque como revertida e adicione a nova embaixo.
 | 13 | 0 | **T12** — As três rotas aceitam `WAITER`, `ADMIN` **e `FRONT_DESK`**; `KITCHEN` recebe 403. É a primeira rota de comanda aberta à recepção, contra o padrão da 2.2 #3, e entra como exceção anotada — a uniformização das permissões de comanda fica para task própria. *O Ruan escolheu incluir o `FRONT_DESK`; a forma (exceção anotada em vez de revisão geral agora) foi delegada a mim.* | pendente |
 | 14 | 0 | **T13** — Transferência, junção e troca de mesa **não pedem motivo**. Nenhuma delas muda o total do estabelecimento, e são operação de rotina; autor e instante ficam registrados nas colunas de `tab_item_transfer` e nos `merged_*`. Motivo obrigatório segue só no cancelamento, que destrói receita. | pendente |
 | 15 | 0 | **T14** — Na junção o garçom escolhe: em `POST /api/restaurant/tabs/{tabId}/merge` a comanda do caminho **fica** e a do corpo é **absorvida**. O front sugere a mais antiga como padrão. Mantém a mesa onde o grupo realmente está, em vez de o sistema decidir pela data de abertura. | pendente |
+| 19 | 1 | **T17** — Na **troca de mesa** a comanda nova **herda o `guestCount`** da comanda que ela absorve. São as mesmas pessoas sentando noutra mesa, e a comanda nova é artefato de implementação da T5, não um grupo novo. A letra da T8 ("fica o da comanda que fica") derrubava o número em silêncio e mandava a divisão igual da pré-conta de volta ao padrão. A T8 passa a valer só na junção de verdade, onde há dois grupos e o garçom escolheu qual fica. Bug encontrado pelo agente de teste, confirmado pelo Ruan em 2026-10-02. | implementado |
 | 18 | 0 | **T16** — O cenário `FOLIO_OWNED_BY_TAB` numa comanda real **entra na 3.6**, no `http/34`, fechando a pendência herdada da rodada 2 da 3.2. É a única alteração desta task em arquivo de outra, e é aditiva: um bloco novo no fim do 34, sem tocar nos existentes. Deixar para a 3.3 manteria o código de erro testado só com folio sintético. | pendente |
 | 17 | 0 | **T15** — `tab_item_transfer` ganha a coluna **`kind`** (`TRANSFER` · `MERGE` · `MOVE`), `VARCHAR(20) NOT NULL` com `CHECK`. Sem ela as três operações gravariam linhas idênticas e uma troca de mesa de oito itens ficaria indistinguível de oito transferências avulsas. A operação sabe qual é: nada entra na API. Pergunta nascida da reescrita da spec, respondida pelo Ruan em 2026-10-02. | pendente |
 | 16 | 0 | **Glossário** — aprovados para a seção Restaurante do `CLAUDE.md`: `transferItemsTo()` (transferir itens), `mergeWith()` (juntar comandas), `mergedTab` / `mergedIntoTabId` (comanda absorvida), `moveToTable()` (trocar de mesa, rota `/move`), `TabItemTransfer` / tabela `tab_item_transfer` (movimento de item), `TabItemTransferred` com a mensagem `TRANSFERRED` (evento). Técnicos, fora do glossário: `TabTransferService`, `TabTransferController`, `TabTransferResponse`, `INVALID_TAB_TRANSFER`, `INVALID_TAB_MERGE`. | pendente |
@@ -55,7 +56,7 @@ Valores de status: `pendente` · `implementado` · `revertida pela #n`
 Lista viva. Item aprovado pelo Ruan **entra aqui** e só sai por decisão
 explícita do Ruan.
 
-- [ ] Glossário do `CLAUDE.md` com os seis termos novos
+- [x] Glossário do `CLAUDE.md` com os termos novos (os seis da #16, mais `TabTransferKind` da T15)
 - [ ] `transferItemsTo()` — transferência de itens entre comandas
 - [ ] `mergeWith()` — junção de comandas, com a absorvida indo para `MERGED`
 - [ ] `moveToTable()` / `POST /tabs/{tabId}/move` — trocar de mesa, por dentro abrir + juntar (T5)

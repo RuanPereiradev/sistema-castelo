@@ -128,6 +128,7 @@ class TabTransferHttpIntegrationTest extends AbstractTabClosingIntegrationTest {
         String toTableId = createDiningTable("Mesa nova");
         String tabId = openOnTable(fromTableId);
         String itemId = order(tabId, sodaId, 1);
+        send(put(TABS + "/" + tabId + "/guest-count", waiterToken, "{\"guestCount\":5}"), 200);
 
         JsonNode moved = send(post(TABS + "/" + tabId + "/move", waiterToken,
                 "{\"diningTableId\":\"%s\"}".formatted(toTableId)), 201);
@@ -135,6 +136,9 @@ class TabTransferHttpIntegrationTest extends AbstractTabClosingIntegrationTest {
         assertThat(moved.get("id").asString()).isNotEqualTo(tabId);
         assertThat(moved.get("diningTableId").asString()).isEqualTo(toTableId);
         assertThat(moved.get("subtotal").asString()).isEqualTo("6.00");
+        assertThat(moved.get("guestCount").asInt())
+                .as("the same party at another table keeps its number of guests (T17)")
+                .isEqualTo(5);
         assertThat(itemOf(moved, itemId)).isNotNull();
         assertThat(tabIdOf(itemId)).isEqualTo(moved.get("id").asString());
         JsonNode old = send(get(TABS + "/" + tabId, waiterToken), 200);
@@ -219,6 +223,22 @@ class TabTransferHttpIntegrationTest extends AbstractTabClosingIntegrationTest {
     }
 
     @Test
+    void shouldRefuseToChangeTableBeforeLookingAtTheDestinationWhenTheTabIsClosing() {
+        String sodaId = createItem("Soda", "6.00", true);
+        String tabId = openOnTable(createDiningTable("Fecha e move"));
+        order(tabId, sodaId, 1);
+        send(post(TABS + "/" + tabId + "/closing", waiterToken, ""), 200);
+
+        HttpResponse<String> response = exchange(post(TABS + "/" + tabId + "/move", waiterToken,
+                "{\"diningTableId\":\"%s\"}".formatted(deactivatedTable())));
+
+        assertThat(response.statusCode()).as(response.body()).isEqualTo(409);
+        assertThat(codeOf(response))
+                .as("the tab answers for its own status before it looks at the destination table")
+                .isEqualTo("TAB_NOT_OPEN");
+    }
+
+    @Test
     void shouldRefuseToMergeATabWhoseFolioStillHasABalance() {
         String sodaId = createItem("Soda", "6.00", true);
         String merged = openOnTable(createDiningTable("Com saldo"));
@@ -243,6 +263,12 @@ class TabTransferHttpIntegrationTest extends AbstractTabClosingIntegrationTest {
     private java.net.http.HttpRequest.Builder transfer(String source, String destination, String itemId) {
         return post(TABS + "/" + source + "/transfer", waiterToken,
                 "{\"toTabId\":\"%s\",\"itemIds\":[\"%s\"]}".formatted(destination, itemId));
+    }
+
+    private String deactivatedTable() {
+        String tableId = createDiningTable("Inativa");
+        send(post("/api/restaurant/dining-tables/" + tableId + "/deactivate", adminToken, ""), 200);
+        return tableId;
     }
 
     private String createItemAtStation(String name, String price, String prepStation) {
