@@ -1218,3 +1218,164 @@ Content-Type: application/json
         client.assert(response.body.difference === "0.00", "diferenca " + response.body.difference);
     });
 %}
+
+
+### ------------------------------------------------------------------
+### FOLIO_OWNED_BY_TAB numa comanda real (task 3.6, decisao T16)
+###
+### O `http/40` prova esta regra com um folio TAB sintetico, criado pela rota
+### de dev. Faltava prova-la com o folio de uma comanda de verdade: quem
+### estorna e fecha o folio de comanda e a propria comanda, nunca o balcao,
+### nem para o ADMIN. Pendencia herdada da rodada 2 da 3.2.
+###
+### No fim a comanda e paga em PIX e fechada, para nao deixar mesa ocupada.
+### PIX nao toca o turno de caixa, que ja foi fechado acima.
+### ------------------------------------------------------------------
+
+
+### 65. Abre uma terceira comanda na mesa, livre desde o cancelamento
+POST {{host}}/api/restaurant/tabs
+Authorization: Bearer {{waiterToken}}
+Content-Type: application/json
+
+{
+  "origin": "TABLE_SERVICE",
+  "diningTableId": "{{diningTableId}}"
+}
+
+> {%
+    client.test("terceira comanda aberta", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+    });
+    client.global.set("thirdTabId", response.body.id);
+%}
+
+
+### 66. Lanca o pudim: 10,00 com taxa
+POST {{host}}/api/restaurant/tabs/{{thirdTabId}}/items
+Authorization: Bearer {{waiterToken}}
+Content-Type: application/json
+
+{
+  "menuItemId": "{{puddingId}}",
+  "quantity": 1
+}
+
+> {%
+    client.test("pudim lancado", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+    });
+%}
+
+
+### 67. Inicia o fechamento: o folio da comanda nasce aqui
+POST {{host}}/api/restaurant/tabs/{{thirdTabId}}/closing
+Authorization: Bearer {{waiterToken}}
+
+> {%
+    client.test("pre-conta de 11,00", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        client.assert(response.body.total === "11.00", "total " + response.body.total);
+    });
+%}
+
+
+### 68. Le o folio da comanda e o lancamento que a comanda postou nele
+GET {{host}}/api/restaurant/tabs/{{thirdTabId}}
+Authorization: Bearer {{waiterToken}}
+
+> {%
+    client.test("comanda em CLOSING com folio", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        client.assert(response.body.folioId !== null, "folio deveria estar ligado");
+    });
+    client.global.set("thirdFolioId", response.body.folioId);
+%}
+
+
+### 69. O lancamento do consumo, pelo folio
+GET {{host}}/api/billing/folios/{{thirdFolioId}}
+Authorization: Bearer {{adminToken}}
+
+> {%
+    client.test("folio TAB com o consumo de 11,00", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        client.assert(response.body.ownerType === "TAB", "ownerType " + response.body.ownerType);
+        client.assert(response.body.charges.length === 1, "lancamentos " + response.body.charges.length);
+        client.assert(response.body.charges[0].amount === "11.00", "valor " + response.body.charges[0].amount);
+    });
+    client.global.set("thirdChargeId", response.body.charges[0].id);
+%}
+
+
+### 70. ADMIN tenta estornar o lancamento pelo balcao -> 409 FOLIO_OWNED_BY_TAB
+POST {{host}}/api/billing/folios/{{thirdFolioId}}/charges/{{thirdChargeId}}/reversal
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "reason": "tentativa pelo balcao"
+}
+
+> {%
+    client.test("folio de comanda real nao estorna pelo balcao: 409 FOLIO_OWNED_BY_TAB", function() {
+        client.assert(response.status === 409, "esperado 409, recebido " + response.status);
+        client.assert(response.body.code === "FOLIO_OWNED_BY_TAB", "code " + response.body.code);
+    });
+%}
+
+
+### 71. ADMIN tenta fechar o folio pelo balcao -> 409 FOLIO_OWNED_BY_TAB
+POST {{host}}/api/billing/folios/{{thirdFolioId}}/close
+Authorization: Bearer {{adminToken}}
+
+> {%
+    client.test("folio de comanda real nao fecha pelo balcao: 409 FOLIO_OWNED_BY_TAB", function() {
+        client.assert(response.status === 409, "esperado 409, recebido " + response.status);
+        client.assert(response.body.code === "FOLIO_OWNED_BY_TAB", "code " + response.body.code);
+    });
+%}
+
+
+### 72. O lancamento segue de pe: nada foi estornado
+GET {{host}}/api/billing/folios/{{thirdFolioId}}
+Authorization: Bearer {{adminToken}}
+
+> {%
+    client.test("folio aberto, com um lancamento e sem estorno", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        client.assert(response.body.status === "OPEN", "status " + response.body.status);
+        client.assert(response.body.charges.length === 1, "lancamentos " + response.body.charges.length);
+        client.assert(response.body.balance === "11.00", "saldo " + response.body.balance);
+    });
+%}
+
+
+### 73. Limpeza: paga em PIX e fecha a comanda pelo caminho certo
+POST {{host}}/api/restaurant/tabs/{{thirdTabId}}/payments
+Authorization: Bearer {{waiterToken}}
+Idempotency-Key: {{keyPrefix}}-third-pix
+Content-Type: application/json
+
+{
+  "method": "PIX",
+  "amount": "11.00"
+}
+
+> {%
+    client.test("pagamento de 11,00 registrado", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+    });
+%}
+
+
+### 74. Fecha a comanda: o folio fecha com ela, e a mesa fica livre
+POST {{host}}/api/restaurant/tabs/{{thirdTabId}}/close
+Authorization: Bearer {{waiterToken}}
+
+> {%
+    client.test("comanda fechada pelo caminho dela", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        client.assert(response.body.status === "CLOSED", "status " + response.body.status);
+    });
+%}

@@ -6,7 +6,8 @@ package br.com.castel.restaurant.domain;
  * <p>Task 2.2 moves a tab from {@code OPEN} to {@code CANCELLED}. Task 3.2 moves it from {@code OPEN}
  * to {@code CLOSING} (the pre-bill, with the total posted on the folio), back to {@code OPEN} by the
  * waiter's override, and from {@code CLOSING} to {@code CLOSED} once the folio is settled.
- * {@code MERGED} arrives with task 3.6; its answers here are already the ones that task relies on.
+ * {@code MERGED} arrives with task 3.6: the tab absorbed by another, which answers no to everything
+ * and holds neither its table nor its card.
  */
 public enum TabStatus {
 
@@ -84,5 +85,26 @@ public enum TabStatus {
      */
     public boolean acceptsSplitChange() {
         return this == OPEN || this == CLOSING;
+    }
+
+    // ------------------------------------------------------------------ transfer and merge (task 3.6)
+
+    /**
+     * Only an {@code OPEN} tab has items moved in or out, as source or as destination (decision T1).
+     * A {@code CLOSING} tab has its total already posted on the folio, and moving an item would ask
+     * for that charge to be reversed and posted again inside the move — the very thing decision F13
+     * refused for a cancellation. The waiter reopens, moves, and closes again.
+     */
+    public boolean acceptsItemTransfer() {
+        return this == OPEN;
+    }
+
+    /**
+     * Only an {@code OPEN} tab takes part in a merge, on either side. The tab that is absorbed goes
+     * to {@code MERGED}, which is final (decision T10) and never a destination, so a cycle between
+     * two tabs cannot be formed.
+     */
+    public boolean acceptsMerge() {
+        return this == OPEN;
     }
 }

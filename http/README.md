@@ -89,11 +89,16 @@ a URL, o privado com a senha.
 | `33-restaurant-tabs.http` | 2.2 | Comanda: abrir em mesa e cartão, lançar por unidade e por peso, cancelar item e comanda |
 | `34-restaurant-tab-closing.http` | 3.2 | Fechamento da comanda: taxa de serviço, divisão igual e por item, pré-conta, pagamentos PIX/dinheiro/cartão, reabertura, fechamento com saldo zero, cancelar comanda reaberta |
 | `35-kitchen-display.http` | 3.5 | KDS: fila por setor com limites de atraso, iniciar/pronto/desfazer, pronto direto, entrega pelo garçom, perfis trocados (STOMP fica no teste de integração) |
+| `36-restaurant-tab-transfer.http` | 3.6 | Comanda: transferência de linha inteira com o dinheiro conservado, taxa dispensada que viaja com o item, junção somando `guestCount`, troca de mesa respondendo comanda nova, rastro de dois saltos, recepção operando e cozinha com 403 |
 | `40-billing-folios.http` | 1.3 | Folio: lançamentos, estorno, pagamentos, estorno de pagamento, fechamento com saldo zero; folio de comanda recusa estorno e fechamento pelo balcão (3.2) |
 | `41-billing-cash-sessions.http` | 2.4 | Caixa: abertura de turno, suprimento, dinheiro do folio no turno, sangria, fechamento cego com quebra |
 
 Numeração em ordem de execução sugerida. Cada task nova acrescenta o próximo
 número — a 0.8 traz o `30-restaurant-menu.http`.
+
+O `36` roda depois do `33`: ele abre as próprias mesas e comandas, mas conta com
+o seed de dev (usuários `admin`, `garcom`, `recepcao` e `cozinha`, e a taxa de
+serviço em `setting`).
 
 ---
 

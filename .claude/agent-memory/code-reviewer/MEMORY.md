@@ -6,3 +6,4 @@
 - [Boot 4 / Security 7 runtime gotchas](spring_security_review_gotchas.md) — error dispatch, XFF, log leaks, probe recipe
 - [Task 1.5 review (dining tables)](project_task_1_5_dining_table.md) — comparator probe recipe, area case tie-break divergence from #11, stale decision log
 - [Task 2.2 review (tab)](project_task_2_2_tab.md) — same-item double cancel race under FOR KEY SHARE, unfiltered list untested, V7/doc diff recipe
+- [Task 3.6 review (tab transfer/merge/move)](project_task_3_6_tab_transfer.md) — "the new tab starts fresh" pattern: /move drops splitGroup + serviceChargeApplied; lock order proven sound

@@ -16,6 +16,10 @@ import java.util.UUID;
  * <p>{@code serviceChargeRate} (percent points), {@code serviceCharge} and {@code total} are live
  * while the tab is {@code OPEN}, with the rate of the setting now, and the frozen figures once closing
  * started (decision D20 of task 3.2).
+ *
+ * <p>{@code mergedIntoTabId} is set on a {@code MERGED} tab, the one absorbed by another or left
+ * behind by a change of table: a {@code GET} on it answers 200 with the pointer, and the front
+ * follows it to where the group is now.
  */
 public record TabResponse(
         String id,
@@ -42,7 +46,11 @@ public record TabResponse(
         String closingStartedBy,
         String closedAt,
         String closedBy,
-        String destination) {
+        String destination,
+        // ---- transfer and merge (task 3.6)
+        String mergedIntoTabId,
+        String mergedAt,
+        String mergedBy) {
 
     /** @param currentRate the rate of the setting now; used only while no rate is frozen */
     public static TabResponse from(Tab tab, String diningTableLabel, Percentage currentRate) {
@@ -71,6 +79,9 @@ public record TabResponse(
                 tab.closingStartedBy().map(UUID::toString).orElse(null),
                 tab.closedAt().map(Instant::toString).orElse(null),
                 tab.closedBy().map(UUID::toString).orElse(null),
-                tab.destination().map(Enum::name).orElse(null));
+                tab.destination().map(Enum::name).orElse(null),
+                tab.mergedIntoTabId().map(id -> id.value().toString()).orElse(null),
+                tab.mergedAt().map(Instant::toString).orElse(null),
+                tab.mergedBy().map(UUID::toString).orElse(null));
     }
 }

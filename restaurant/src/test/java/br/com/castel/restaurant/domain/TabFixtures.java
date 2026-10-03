@@ -74,12 +74,22 @@ final class TabFixtures {
     static final String INVALID_GUEST_COUNT = "INVALID_GUEST_COUNT";
     static final String INVALID_REOPENING_REASON = "INVALID_REOPENING_REASON";
 
+    // ------------------------------------------------------------------ codes, task 3.6
+
+    static final String INVALID_TAB_TRANSFER = "INVALID_TAB_TRANSFER";
+    static final String INVALID_TAB_MERGE = "INVALID_TAB_MERGE";
+
     // ------------------------------------------------------------------ closing, task 3.2
 
     static final Percentage TEN_PERCENT = Percentage.ofPercent(10);
     static final Percentage TWENTY_PERCENT = Percentage.ofPercent(20);
     static final Instant CLOSING_AT = wednesdayAt("13:00");
     static final Instant CLOSED_AT = wednesdayAt("13:30");
+
+    // ------------------------------------------------------------------ transfer and merge, task 3.6
+
+    static final Instant TRANSFERRED_AT = wednesdayAt("12:40");
+    static final Instant MERGED_AT = wednesdayAt("12:50");
 
     private TabFixtures() {
     }
@@ -205,6 +215,24 @@ final class TabFixtures {
         tab.receivePayment(PaymentMethod.PIX, Money.of("110.00"), "key-closed", billing);
         tab.close(billing, WAITER, CLOSED_AT);
         return tab;
+    }
+
+    /** A tab in each of the five statuses, so the matrix of a move is written once. */
+    static Tab tabInStatus(TabStatus status, FakeTabBilling billing) {
+        return switch (status) {
+            case OPEN -> tableTab();
+            case CLOSING -> closingTab(billing);
+            case CLOSED -> closedTab(billing);
+            case CANCELLED -> cancelledTab();
+            case MERGED -> mergedTab(billing);
+        };
+    }
+
+    /** An empty tab absorbed by another one: the only way into MERGED. */
+    static Tab mergedTab(FakeTabBilling billing) {
+        Tab merged = tableTab();
+        tableTab().mergeWith(merged, billing, WAITER, MERGED_AT);
+        return merged;
     }
 
     // ------------------------------------------------------------------ asserts

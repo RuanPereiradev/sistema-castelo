@@ -29,6 +29,8 @@ import tools.jackson.databind.JsonNode;
  * <p>A topic that must stay silent is checked with a short wait after a message that did arrive on
  * another topic of the same session: the broker keeps the publish order (preservePublishOrder), so
  * anything wrongly sent earlier would already be there.
+ *
+ * <p>Task 3.6 adds the {@code TRANSFERRED} message, pushed when an item changes tab.
  */
 class KitchenDisplayWebSocketIntegrationTest extends AbstractKitchenDisplayIntegrationTest {
 
@@ -153,5 +155,37 @@ class KitchenDisplayWebSocketIntegrationTest extends AbstractKitchenDisplayInteg
                         "{\"menuItemId\":\"%s\"}".formatted(soldOutId)), 422))
                 .isEqualTo("MENU_ITEM_UNAVAILABLE");
         assertThat(pizzaTopic.poll(SILENCE_MILLISECONDS, TimeUnit.MILLISECONDS)).isNull();
+    }
+
+    /**
+     * Task 3.6: an item that changed tab is pushed again, to the topic of its own station, carrying
+     * the table it is on now. Without the message the dish would sit on the screen under the table
+     * it left, and the kitchen would walk it to the wrong place.
+     */
+    @Test
+    void shouldPushTheTransferredItemToItsStationWithTheTableItArrivedOn() throws Exception {
+        String categoryId = createCategory();
+        String pizzaId = createItem(categoryId, "Pizza", "PIZZA", false);
+        String source = openTabOnNewTable("Sai");
+        String destination = openTabOnNewTable("Chega");
+        StompTestClient.Session kitchen = client.connect(kitchenToken);
+        BlockingQueue<JsonNode> pizzaTopic = kitchen.subscribe("/topic/kitchen/PIZZA");
+        BlockingQueue<JsonNode> barTopic = kitchen.subscribe("/topic/kitchen/BAR");
+        String pizza = order(source, pizzaId);
+        assertThat(pizzaTopic.poll(MESSAGE_TIMEOUT_SECONDS, TimeUnit.SECONDS)).isNotNull();
+
+        send(post(TABS + "/" + source + "/transfer", waiterToken,
+                "{\"toTabId\":\"%s\",\"itemIds\":[\"%s\"]}".formatted(destination, pizza)), 200);
+
+        JsonNode transferred = pizzaTopic.poll(MESSAGE_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+        assertThat(transferred).isNotNull();
+        assertThat(transferred.get("type").asString()).isEqualTo("TRANSFERRED");
+        assertThat(transferred.get("item").get("itemId").asString()).isEqualTo(pizza);
+        assertThat(transferred.get("item").get("tabId").asString()).isEqualTo(destination);
+        assertThat(transferred.get("item").get("diningTableLabel").asString()).isEqualTo("Chega " + suffix);
+        assertThat(transferred.get("item").get("status").asString()).isEqualTo("PENDING");
+        assertThat(barTopic.poll(SILENCE_MILLISECONDS, TimeUnit.MILLISECONDS))
+                .as("only the station of the item hears about it")
+                .isNull();
     }
 }
