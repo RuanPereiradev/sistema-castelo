@@ -149,6 +149,21 @@ public class CashDrawerSession extends AuditedEntity {
     }
 
     /**
+     * Takes cash out of the drawer to pay an expense (decision D4 of task F1). Same rules and order
+     * as {@link #drop}, and it moves the expected amount the same way, so the blind closing still
+     * reconciles: without it the count would report a shortfall for money the operator knowingly
+     * paid out, and a shortfall in the drawer looks like theft.
+     *
+     * <p>Told apart from a drop because a drop sends money to the safe, where it is still the
+     * business's, and this leaves for good.
+     *
+     * @return the new payment, or the one already registered under this key
+     */
+    public CashMovement payExpense(Money amount, String reason, String idempotencyKey) {
+        return move(CashMovementType.EXPENSE_PAYMENT, amount, reason, idempotencyKey);
+    }
+
+    /**
      * A retry is recognised before any other rule, even on a closed session (decision C9 of task
      * 2.4): a key this session already holds with the same type and amount answers the movement
      * already registered, and writes nothing.
@@ -241,8 +256,8 @@ public class CashDrawerSession extends AuditedEntity {
     // ------------------------------------------------------------------ totals
 
     /**
-     * What the drawer should hold: the float, plus the supplies and minus the drops, each with its
-     * sign in the order it was registered, plus the cash payments. Negative after a drop above it (decision C7). Once closed, the amount frozen at the
+     * What the drawer should hold: the float, plus the supplies and minus the drops and the expense
+     * payments, each with its sign in the order it was registered, plus the cash payments. Negative after a drop above it (decision C7). Once closed, the amount frozen at the
      * closing, whatever is passed in.
      *
      * @param cashPayments the confirmed cash payments linked to this session
@@ -284,6 +299,11 @@ public class CashDrawerSession extends AuditedEntity {
 
     public Money totalSupplies() {
         return totalOf(CashMovementType.CASH_SUPPLY);
+    }
+
+    /** What was paid out of the drawer as expense (decision D4 of task F1). */
+    public Money totalExpensePayments() {
+        return totalOf(CashMovementType.EXPENSE_PAYMENT);
     }
 
     /**

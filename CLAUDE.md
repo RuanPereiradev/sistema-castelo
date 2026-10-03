@@ -107,6 +107,13 @@ aqui, **pergunte antes de nomear**.
 | Fundo de troco | `openingFloat` |
 | Sangria | `CASH_DROP` |
 | Suprimento | `CASH_SUPPLY` |
+| Saída / despesa | `Expense` (tabela `expense`) |
+| Categoria da despesa | `ExpenseCategory` |
+| Data de competência | `accrualDate` |
+| Vencimento | `dueDate` |
+| Conta a pagar | despesa com `paidAt` nulo; consulta `payables` |
+| Fornecedor | `supplierName` |
+| Despesa paga pela gaveta | `CashMovementType.EXPENSE_PAYMENT` |
 
 ### Identidade e transversais
 
@@ -140,7 +147,8 @@ FolioStatus        OPEN · CLOSED
 PaymentStatus      PENDING · CONFIRMED · FAILED · REFUNDED
 PaymentMethod      CASH · PIX · CREDIT_CARD · DEBIT_CARD · ROOM_ACCOUNT
 CashDrawerSessionStatus  OPEN · CLOSED
-CashMovementType   CASH_DROP · CASH_SUPPLY
+CashMovementType   CASH_DROP · CASH_SUPPLY · EXPENSE_PAYMENT
+ExpenseCategory    PAYROLL · SUPPLIER · RENT · UTILITIES · TAX · MAINTENANCE · WITHDRAWAL · OTHER
 Role               ADMIN · FRONT_DESK · WAITER · KITCHEN
 ```
 
@@ -190,6 +198,7 @@ identity/        User, Role, JWT
 hotel/           RoomType, Room, Reservation, Guest, RatePlan, DailyInventory
 restaurant/      MenuItem, MenuCategory, Tab, DiningTable, KDS
 billing/         Folio, Charge, Payment, CashDrawerSession
+finance/         Expense, resumo financeiro
 tax-invoice/     porta TaxInvoiceIssuer + adaptador fake
 payment/         porta PaymentProcessor + adaptador fake
 app/             bootstrap, configuração, composição
@@ -205,6 +214,7 @@ Cada módulo: `api/` (interfaces públicas e DTOs) · `domain/` · `application/
 app ─────────> todos
 restaurant ──> billing.api, shared-kernel
 hotel ───────> billing.api, shared-kernel
+finance ─────> billing.api, restaurant.api, hotel.api, shared-kernel
 billing ─────> tax-invoice.api, payment.api, shared-kernel
 identity ────> shared-kernel
 ```

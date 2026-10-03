@@ -39,6 +39,10 @@
         </dependency>
         <dependency>
             <groupId>br.com.castel</groupId>
+            <artifactId>finance</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>br.com.castel</groupId>
             <artifactId>tax-invoice</artifactId>
         </dependency>
         <dependency>

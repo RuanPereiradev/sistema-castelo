@@ -13,9 +13,9 @@
 | | |
 |---|---|
 | Branch | `task/F1-expense` |
-| Rodada atual | 0 (decisões de negócio; nenhuma linha de código) |
-| Build | não rodado |
-| Testes | 0 |
+| Rodada atual | 1 (implementação) |
+| Build | `./mvnw clean install` passa: **BUILD SUCCESS, 6min07, zero falhas** |
+| Testes | 28 de unidade no `finance` + 10 de integração no `app`; os 64 do `CashDrawerSessionTest` da 2.4 seguem verdes |
 
 **Código da task:** `F1`. Não cabe na numeração das ondas do `plano-tecnico.md` — é
 escopo que o Ruan acrescentou em 2026-10-03, e o plano não previa finanças (a única menção
@@ -28,10 +28,13 @@ desta ter dados.
 
 | # | Rodada | Decisão | Status |
 |---|---|---|---|
-| 1 | 0 | **D1 — Duas datas na saída.** Cada despesa guarda `accrualDate` (a que mês pertence) e `paidAt` (quando o dinheiro saiu, nulo enquanto é conta a pagar). O Ruan pediu **lucro/prejuízo** e **fluxo de caixa**, que são números diferentes: o aluguel pago dia 5 é despesa do mês inteiro e caixa do dia 5; o almoço lançado no quarto dia 20 e pago no check-out dia 25 é receita do dia 20 e caixa do dia 25. Uma data só deixaria uma das duas perguntas sem resposta para sempre, e consertar depois custa migration mais recálculo de histórico. Habilita também **contas a pagar** de graça: despesa com `paidAt` nulo. | pendente |
-| 2 | 0 | **D2 — Módulo próprio `finance`**, dono da saída de dinheiro e do resumo, lendo `billing.api` e uma **porta de leitura nova em `restaurant.api`** para o fluxo de clientes. Alternativas recusadas: dentro do `billing`, que não pode ver o `restaurant` e deixaria `guest_count` inalcançável (sobraria contar folio de comanda, que é número de comandas e não de pessoas); e um `finance` lendo as tabelas alheias por SQL, que acopla à estrutura de tabela em vez da API e o **ArchUnit não enxerga**, porque confere pacote Java e não SQL. Exige: módulo novo no `pom`, o grafo do `CLAUDE.md` e o `ALLOWED_MODULE_GRAPH` do ArchUnit atualizados, e a primeira porta de leitura do `restaurant` — que passa a ser contrato. | pendente |
-| 3 | 0 | **D3 — `ExpenseCategory` é enum fixo** de oito valores: `PAYROLL` · `SUPPLIER` · `RENT` · `UTILITIES` · `TAX` · `MAINTENANCE` · `WITHDRAWAL` · `OTHER`. Persistido como string, igual aos doze enums que o sistema já tem. Recusada a tabela `expense_category`: o resumo precisa de conta fixa por categoria ("a folha consumiu 31% da receita"), e com tabela isso exigiria uma coluna marcando qual linha é folha — o modelo ficaria meio enum, meio tabela. Custo aceito: categoria nova depois exige migration alterando o `CHECK`. | pendente |
-| 4 | 0 | **D4 — Despesa paga em dinheiro vivo sai da gaveta**, como movimento de caixa do turno. Sem isso o `expectedAmount` (fundo + suprimentos − sangrias + pagamentos) ignoraria a saída e o **fechamento cego acusaria falta** — e falta no caixa parece roubo, não contabilidade. Implica **mudar o `billing`, que já está na `main`**: valor novo em `CashMovementType`, migration alterando o `CHECK` de `cash_movement.movement_type`, método de negócio novo em `CashDrawerSession` e porta em `billing.api` para o `finance` chamar. O log da 2.4 ganha uma linha. Recusadas: sangria manual antes de pagar (dois lançamentos sem ligação entre si, ninguém prova que um virou o outro) e proibir `CASH` em despesa (se na prática se paga o entregador em dinheiro, o número mente). | pendente |
+| 1 | 0 | **D1 — Duas datas na saída.** Cada despesa guarda `accrualDate` (a que mês pertence) e `paidAt` (quando o dinheiro saiu, nulo enquanto é conta a pagar). O Ruan pediu **lucro/prejuízo** e **fluxo de caixa**, que são números diferentes: o aluguel pago dia 5 é despesa do mês inteiro e caixa do dia 5; o almoço lançado no quarto dia 20 e pago no check-out dia 25 é receita do dia 20 e caixa do dia 25. Uma data só deixaria uma das duas perguntas sem resposta para sempre, e consertar depois custa migration mais recálculo de histórico. Habilita também **contas a pagar** de graça: despesa com `paidAt` nulo. | implementado |
+| 2 | 0 | **D2 — Módulo próprio `finance`**, dono da saída de dinheiro e do resumo, lendo `billing.api` e uma **porta de leitura nova em `restaurant.api`** para o fluxo de clientes. Alternativas recusadas: dentro do `billing`, que não pode ver o `restaurant` e deixaria `guest_count` inalcançável (sobraria contar folio de comanda, que é número de comandas e não de pessoas); e um `finance` lendo as tabelas alheias por SQL, que acopla à estrutura de tabela em vez da API e o **ArchUnit não enxerga**, porque confere pacote Java e não SQL. Exige: módulo novo no `pom`, o grafo do `CLAUDE.md` e o `ALLOWED_MODULE_GRAPH` do ArchUnit atualizados, e a primeira porta de leitura do `restaurant` — que passa a ser contrato. | implementado |
+| 3 | 0 | **D3 — `ExpenseCategory` é enum fixo** de oito valores: `PAYROLL` · `SUPPLIER` · `RENT` · `UTILITIES` · `TAX` · `MAINTENANCE` · `WITHDRAWAL` · `OTHER`. Persistido como string, igual aos doze enums que o sistema já tem. Recusada a tabela `expense_category`: o resumo precisa de conta fixa por categoria ("a folha consumiu 31% da receita"), e com tabela isso exigiria uma coluna marcando qual linha é folha — o modelo ficaria meio enum, meio tabela. Custo aceito: categoria nova depois exige migration alterando o `CHECK`. | implementado |
+| 4 | 0 | **D4 — Despesa paga em dinheiro vivo sai da gaveta**, como movimento de caixa do turno. Sem isso o `expectedAmount` (fundo + suprimentos − sangrias + pagamentos) ignoraria a saída e o **fechamento cego acusaria falta** — e falta no caixa parece roubo, não contabilidade. Implica **mudar o `billing`, que já está na `main`**: valor novo em `CashMovementType`, migration alterando o `CHECK` de `cash_movement.movement_type`, método de negócio novo em `CashDrawerSession` e porta em `billing.api` para o `finance` chamar. O log da 2.4 ganha uma linha. Recusadas: sangria manual antes de pagar (dois lançamentos sem ligação entre si, ninguém prova que um virou o outro) e proibir `CASH` em despesa (se na prática se paga o entregador em dinheiro, o número mente). | implementado |
+
+| 5 | 0 | **D5 — Nomes aprovados** para o glossário: `Expense` (tabela `expense`), `ExpenseCategory`, `accrualDate`, `dueDate`, `payables`, `supplierName`, `CashMovementType.EXPENSE_PAYMENT` e `RestaurantActivity` (a porta nova em `restaurant.api`). Técnicos, fora do glossário: `ExpenseService`, `ExpenseController`, `ExpenseRepository` e as exceções. O `EXPENSE_PAYMENT` é o sensível: entra num enum que já está na `main`, então renomear depois é migration nova. | implementado |
+| 6 | 0 | **D6 — A F1 toma a `V12`**, que estava reservada ao hotel, e o hotel desce para **V13 (1.1) e V14 (2.1)**. Mesma razão da T11b da 3.6: com o `outOfOrder` desligado, a versão segue a ordem de execução, e o Ruan quer finanças na primeira entrega enquanto o hotel segue adiado. Uma migration só para a task, criando `expense` e alterando o `CHECK` de `cash_movement.movement_type`. *Decisão minha, decorrente da D4 — revisável sem ônus enquanto o hotel não abrir.* | implementado |
 
 Valores de status: `pendente` · `implementado` · `revertida pela #n`
 
@@ -39,17 +42,18 @@ Valores de status: `pendente` · `implementado` · `revertida pela #n`
 
 ## Escopo desta task
 
-- [ ] Módulo `finance` no `pom`, no grafo do `CLAUDE.md` e no `ALLOWED_MODULE_GRAPH` do ArchUnit
-- [ ] Agregado `Expense` com as duas datas, cancelamento com motivo e quitação
-- [ ] `ExpenseCategory` com os oito valores (D3)
-- [ ] Migration do `expense`
-- [ ] `CashMovementType` com o valor novo + migration alterando o `CHECK` (D4)
-- [ ] Método de negócio em `CashDrawerSession` e porta em `billing.api` (D4)
-- [ ] Rotas de despesa e de contas a pagar, perfil `ADMIN`
-- [ ] Arquivo `.http` com caminho feliz e cenários negativos
-- [ ] Linha no `http/README.md`
-- [ ] Glossário do `CLAUDE.md` com os termos aprovados
-- [ ] Linha no log de decisões da 2.4, registrando a mudança no caixa
+- [x] Módulo `finance` no `pom`, no grafo do `CLAUDE.md` e no `ALLOWED_MODULE_GRAPH` do ArchUnit
+- [x] Agregado `Expense` com as duas datas, cancelamento com motivo e quitação
+- [x] `ExpenseCategory` com os oito valores (D3)
+- [x] `V12__finance_expense.sql`: cria `expense` e altera o `CHECK` do `cash_movement` (D6)
+- [x] Renumerar o hotel no `docs/MIGRATIONS.md`: 1.1 → V13, 2.1 → V14 (D6)
+- [x] `CashMovementType` com o valor novo + migration alterando o `CHECK` (D4)
+- [x] Método de negócio em `CashDrawerSession` e porta em `billing.api` (D4)
+- [x] Rotas de despesa e de contas a pagar, perfil `ADMIN`
+- [x] Arquivo `.http` com caminho feliz e cenários negativos
+- [x] Linha no `http/README.md`
+- [x] Glossário do `CLAUDE.md` com os termos aprovados
+- [x] Linha no log de decisões da 2.4, registrando a mudança no caixa
 
 ### Movido para outra task
 
@@ -66,7 +70,6 @@ Valores de status: `pendente` · `implementado` · `revertida pela #n`
 
 | # | Pergunta | Quando bloqueia |
 |---|---|---|
-| A1 | Nome do valor novo de `CashMovementType` e os nomes do glossário em geral | Antes da primeira linha de código |
 | A2 | O dia é congelado num `DailyClose` ou recalculado ao vivo sempre? | Só na **F2** |
 
 ---
@@ -78,4 +81,5 @@ Valores de status: `pendente` · `implementado` · `revertida pela #n`
 | Não existe margem por prato | `menu_item` não tem custo; o sistema dirá "lucro do mês", não "a pizza dá 60%" |
 | Fluxo de clientes por pessoa é parcial | `guest_count` é **opcional** na comanda; o resumo tem de dizer "412 pessoas em 180 de 213 comandas informadas" em vez de fingir precisão |
 | Receita de hotel é zero | O módulo `hotel` não existe |
+| Retirada dos sócios não conta como custo | `WITHDRAWAL` move caixa e não pesa no resultado: contar como despesa reportaria prejuízo num mês lucrativo em que os sócios só tiraram o próprio dinheiro. *Decisão minha, não pedida pelo Ruan — uma linha para reverter* |
 | Categoria nova exige migration | Consequência aceita da D3 |
