@@ -75,7 +75,7 @@ Valores de status: `pendente` · `implementado` · `revertida pela #n`
 
 | # | Pergunta | Quando bloqueia |
 |---|---|---|
-| A2 | O dia é congelado num `DailyClose` ou recalculado ao vivo sempre? | Só na **F2** |
+| — | Nenhum. A A2 (dia congelado ou ao vivo) foi respondida pelo Ruan em 2026-10-03 e virou a **D1 da F2**: congela o dia | — |
 
 ---
 
