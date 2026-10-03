@@ -11,6 +11,11 @@ conhecido.
 Este arquivo carrega automaticamente em toda sessão e em todo subagente. É a
 fonte da verdade de convenções. Não duplique estas regras nos arquivos de agente.
 
+O front tem convenções próprias em `frontend/CLAUDE.md`, que carregam ao trabalhar
+naquele diretório: regra de tradução, mapa de código de erro para frase, tempo real
+do KDS e toque. Ele **não** repete o glossário, o dinheiro nem o contrato de erro —
+isso é daqui.
+
 ---
 
 ## Regra de idioma
