@@ -3,6 +3,7 @@ package br.com.castel.restaurant.infra;
 import br.com.castel.restaurant.domain.DiningTableId;
 import br.com.castel.restaurant.domain.Tab;
 import br.com.castel.restaurant.domain.TabId;
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -54,4 +55,33 @@ interface SpringDataTabRepository extends JpaRepository<Tab, TabId> {
     /** The id of the tab holding the item, read without any lock. */
     @Query(value = "select cast(tab_id as varchar) from tab_item where id = :itemId", nativeQuery = true)
     Optional<String> findTabIdOfItem(@Param("itemId") UUID itemId);
+
+    // ---- activity of the floor, for the finance module (task F1)
+
+    /**
+     * How much the floor moved between the two instants: tabs opened, how many of them informed the
+     * number of guests, the sum of those guests, and the split between table and card.
+     *
+     * <p>{@code CANCELLED} and {@code MERGED} are left out: a tab opened by mistake and a tab
+     * absorbed by another never served anybody, and counting them would inflate the movement of
+     * customers.
+     *
+     * <p>One query for the five figures, so they stay consistent with each other even if a tab is
+     * opened while the report is being built. Native because {@code count(... ) filter (where ...)}
+     * is PostgreSQL's, and JPQL has no equivalent that reads as clearly.
+     */
+    @Query(value = "select count(*), "
+            + "count(guest_count), "
+            + "coalesce(sum(guest_count), 0), "
+            + "count(*) filter (where origin = 'TABLE_SERVICE'), "
+            + "count(*) filter (where origin = 'SELF_SERVICE') "
+            + "from tab "
+            + "where property_id = :propertyId "
+            + "and opened_at >= :from "
+            + "and opened_at < :to "
+            + "and status not in ('CANCELLED', 'MERGED')", nativeQuery = true)
+    Object[] activityBetween(
+            @Param("propertyId") UUID propertyId,
+            @Param("from") Instant from,
+            @Param("to") Instant to);
 }

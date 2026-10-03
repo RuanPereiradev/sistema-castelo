@@ -36,6 +36,10 @@ desta ter dados.
 | 5 | 0 | **D5 — Nomes aprovados** para o glossário: `Expense` (tabela `expense`), `ExpenseCategory`, `accrualDate`, `dueDate`, `payables`, `supplierName`, `CashMovementType.EXPENSE_PAYMENT` e `RestaurantActivity` (a porta nova em `restaurant.api`). Técnicos, fora do glossário: `ExpenseService`, `ExpenseController`, `ExpenseRepository` e as exceções. O `EXPENSE_PAYMENT` é o sensível: entra num enum que já está na `main`, então renomear depois é migration nova. | implementado |
 | 6 | 0 | **D6 — A F1 toma a `V12`**, que estava reservada ao hotel, e o hotel desce para **V13 (1.1) e V14 (2.1)**. Mesma razão da T11b da 3.6: com o `outOfOrder` desligado, a versão segue a ordem de execução, e o Ruan quer finanças na primeira entrega enquanto o hotel segue adiado. Uma migration só para a task, criando `expense` e alterando o `CHECK` de `cash_movement.movement_type`. *Decisão minha, decorrente da D4 — revisável sem ônus enquanto o hotel não abrir.* | implementado |
 
+| 7 | 1 | **D7 — Finanças é do restaurante; o hotel entra como uma fonte a mais.** Diretriz do Ruan em 2026-10-03: o restaurante é o produto, e o hotel vai ser "só uma entrada de dinheiro e despesa a mais". Consequência de desenho, não só de prioridade: a receita é modelada **por fonte**, numa lista, e não com `TabCharge` e `RoomNightCharge` costurados no meio do cálculo. Acrescentar o hotel na F2 passa a ser acrescentar uma fonte, não mexer no resumo. A F2 **não espera** o hotel: ela nasce respondendo pelo restaurante, com a fonte do hotel somando zero até existir. | implementado |
+| 8 | 1 | **D8 — `RestaurantActivity`, a primeira porta de leitura do restaurante.** Responde **atividade**, não dinheiro: comandas abertas, quantas informaram o número de pessoas, a soma dessas pessoas, e a divisão entre mesa e cartão. O dinheiro continua sendo do `billing`, e quem junta os dois é o `finance`. Estreita de propósito: um módulo de relatório que pudesse perguntar qualquer coisa ao restaurante acabaria acoplado à forma da comanda. Comanda `CANCELLED` e `MERGED` ficam fora — a aberta por engano e a absorvida por outra não serviram ninguém, e contá-las infla o movimento de clientes. | implementado |
+| 9 | 1 | **D9 — O número de pessoas é parcial, e o tipo diz isso.** `guest_count` é opcional na comanda, então `RestaurantActivityView` carrega também `tabsWithGuestCount`, e expõe `guestCountCoverage()` e `guestCountIsComplete()`. Quem mostra o número de pessoas **tem de** mostrar a cobertura ao lado: "412 pessoas em 180 de 213 comandas" é honesto, "412 pessoas" não é. A honestidade fica no tipo, não na boa vontade de quem for consumir. | implementado |
+
 Valores de status: `pendente` · `implementado` · `revertida pela #n`
 
 ---
@@ -54,6 +58,7 @@ Valores de status: `pendente` · `implementado` · `revertida pela #n`
 - [x] Linha no `http/README.md`
 - [x] Glossário do `CLAUDE.md` com os termos aprovados
 - [x] Linha no log de decisões da 2.4, registrando a mudança no caixa
+- [x] `RestaurantActivity` e `RestaurantActivityView` em `restaurant.api`, com a consulta de atividade (D8, D9)
 
 ### Movido para outra task
 
@@ -79,7 +84,7 @@ Valores de status: `pendente` · `implementado` · `revertida pela #n`
 | Limitação | Por que foi aceita |
 |---|---|
 | Não existe margem por prato | `menu_item` não tem custo; o sistema dirá "lucro do mês", não "a pizza dá 60%" |
-| Fluxo de clientes por pessoa é parcial | `guest_count` é **opcional** na comanda; o resumo tem de dizer "412 pessoas em 180 de 213 comandas informadas" em vez de fingir precisão |
+| Fluxo de clientes por pessoa é parcial | `guest_count` é **opcional** na comanda. Mitigado na D9: o tipo carrega a cobertura, então o consumidor não consegue mostrar o número sozinho por descuido |
 | Receita de hotel é zero | O módulo `hotel` não existe |
 | Retirada dos sócios não conta como custo | `WITHDRAWAL` move caixa e não pesa no resultado: contar como despesa reportaria prejuízo num mês lucrativo em que os sócios só tiraram o próprio dinheiro. *Decisão minha, não pedida pelo Ruan — uma linha para reverter* |
 | Categoria nova exige migration | Consequência aceita da D3 |
