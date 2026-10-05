@@ -1,9 +1,6 @@
-import { LoginPage } from './features/auth/LoginPage';
+import { RouterProvider } from 'react-router-dom';
+import { router } from './router';
 
-/**
- * One screen, so no router yet: it arrives with the first real area, which is
- * the dining room.
- */
 export function App() {
-  return <LoginPage />;
+  return <RouterProvider router={router} />;
 }

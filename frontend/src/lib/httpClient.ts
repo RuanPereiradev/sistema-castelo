@@ -1,4 +1,6 @@
 import { ApiError, NetworkError, type ProblemDetail } from './problemDetail';
+import { refresh } from '../features/auth/authApi';
+import { currentSession, clearSession } from '../features/auth/session';
 
 /**
  * Same-origin by design: the Vite dev server proxies `/api` to the backend, and
@@ -7,9 +9,10 @@ import { ApiError, NetworkError, type ProblemDetail } from './problemDetail';
 const BASE_PATH = '/api';
 
 export interface RequestOptions {
-  readonly method?: 'GET' | 'POST';
+  readonly method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
   readonly body?: unknown;
   readonly accessToken?: string;
+  readonly skipRefresh?: boolean;
 }
 
 async function readCode(response: Response): Promise<string | null> {
@@ -22,14 +25,15 @@ async function readCode(response: Response): Promise<string | null> {
   }
 }
 
-export async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
+async function makeRequest<T>(
+  path: string,
+  options: RequestOptions & { readonly accessToken: string },
+): Promise<T> {
   const headers: Record<string, string> = { Accept: 'application/json' };
   if (options.body !== undefined) {
     headers['Content-Type'] = 'application/json';
   }
-  if (options.accessToken) {
-    headers['Authorization'] = `Bearer ${options.accessToken}`;
-  }
+  headers['Authorization'] = `Bearer ${options.accessToken}`;
 
   let response: Response;
   try {
@@ -50,4 +54,35 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
     return undefined as T;
   }
   return (await response.json()) as T;
+}
+
+export async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
+  const session = currentSession();
+  const token = options.accessToken ?? session?.accessToken;
+
+  if (!token) {
+    throw new ApiError(401, 'INVALID_TOKEN');
+  }
+
+  try {
+    return await makeRequest<T>(path, { ...options, accessToken: token });
+  } catch (error) {
+    if (
+      error instanceof ApiError &&
+      error.status === 401 &&
+      !options.skipRefresh &&
+      session?.refreshToken
+    ) {
+      try {
+        const refreshed = await refresh(session.refreshToken);
+        // Retry com novo token
+        return await makeRequest<T>(path, { ...options, accessToken: refreshed.accessToken });
+      } catch {
+        // Refresh falhou; sessão encerrou mesmo
+        clearSession();
+        throw error;
+      }
+    }
+    throw error;
+  }
 }

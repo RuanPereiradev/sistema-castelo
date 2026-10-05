@@ -1,0 +1,103 @@
+/* Shell layout: cabeçalho + main */
+.shell {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background-color: var(--bg-primary);
+  color: var(--fg-primary);
+}
+
+.shell-header {
+  flex-shrink: 0;
+  background-color: var(--bg-header, #2c3e50);
+  border-bottom: 1px solid var(--border-subtle, #34495e);
+  padding: 0.75rem 1rem;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.shell-header-content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  max-width: 100%;
+}
+
+.shell-header h1 {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #ecf0f1;
+}
+
+.shell-header-right {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+}
+
+.shell-role-badge {
+  display: inline-block;
+  padding: 0.25rem 0.75rem;
+  background-color: var(--accent-primary, #3498db);
+  border-radius: 0.25rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #fff;
+}
+
+.shell-username {
+  font-size: 0.95rem;
+  color: #bdc3c7;
+}
+
+.shell-logout-btn {
+  padding: 0.5rem 1rem;
+  background-color: var(--accent-danger, #e74c3c);
+  color: #fff;
+  border: none;
+  border-radius: 0.25rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.shell-logout-btn:hover {
+  background-color: var(--accent-danger-hover, #c0392b);
+}
+
+.shell-logout-btn:active {
+  transform: scale(0.98);
+}
+
+.shell-main {
+  flex: 1;
+  overflow: auto;
+  padding: 1rem;
+}
+
+/* Portal theme: aplicar variáveis herdadas do login */
+@media (prefers-color-scheme: dark) {
+  .shell-header {
+    background-color: #1a2332;
+    border-bottom-color: #2c3e50;
+  }
+}
+
+/* Mobile: stack mais compacto */
+@media (max-width: 768px) {
+  .shell-header-content {
+    flex-direction: column;
+    gap: 0.5rem;
+    align-items: flex-start;
+  }
+
+  .shell-header-right {
+    width: 100%;
+    gap: 0.75rem;
+    font-size: 0.875rem;
+  }
+
+  .shell-logout-btn {
+    margin-left: auto;
+  }
+}
