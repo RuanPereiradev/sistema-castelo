@@ -3,6 +3,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import type { DiningTable } from './useDiningTables';
 import { useOpenTab } from './useTab';
 import { useDiningTableTab } from './useDiningTableTab';
+import { AddItemModal } from './AddItemModal';
 import { formatDistanceToNow } from 'date-fns';
 import { pt } from 'date-fns/locale';
 
@@ -24,6 +25,7 @@ const STATUS_LABELS: Record<string, string> = {
  */
 export function TabDetailsPanel({ table }: Props) {
   const [guestCount, setGuestCount] = useState(1);
+  const [isAddItemOpen, setIsAddItemOpen] = useState(false);
   const queryClient = useQueryClient();
 
   const isOccupied = table.occupiedTabCount > 0;
@@ -165,11 +167,20 @@ export function TabDetailsPanel({ table }: Props) {
       </div>
 
       <div className="tab-actions">
-        <button className="btn-primary">+ Lançar item</button>
+        <button className="btn-primary" onClick={() => setIsAddItemOpen(true)}>
+          + Lançar item
+        </button>
         <button className="btn-secondary">📋 Pré-conta</button>
         <button className="btn-secondary">🔄 Transferir</button>
         <button className="btn-danger">❌ Cancelar</button>
       </div>
+
+      {/* Modal de adicionar item */}
+      <AddItemModal
+        tabId={tab.id}
+        isOpen={isAddItemOpen}
+        onClose={() => setIsAddItemOpen(false)}
+      />
     </div>
   );
 }
