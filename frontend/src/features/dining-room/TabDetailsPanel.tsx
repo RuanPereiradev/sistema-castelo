@@ -4,6 +4,9 @@ import type { DiningTable } from './useDiningTables';
 import { useOpenTab } from './useTab';
 import { useDiningTableTab } from './useDiningTableTab';
 import { AddItemModal } from './AddItemModal';
+import { ConfirmDialog } from './ConfirmDialog';
+import { TabBillModal } from './TabBillModal';
+import { useCancelTab, useGetTabBill } from './useTabActions';
 import { formatDistanceToNow } from 'date-fns';
 import { pt } from 'date-fns/locale';
 
@@ -26,6 +29,9 @@ const STATUS_LABELS: Record<string, string> = {
 export function TabDetailsPanel({ table }: Props) {
   const [guestCount, setGuestCount] = useState(1);
   const [isAddItemOpen, setIsAddItemOpen] = useState(false);
+  const [isCancelTabOpen, setIsCancelTabOpen] = useState(false);
+  const [cancelTabReason, setCancelTabReason] = useState('');
+  const [isBillOpen, setIsBillOpen] = useState(false);
   const queryClient = useQueryClient();
 
   const isOccupied = table.occupiedTabCount > 0;
@@ -35,6 +41,8 @@ export function TabDetailsPanel({ table }: Props) {
   );
 
   const { mutate: openTab, isPending: opening } = useOpenTab();
+  const { mutate: cancelTab, isPending: cancelingTab } = useCancelTab(tab?.id || '');
+  const { mutate: getBill, isPending: loadingBill, data: bill } = useGetTabBill(tab?.id || '');
 
   function handleOpenTab(e: React.FormEvent) {
     e.preventDefault();
@@ -170,9 +178,25 @@ export function TabDetailsPanel({ table }: Props) {
         <button className="btn-primary" onClick={() => setIsAddItemOpen(true)}>
           + Lançar item
         </button>
-        <button className="btn-secondary">📋 Pré-conta</button>
-        <button className="btn-secondary">🔄 Transferir</button>
-        <button className="btn-danger">❌ Cancelar</button>
+        <button
+          className="btn-secondary"
+          onClick={() => {
+            setIsBillOpen(true);
+            getBill();
+          }}
+          disabled={loadingBill}
+        >
+          📋 Pré-conta
+        </button>
+        <button className="btn-secondary" disabled>
+          🔄 Transferir
+        </button>
+        <button
+          className="btn-danger"
+          onClick={() => setIsCancelTabOpen(true)}
+        >
+          ❌ Cancelar
+        </button>
       </div>
 
       {/* Modal de adicionar item */}
@@ -180,6 +204,44 @@ export function TabDetailsPanel({ table }: Props) {
         tabId={tab.id}
         isOpen={isAddItemOpen}
         onClose={() => setIsAddItemOpen(false)}
+      />
+
+      {/* Diálogo de cancelar item (quando clicar no item) */}
+      {/* TODO: Implementar cancel item ao clicar em item específico */}
+
+      {/* Diálogo de cancelar comanda */}
+      <ConfirmDialog
+        isOpen={isCancelTabOpen}
+        title="Cancelar comanda?"
+        message="Ao cancelar, a comanda será fechada e nenhum outro garçom poderá adicionar itens."
+        requiresReason
+        reason={cancelTabReason}
+        onReasonChange={setCancelTabReason}
+        onConfirm={() => {
+          cancelTab(cancelTabReason, {
+            onSuccess: () => {
+              setIsCancelTabOpen(false);
+              setCancelTabReason('');
+              queryClient.invalidateQueries({ queryKey: ['dining-table-tab'] });
+              queryClient.invalidateQueries({ queryKey: ['dining-tables'] });
+            },
+          });
+        }}
+        onCancel={() => {
+          setIsCancelTabOpen(false);
+          setCancelTabReason('');
+        }}
+        isLoading={cancelingTab}
+        confirmLabel="Cancelar comanda"
+        isDanger
+      />
+
+      {/* Modal de pré-conta */}
+      <TabBillModal
+        isOpen={isBillOpen && !!bill}
+        bill={bill || null}
+        isLoading={loadingBill}
+        onClose={() => setIsBillOpen(false)}
       />
     </div>
   );
