@@ -18,6 +18,7 @@
         <module>hotel</module>
         <module>restaurant</module>
         <module>billing</module>
+        <module>finance</module>
         <module>tax-invoice</module>
         <module>payment</module>
         <module>app</module>
@@ -90,6 +91,11 @@
             <dependency>
                 <groupId>br.com.castel</groupId>
                 <artifactId>billing</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>br.com.castel</groupId>
+                <artifactId>finance</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>

@@ -34,8 +34,9 @@ Cada task já tem seu número atribuído em `docs/schema-banco-de-dados.md`
 | V9 | `V9__tab_closing.sql` | 3.2 | altera `tab` (`folio_id`, `tab_charge_id`, fechamento, destino, taxa de serviço, `guest_count`) e `tab_item` (`split_group`, `service_charge_waived`) |
 | V10 | `V10__kitchen_queue_ready.sql` | 3.5 | recria `idx_kds_queue` incluindo `READY` |
 | V11 | `V11__tab_item_transfer.sql` | 3.6 | `tab_item_transfer` |
-| V12 | `V12__hotel_inventory.sql` | 1.1 | `room_type`, `room`, `rate_plan` |
-| V13 | `V13__reservation.sql` | 2.1 | `guest`, `daily_inventory`, `reservation`, `reservation_child`, `room_night` |
+| V12 | `V12__finance_expense.sql` | F1 | `expense` + altera o `CHECK` de `cash_movement` |
+| V13 | `V13__hotel_inventory.sql` | 1.1 | `room_type`, `room`, `rate_plan` |
+| V14 | `V14__reservation.sql` | 2.1 | `guest`, `daily_inventory`, `reservation`, `reservation_child`, `room_night` |
 
 Renumerada em 2026-09-24 (decisão #5 da task 1.2): o restaurante é construído
 antes do hotel, e a versão segue a ordem de execução. Com o hotel no meio, o
@@ -52,6 +53,13 @@ própria, e com ela migration. O hotel desce mais um degrau, de V11/V12 para
 V12/V13.
 
 **Ordem de merge do lote 2:** V8 (2.4) → V9 (3.2) → V10 (3.5).
+
+Renumerada uma quarta vez em 2026-10-03 (task F1, decisão D6): o Ruan acrescentou
+finanças ao escopo da primeira entrega, e a saída de dinheiro ganhou a V12. O hotel
+desce para V13/V14.
+
+**Ordem de merge da F1:** mesma regra da 3.6 — a V12 entra na `main` antes de qualquer
+task de hotel.
 
 **Ordem de merge da 3.6:** a V11 entra na `main` **antes** de qualquer task de
 hotel. Com o `outOfOrder` desligado, uma V11 de hotel aplicada primeiro faria o

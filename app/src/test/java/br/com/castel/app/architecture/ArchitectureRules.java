@@ -45,7 +45,7 @@ final class ArchitectureRules {
 
     /** Real domain modules, restricted by the module boundary rules (app is exempt). */
     static final List<String> DOMAIN_MODULES =
-            List.of("hotel", "restaurant", "billing", "identity", "taxinvoice", "payment");
+            List.of("hotel", "restaurant", "billing", "finance", "identity", "taxinvoice", "payment");
 
     /**
      * The dependency graph allowed by the technical plan (section 4): a module may freely
@@ -55,6 +55,9 @@ final class ArchitectureRules {
             "hotel", Set.of("billing"),
             "restaurant", Set.of("billing"),
             "billing", Set.of("taxinvoice", "payment"),
+            // Finance reads what the operation produced: the money through billing, and the
+            // movement of customers through restaurant and hotel (decision D2 of task F1).
+            "finance", Set.of("billing", "restaurant", "hotel"),
             "identity", Set.of(),
             "taxinvoice", Set.of(),
             "payment", Set.of());

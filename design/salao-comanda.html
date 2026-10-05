@@ -1,0 +1,462 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Salão e comanda</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
+<meta name="theme-color" content="#191512">
+<meta name="color-scheme" content="dark">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:ital,wdth,wght@0,62..125,100..900&display=swap" rel="stylesheet">
+<style>
+:root{
+  --tinta:#191512; --papel:#241F1A; --giz:#EDE6DD;
+  --brasa:#E2902B; --cinza:#8A8178; --oxido:#8E3B32;
+  --regua:#322A24;
+  --ease:cubic-bezier(.2,.8,.2,1);
+}
+*,*::before,*::after{box-sizing:border-box}
+html{
+  -webkit-tap-highlight-color:transparent;
+  -webkit-text-size-adjust:100%;
+  overscroll-behavior:none;
+  background:var(--tinta);
+}
+body{
+  margin:0;
+  font-family:Archivo,system-ui,sans-serif;
+  font-variation-settings:"wdth" 100,"wght" 400;
+  background:var(--tinta); color:var(--giz);
+  font-size:16px; line-height:1.35;
+  -webkit-font-smoothing:antialiased;
+}
+button{
+  font:inherit; color:inherit; background:none; border:0; margin:0;
+  touch-action:manipulation; user-select:none; -webkit-user-select:none;
+  -webkit-touch-callout:none; cursor:pointer;
+}
+input{font-size:16px;font-family:inherit}
+:focus-visible{outline:2px solid var(--brasa); outline-offset:2px}
+
+/* ---------- dinheiro: coluna tabular, mesma largura sempre ---------- */
+.valor{
+  font-variant-numeric:tabular-nums;
+  font-variation-settings:"wdth" 85,"wght" 600;
+  letter-spacing:.01em; white-space:nowrap;
+}
+
+/* ---------- o aparelho, só no protótipo ---------- */
+.moldura{max-width:420px;margin:0 auto;min-height:100dvh;display:flex;flex-direction:column;position:relative}
+
+/* ---------- cabeçalho ---------- */
+.topo{
+  position:sticky;top:0;z-index:5;background:var(--tinta);
+  padding:calc(env(safe-area-inset-top,0px) + 14px) 18px 12px;
+  display:flex;align-items:baseline;gap:12px;
+  border-bottom:1px solid var(--regua);
+}
+.topo h1{
+  margin:0;font-size:21px;
+  font-variation-settings:"wdth" 108,"wght" 600;
+}
+.topo .meta{margin-left:auto;color:var(--cinza);font-size:14px;font-variation-settings:"wdth" 92,"wght" 400}
+.voltar{font-size:22px;line-height:1;padding:4px 10px 6px 0;margin-left:-4px;color:var(--cinza)}
+
+/* ---------- a linha: a unidade de tudo ---------- */
+.lista{list-style:none;margin:0;padding:0;flex:1}
+.linha{
+  display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 14px;
+  align-items:baseline;
+  padding:14px 18px;
+  border-bottom:1px solid var(--regua);
+  width:100%;text-align:left;
+  transition:background 120ms var(--ease);
+}
+.linha:active{background:#2B241E}
+.linha .nome{font-variation-settings:"wdth" 100,"wght" 500;font-size:17px;min-width:0;overflow-wrap:anywhere}
+.linha .det{
+  grid-column:1;font-size:13.5px;color:var(--cinza);
+  font-variation-settings:"wdth" 92,"wght" 400;
+  overflow-wrap:anywhere;
+}
+.linha .valor{grid-row:1;grid-column:2;font-size:17px;flex-shrink:0}
+.linha .sub{grid-row:2;grid-column:2;font-size:13px;color:var(--cinza);font-variation-settings:"wdth" 88,"wght" 400;font-variant-numeric:tabular-nums}
+
+/* estados de item — a cor é a legenda, e só isso */
+.em-preparo .det{color:var(--brasa)}
+.entregue .nome,.entregue .valor{opacity:.5}
+.entregue .det{opacity:.45}
+.cancelada .nome,.cancelada .valor{text-decoration:line-through;text-decoration-thickness:1px;opacity:.5}
+.cancelada .det{color:var(--oxido);opacity:1}
+
+/* pronto: a linha inverte. único momento alto da tela */
+.pronta{background:var(--giz);color:var(--tinta);border-bottom-color:var(--giz)}
+.pronta .det{color:#4A3B2C}
+
+/* mesa livre */
+.livre .nome{color:var(--cinza);font-variation-settings:"wdth" 100,"wght" 400}
+.livre .valor{color:var(--cinza);font-variation-settings:"wdth" 85,"wght" 400}
+/* só a exceção ganha peso: mesa aberta muito tempo */
+.demorada .det{color:var(--brasa)}
+/* comanda em fechamento: o dinheiro está congelado */
+.fechando .det{color:var(--brasa)}
+
+/* ---------- somatório ---------- */
+.conta{padding:18px 18px 10px;border-bottom:1px solid var(--regua)}
+.conta .l{display:flex;justify-content:space-between;align-items:baseline;padding:5px 0;font-size:15px;color:var(--cinza)}
+.conta .l .valor{font-size:15px;color:var(--giz)}
+.conta .l.dispensa{color:var(--cinza)}
+.conta .l.dispensa .valor{color:var(--cinza);text-decoration:line-through}
+.conta .total{
+  display:flex;justify-content:space-between;align-items:baseline;
+  margin-top:10px;padding-top:12px;border-top:1px solid var(--regua);
+}
+.conta .total span:first-child{font-size:16px;font-variation-settings:"wdth" 100,"wght" 500;flex-shrink:0}
+.conta .total .valor{
+  font-size:clamp(22px,8.2vw,33px);
+  font-variation-settings:"wdth" 115,"wght" 700;
+  min-width:0;
+}
+
+/* ---------- grupos da divisão ---------- */
+.grupo{padding:14px 18px;border-bottom:1px solid var(--regua)}
+.grupo h3{margin:0 0 8px;font-size:15px;font-variation-settings:"wdth" 104,"wght" 600}
+.grupo .itens{font-size:13.5px;color:var(--cinza);font-variation-settings:"wdth" 92}
+.grupo .fecho{display:flex;justify-content:space-between;align-items:baseline;margin-top:8px}
+.grupo .fecho .valor{font-size:19px}
+
+/* ---------- barra do polegar ---------- */
+.polegar{
+  position:sticky;bottom:0;z-index:5;background:var(--tinta);
+  border-top:1px solid var(--regua);
+  padding:12px 18px calc(env(safe-area-inset-bottom,0px) + 12px);
+  display:flex;gap:10px;
+}
+.acao{
+  flex:1;background:var(--giz);color:var(--tinta);
+  padding:16px;border-radius:3px;text-align:center;
+  font-size:17px;font-variation-settings:"wdth" 104,"wght" 600;
+  transition:transform 110ms var(--ease),background 110ms;
+}
+.acao:active{transform:scale(.975);background:#DCD3C7}
+.acao.quieta{background:transparent;color:var(--giz);box-shadow:inset 0 0 0 1px var(--regua);flex:0 0 auto;padding:16px 20px}
+.acao.quieta:active{background:#2B241E;transform:scale(.975)}
+
+/* ---------- estados ---------- */
+.vazio{padding:56px 24px;text-align:left;color:var(--cinza)}
+.vazio p{margin:0 0 20px;font-size:17px;max-width:30ch;line-height:1.45}
+.vazio .acao{display:inline-block;flex:0 0 auto;padding:14px 22px}
+
+.erro{
+  margin:14px 18px;padding:14px 16px;border-radius:3px;
+  background:#2B1F1C;box-shadow:inset 0 0 0 1px #4A2A24;
+}
+.erro strong{display:block;font-size:16px;font-variation-settings:"wdth" 100,"wght" 600;margin-bottom:4px}
+.erro p{margin:0 0 12px;font-size:14.5px;color:#D8B4AC;line-height:1.45;max-width:38ch}
+.erro .acao{padding:12px 18px;flex:0 0 auto;display:inline-block;font-size:15px}
+
+.carregando .linha{border-bottom-color:var(--regua)}
+.osso{display:block;height:15px;border-radius:2px;background:var(--regua);animation:pulsa 1.4s ease-in-out infinite}
+.osso.curto{width:38%}.osso.medio{width:62%}.osso.valor{width:66px;margin-left:auto}
+.osso.fino{height:12px;width:30%;margin-top:7px}
+@keyframes pulsa{0%,100%{opacity:1}50%{opacity:.45}}
+
+/* ---------- folha de confirmação ---------- */
+.fundo{position:fixed;inset:0;background:rgba(10,8,7,.72);z-index:20;display:flex;align-items:flex-end;justify-content:center}
+.folha{
+  width:100%;max-width:420px;background:var(--papel);
+  border-radius:12px 12px 0 0;
+  padding:22px 18px calc(env(safe-area-inset-bottom,0px) + 18px);
+  animation:sobe 220ms var(--ease);
+  overscroll-behavior:contain;
+}
+@keyframes sobe{from{transform:translateY(100%)}to{transform:translateY(0)}}
+.folha h2{margin:0 0 8px;font-size:20px;font-variation-settings:"wdth" 106,"wght" 600}
+.folha p{margin:0 0 16px;font-size:15px;color:var(--cinza);line-height:1.45;max-width:36ch}
+.folha label{display:block;font-size:14px;color:var(--cinza);margin-bottom:6px}
+.folha input{
+  width:100%;padding:14px;border-radius:3px;background:var(--tinta);
+  color:var(--giz);box-shadow:inset 0 0 0 1px var(--regua);margin-bottom:16px;
+}
+.folha .botoes{display:flex;gap:10px}
+.folha .destrutiva{background:var(--oxido);color:var(--giz)}
+.folha .destrutiva:active{background:#7A322A}
+
+@media (prefers-reduced-motion:reduce){
+  *{animation-duration:.01ms !important;transition-duration:.01ms !important}
+}
+@media (hover:hover) and (pointer:fine){
+  .linha:hover{background:#221C17}
+  .acao:hover{background:#FFF8EE}
+  .acao.quieta:hover{background:#221C17}
+}
+
+/* ---------- seletor do protótipo, fora do desenho ---------- */
+.seletor{
+  position:fixed;left:50%;transform:translateX(-50%);
+  bottom:calc(env(safe-area-inset-bottom,0px) + 86px);z-index:30;
+  display:flex;gap:1px;background:#0D0B09;padding:3px;border-radius:999px;
+  box-shadow:0 6px 24px rgba(0,0,0,.5);
+}
+.seletor button{padding:7px 12px;border-radius:999px;font-size:12.5px;color:#9A9188;font-variation-settings:"wdth" 92,"wght" 500}
+.seletor button[aria-current="true"]{background:#302820;color:var(--giz)}
+.tela{display:none}
+.tela[data-ativa]{display:flex;flex-direction:column;flex:1}
+</style>
+</head>
+<body>
+<div class="moldura">
+
+<!-- ============ 1. MAPA DO SALÃO ============ -->
+<section class="tela" id="t-salao" data-ativa>
+  <header class="topo"><h1>Salão</h1><span class="meta">3 comandas abertas</span></header>
+  <ul class="lista">
+    <li><button class="linha demorada" data-ir="comanda">
+      <span class="nome">Mesa 12</span>
+      <span class="det">aberta há 3h 10 · 5 pessoas</span>
+      <span class="valor">112,10</span>
+    </button></li>
+    <li><button class="linha" data-ir="comanda">
+      <span class="nome">Mesa 4</span>
+      <span class="det">aberta há 12 min · 2 pessoas</span>
+      <span class="valor">68,00</span>
+    </button></li>
+    <li><button class="linha fechando" data-ir="preconta">
+      <span class="nome">Cartão 37</span>
+      <span class="det">em fechamento — aberta há 4 min</span>
+      <span class="valor">26,18</span>
+    </button></li>
+    <li><button class="linha livre">
+      <span class="nome">Mesa 7</span>
+      <span class="det">livre</span>
+      <span class="valor">abrir</span>
+    </button></li>
+    <li><button class="linha livre">
+      <span class="nome">Mesa 9</span>
+      <span class="det">livre</span>
+      <span class="valor">abrir</span>
+    </button></li>
+  </ul>
+  <div class="polegar"><button class="acao">Abrir comanda</button></div>
+</section>
+
+<!-- ============ 2. A COMANDA ============ -->
+<section class="tela" id="t-comanda">
+  <header class="topo">
+    <button class="voltar" data-ir="salao" aria-label="Voltar ao salão">‹</button>
+    <h1>Mesa 12</h1><span class="meta">5 pessoas</span>
+  </header>
+  <ul class="lista">
+    <li><button class="linha entregue">
+      <span class="nome">Pizza Calabresa G</span>
+      <span class="det">borda recheada ×2, catupiry</span>
+      <span class="valor">94,00</span>
+      <span class="sub">entregue 20:42</span>
+    </button></li>
+    <li><button class="linha em-preparo">
+      <span class="nome">Picanha na chapa</span>
+      <span class="det">ao ponto — em preparo há 18 min</span>
+      <span class="valor">89,00</span>
+    </button></li>
+    <li><button class="linha pronta">
+      <span class="nome">Suco</span>
+      <span class="det">pronto para levar</span>
+      <span class="valor">18,00</span>
+      <span class="sub">2 unidades</span>
+    </button></li>
+    <li><button class="linha">
+      <span class="nome">Couvert</span>
+      <span class="det">sem taxa de serviço · pendente</span>
+      <span class="valor">12,00</span>
+    </button></li>
+    <li><button class="linha cancelada">
+      <span class="nome">Feijoada</span>
+      <span class="det">cancelada por Ruan: cliente desistiu</span>
+      <span class="valor">55,00</span>
+    </button></li>
+  </ul>
+  <div class="conta">
+    <div class="l"><span>Subtotal</span><span class="valor">213,00</span></div>
+    <div class="l"><span>Taxa de serviço 10%</span><span class="valor">20,10</span></div>
+    <div class="total"><span>Total</span><span class="valor">233,10</span></div>
+  </div>
+  <div class="polegar">
+    <button class="acao">Lançar item</button>
+    <button class="acao quieta" data-ir="preconta">Pré-conta</button>
+  </div>
+</section>
+
+<!-- ============ 3. PRÉ-CONTA, DIVIDIDA POR ITEM ============ -->
+<section class="tela" id="t-preconta">
+  <header class="topo">
+    <button class="voltar" data-ir="comanda" aria-label="Voltar à comanda">‹</button>
+    <h1>Pré-conta</h1><span class="meta">Mesa 12</span>
+  </header>
+  <div class="conta">
+    <div class="l"><span>Subtotal</span><span class="valor">213,00</span></div>
+    <div class="l"><span>Base da taxa</span><span class="valor">201,00</span></div>
+    <div class="l dispensa"><span>Couvert, sem taxa</span><span class="valor">12,00</span></div>
+    <div class="l"><span>Taxa de serviço 10%</span><span class="valor">20,10</span></div>
+    <div class="l"><span>Pago</span><span class="valor">100,00</span></div>
+    <div class="total"><span>Falta</span><span class="valor">133,10</span></div>
+  </div>
+  <div class="grupo">
+    <h3>Grupo 1</h3>
+    <div class="itens">Pizza Calabresa G, Couvert</div>
+    <div class="fecho"><span>Com taxa de 9,40</span><span class="valor">115,40</span></div>
+  </div>
+  <div class="grupo">
+    <h3>Grupo 2</h3>
+    <div class="itens">Picanha na chapa, Suco</div>
+    <div class="fecho"><span>Com taxa de 10,70</span><span class="valor">117,70</span></div>
+  </div>
+  <div class="polegar">
+    <button class="acao">Receber pagamento</button>
+    <button class="acao quieta" data-folha="cancelar">⋯</button>
+  </div>
+</section>
+
+<!-- ============ 4. VAZIO ============ -->
+<section class="tela" id="t-vazio">
+  <header class="topo">
+    <button class="voltar" data-ir="salao" aria-label="Voltar ao salão">‹</button>
+    <h1>Mesa 7</h1><span class="meta">recém-aberta</span>
+  </header>
+  <div class="vazio">
+    <p>Nenhum item nesta comanda ainda. Lance o primeiro pedido da mesa.</p>
+    <button class="acao">Lançar item</button>
+  </div>
+  <div class="polegar"><button class="acao">Lançar item</button></div>
+</section>
+
+<!-- ============ 5. ERRO DE CONFLITO SIMULTÂNEO ============ -->
+<section class="tela" id="t-erro">
+  <header class="topo">
+    <button class="voltar" data-ir="salao" aria-label="Voltar ao salão">‹</button>
+    <h1>Mesa 4</h1>
+  </header>
+  <div class="erro">
+    <strong>Esta comanda acabou de ser fechada</strong>
+    <p>Outro garçom fechou a Mesa 4 enquanto você olhava. O lançamento não foi feito. Abra uma
+       comanda nova para continuar atendendo a mesa.</p>
+    <button class="acao">Abrir comanda nova</button>
+  </div>
+  <ul class="lista">
+    <li><button class="linha entregue">
+      <span class="nome">Refrigerante</span><span class="det">2 unidades · entregue</span>
+      <span class="valor">12,00</span>
+    </button></li>
+  </ul>
+  <div class="polegar"><button class="acao quieta" data-ir="salao">Voltar ao salão</button></div>
+</section>
+
+<!-- ============ 7. PIOR CASO: os limites reais do schema ============ -->
+<section class="tela" id="t-pior">
+  <header class="topo">
+    <button class="voltar" data-ir="salao" aria-label="Voltar ao salão">‹</button>
+    <h1>Mesa do Canto Fundo</h1><span class="meta">1 pessoa</span>
+  </header>
+  <ul class="lista">
+    <li><button class="linha">
+      <span class="nome">Picanha Maturada na Chapa de Ferro Fundido com Farofa de Banana da Terra, Vinagrete de Tomate Seco e Arroz de Carreteiro do Chef</span>
+      <span class="det">ao ponto para a dona de casa, sem alho, sem cebola, sem pimenta, trocar a farofa por mandioca cozida e servir o molho à parte num potinho separado</span>
+      <span class="valor">9.999.999.999,99</span>
+      <span class="sub">999 unidades</span>
+    </button></li>
+    <li><button class="linha em-preparo">
+      <span class="nome">Suco</span>
+      <span class="det">em preparo há 4 h 12</span>
+      <span class="valor">0,00</span>
+    </button></li>
+    <li><button class="linha">
+      <span class="nome">Buffet por quilo</span>
+      <span class="det">50,000 kg a 59,90 o quilo</span>
+      <span class="valor">2.995,00</span>
+    </button></li>
+    <li><button class="linha">
+      <span class="nome">Pizza</span>
+      <span class="det">Tamanho Família Gigante Para Oito Pessoas, borda recheada com catupiry original da marca ×9, bacon artesanal defumado na lenha ×9</span>
+      <span class="valor">1.286,50</span>
+    </button></li>
+    <li><button class="linha cancelada">
+      <span class="nome">Feijoada completa</span>
+      <span class="det">cancelada por Maria Aparecida da Conceição Figueiredo: o cliente avisou que esperou quarenta minutos, desistiu do prato principal e pediu para tirar da conta porque vai embora agora e não quer mais nada além do que já foi servido na mesa</span>
+      <span class="valor">55,00</span>
+    </button></li>
+  </ul>
+  <div class="conta">
+    <div class="l"><span>Subtotal</span><span class="valor">10.000.004.336,49</span></div>
+    <div class="l"><span>Taxa de serviço 10%</span><span class="valor">1.000.000.433,65</span></div>
+    <div class="total"><span>Total</span><span class="valor">11.000.004.770,14</span></div>
+  </div>
+  <div class="polegar">
+    <button class="acao">Lançar item</button>
+    <button class="acao quieta" data-ir="preconta">Pré-conta</button>
+  </div>
+</section>
+
+<!-- ============ 6. CARREGANDO ============ -->
+<section class="tela carregando" id="t-carregando">
+  <header class="topo">
+    <button class="voltar" data-ir="salao" aria-label="Voltar ao salão">‹</button>
+    <h1>Mesa 12</h1>
+  </header>
+  <ul class="lista">
+    <li class="linha"><span class="nome"><span class="osso medio"></span><span class="osso fino"></span></span><span class="valor"><span class="osso valor"></span></span></li>
+    <li class="linha"><span class="nome"><span class="osso curto"></span><span class="osso fino"></span></span><span class="valor"><span class="osso valor"></span></span></li>
+    <li class="linha"><span class="nome"><span class="osso medio"></span></span><span class="valor"><span class="osso valor"></span></span></li>
+  </ul>
+  <div class="polegar"><button class="acao" aria-disabled="true" style="opacity:.4">Lançar item</button></div>
+</section>
+
+<!-- seletor do protótipo -->
+<nav class="seletor" aria-label="Estados do protótipo">
+  <button data-ir="salao" aria-current="true">Salão</button>
+  <button data-ir="comanda">Comanda</button>
+  <button data-ir="preconta">Pré-conta</button>
+  <button data-ir="vazio">Vazio</button>
+  <button data-ir="erro">Erro</button>
+  <button data-ir="carregando">Carregando</button>
+  <button data-ir="pior">Pior caso</button>
+</nav>
+</div>
+
+<script>
+const telas = document.querySelectorAll('.tela');
+const abas = document.querySelectorAll('.seletor button');
+function ir(nome){
+  telas.forEach(t => t.id === 't-' + nome ? t.setAttribute('data-ativa','') : t.removeAttribute('data-ativa'));
+  abas.forEach(b => b.setAttribute('aria-current', String(b.dataset.ir === nome)));
+  window.scrollTo(0,0);
+}
+document.addEventListener('click', e => {
+  const alvo = e.target.closest('[data-ir]');
+  if (alvo) { ir(alvo.dataset.ir); return; }
+  if (e.target.closest('[data-folha]')) { folha(); return; }
+});
+
+function folha(){
+  const fundo = document.createElement('div');
+  fundo.className = 'fundo';
+  fundo.innerHTML = `
+    <div class="folha" role="dialog" aria-modal="true" aria-labelledby="ft">
+      <h2 id="ft">Cancelar a Feijoada?</h2>
+      <p>O item sai da conta e continua na comanda, riscado, com o seu nome e o motivo. A cozinha
+         é avisada na hora.</p>
+      <label for="motivo">Motivo do cancelamento</label>
+      <input id="motivo" placeholder="Cliente desistiu" enterkeyhint="done" autocomplete="off">
+      <div class="botoes">
+        <button class="acao quieta" data-fechar style="flex:1">Manter o item</button>
+        <button class="acao destrutiva" data-fechar style="flex:1">Cancelar item</button>
+      </div>
+    </div>`;
+  fundo.addEventListener('click', e => {
+    if (e.target === fundo || e.target.closest('[data-fechar]')) fundo.remove();
+  });
+  document.body.appendChild(fundo);
+  fundo.querySelector('input').focus({preventScroll:true});
+}
+</script>
+</body>
+</html>

@@ -92,6 +92,7 @@ a URL, o privado com a senha.
 | `36-restaurant-tab-transfer.http` | 3.6 | Comanda: transferência de linha inteira com o dinheiro conservado, taxa dispensada que viaja com o item, junção somando `guestCount`, troca de mesa respondendo comanda nova, rastro de dois saltos, recepção operando e cozinha com 403 |
 | `40-billing-folios.http` | 1.3 | Folio: lançamentos, estorno, pagamentos, estorno de pagamento, fechamento com saldo zero; folio de comanda recusa estorno e fechamento pelo balcão (3.2) |
 | `41-billing-cash-sessions.http` | 2.4 | Caixa: abertura de turno, suprimento, dinheiro do folio no turno, sangria, fechamento cego com quebra |
+| `50-finance-expenses.http` | F1 | Finanças: as duas datas da despesa (competência e pagamento), conta a pagar e quitação, dinheiro saindo da gaveta com o fechamento cego ainda fechando, retirada dos sócios fora do custo, cancelamento com motivo, e 403 para garçom, recepção e cozinha |
 
 Numeração em ordem de execução sugerida. Cada task nova acrescenta o próximo
 número — a 0.8 traz o `30-restaurant-menu.http`.

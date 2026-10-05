@@ -1,0 +1,629 @@
+### Task F1 - financas: saida de dinheiro, contas a pagar e caixa
+### Ambiente: selecione "dev" no IntelliJ HTTP Client, com http-client.env.json
+### + http-client.private.env.json (copie o .example). Ver http/README.md.
+###
+### Pre-requisito: aplicacao rodando no perfil "dev" com o seed habilitado.
+### Rode o arquivo inteiro, em ordem.
+###
+### O que este arquivo prova:
+###   - duas datas: competencia (a que mes pertence) e pagamento (quando saiu)
+###   - conta a pagar e sua quitacao
+###   - despesa em dinheiro sai da gaveta e o esperado do caixa cai junto (D4)
+###   - retirada dos socios move caixa e nao conta como custo
+###   - cancelamento com motivo, e despesa paga que nao cancela
+###   - so o ADMIN alcanca; garcom, recepcao e cozinha recebem 403
+
+
+### 0. Login do admin
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{
+  "username": "{{adminUsername}}",
+  "password": "{{password}}"
+}
+
+> {%
+    client.test("login do admin retorna 200", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+    });
+    client.global.set("adminToken", response.body.accessToken);
+    client.global.set("suffix", Math.random().toString(36).substring(2, 8));
+    client.global.set("keyPrefix", "expense-" + Math.random().toString(36).substring(2, 12));
+%}
+
+
+### 1. Login do garcom, para o 403
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{
+  "username": "{{waiterUsername}}",
+  "password": "{{password}}"
+}
+
+> {%
+    client.test("login do garcom retorna 200", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+    });
+    client.global.set("waiterToken", response.body.accessToken);
+%}
+
+
+### 2. Login da recepcao, para o 403
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{
+  "username": "{{frontDeskUsername}}",
+  "password": "{{password}}"
+}
+
+> {%
+    client.test("login da recepcao retorna 200", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+    });
+    client.global.set("frontDeskToken", response.body.accessToken);
+%}
+
+
+### ------------------------------------------------------------------
+### As duas datas: o aluguel de outubro pago no dia 5
+### ------------------------------------------------------------------
+
+
+### 3. Aluguel como conta a pagar: competencia em outubro, vencimento dia 10
+POST {{host}}/api/finance/expenses
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "category": "RENT",
+  "description": "Aluguel de outubro {{suffix}}",
+  "amount": "3000.00",
+  "accrualDate": "2026-10-01",
+  "dueDate": "2026-10-10",
+  "supplierName": "Imobiliaria Central"
+}
+
+> {%
+    client.test("conta a pagar registrada", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+        client.assert(response.body.paid === false, "nao deveria estar paga");
+        client.assert(response.body.payable === true, "deveria estar a pagar");
+        client.assert(response.body.paidAt === null, "sem data de pagamento");
+        client.assert(response.body.accrualDate === "2026-10-01", "competencia " + response.body.accrualDate);
+        client.assert(response.body.amount === "3000.00", "valor " + response.body.amount);
+    });
+    client.global.set("rentId", response.body.id);
+%}
+
+
+### 4. Aparece nas contas a pagar
+GET {{host}}/api/finance/payables
+Authorization: Bearer {{adminToken}}
+
+> {%
+    client.test("aluguel na lista de contas a pagar", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        const found = response.body.expenses.some(function(e) { return e.id === client.global.get("rentId"); });
+        client.assert(found, "o aluguel deveria estar a pagar");
+    });
+%}
+
+
+### 5. Quita o aluguel em PIX: a competencia nao muda
+POST {{host}}/api/finance/expenses/{{rentId}}/payment
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "method": "PIX"
+}
+
+> {%
+    client.test("aluguel pago, competencia intacta", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        client.assert(response.body.paid === true, "deveria estar paga");
+        client.assert(response.body.payable === false, "nao esta mais a pagar");
+        client.assert(response.body.paidAt !== null, "data de pagamento gravada");
+        client.assert(response.body.method === "PIX", "forma " + response.body.method);
+        client.assert(response.body.accrualDate === "2026-10-01", "a competencia nao muda ao pagar");
+        client.assert(response.body.amount === "3000.00", "o valor nao muda ao pagar");
+    });
+%}
+
+
+### 6. Saiu das contas a pagar
+GET {{host}}/api/finance/payables
+Authorization: Bearer {{adminToken}}
+
+> {%
+    client.test("aluguel fora das contas a pagar", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        const found = response.body.expenses.some(function(e) { return e.id === client.global.get("rentId"); });
+        client.assert(!found, "nao deveria estar mais a pagar");
+    });
+%}
+
+
+### 7. Pagar de novo -> 409 EXPENSE_ALREADY_PAID
+POST {{host}}/api/finance/expenses/{{rentId}}/payment
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "method": "DEBIT_CARD"
+}
+
+> {%
+    client.test("segundo pagamento recusado", function() {
+        client.assert(response.status === 409, "esperado 409, recebido " + response.status);
+        client.assert(response.body.code === "EXPENSE_ALREADY_PAID", "code " + response.body.code);
+    });
+%}
+
+
+### 8. Cancelar despesa paga -> 409 EXPENSE_ALREADY_PAID
+POST {{host}}/api/finance/expenses/{{rentId}}/cancel
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "reason": "mudei de ideia"
+}
+
+> {%
+    client.test("despesa paga nao cancela: estorne o pagamento primeiro", function() {
+        client.assert(response.status === 409, "esperado 409, recebido " + response.status);
+        client.assert(response.body.code === "EXPENSE_ALREADY_PAID", "code " + response.body.code);
+    });
+%}
+
+
+### ------------------------------------------------------------------
+### Dinheiro vivo sai da gaveta (D4)
+### ------------------------------------------------------------------
+
+
+### 9. Procura turno de caixa aberto (200 ou 404)
+GET {{host}}/api/billing/cash-sessions/current
+Authorization: Bearer {{adminToken}}
+
+> {%
+    client.global.set("staleSessionId", response.status === 200 ? response.body.id : "");
+%}
+
+
+### 10. Fecha o turno esquecido, se houver
+POST {{host}}/api/billing/cash-sessions/{{staleSessionId}}/close
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "countedAmount": "0.00"
+}
+
+> {%
+    client.test("turno esquecido fechado ou inexistente", function() {
+        client.assert(response.status === 200 || response.status === 404 || response.status === 400,
+            "esperado 200, 404 ou 400, recebido " + response.status);
+    });
+%}
+
+
+### 11. Despesa em dinheiro sem turno aberto -> 409 CASH_EXPENSE_REQUIRES_DRAWER_SESSION
+POST {{host}}/api/finance/expenses
+Authorization: Bearer {{adminToken}}
+Idempotency-Key: {{keyPrefix}}-no-drawer
+Content-Type: application/json
+
+{
+  "category": "SUPPLIER",
+  "description": "Peixe do dia {{suffix}}",
+  "amount": "200.00",
+  "method": "CASH"
+}
+
+> {%
+    client.test("dinheiro precisa de gaveta aberta", function() {
+        client.assert(response.status === 409, "esperado 409, recebido " + response.status);
+        client.assert(response.body.code === "CASH_EXPENSE_REQUIRES_DRAWER_SESSION", "code " + response.body.code);
+    });
+%}
+
+
+### 12. Abre o turno com fundo de 500,00
+POST {{host}}/api/billing/cash-sessions
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "openingFloat": "500.00"
+}
+
+> {%
+    client.test("turno aberto", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+        client.assert(response.body.expectedAmount === "500.00", "esperado " + response.body.expectedAmount);
+    });
+    client.global.set("sessionId", response.body.id);
+%}
+
+
+### 13. Paga o peixe em dinheiro: 200,00 saem da gaveta
+POST {{host}}/api/finance/expenses
+Authorization: Bearer {{adminToken}}
+Idempotency-Key: {{keyPrefix}}-fish
+Content-Type: application/json
+
+{
+  "category": "SUPPLIER",
+  "description": "Peixe do dia {{suffix}}",
+  "amount": "200.00",
+  "supplierName": "Peixaria do Porto",
+  "method": "CASH"
+}
+
+> {%
+    client.test("despesa em dinheiro paga, amarrada ao turno", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+        client.assert(response.body.paid === true, "deveria estar paga");
+        client.assert(response.body.method === "CASH", "forma " + response.body.method);
+        client.assert(response.body.cashDrawerSessionId === client.global.get("sessionId"),
+            "deveria apontar o turno aberto");
+    });
+%}
+
+
+### 14. O esperado do caixa caiu: 500,00 - 200,00 = 300,00
+GET {{host}}/api/billing/cash-sessions/{{sessionId}}
+Authorization: Bearer {{adminToken}}
+
+> {%
+    client.test("a gaveta sabe que o dinheiro saiu", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        client.assert(response.body.expectedAmount === "300.00",
+            "esperado 300.00, recebido " + response.body.expectedAmount);
+    });
+%}
+
+
+### 15. Fechamento cego fecha certo: contou 300,00, sem quebra
+POST {{host}}/api/billing/cash-sessions/{{sessionId}}/close
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "countedAmount": "300.00"
+}
+
+> {%
+    client.test("sem quebra: a despesa entrou na conta da gaveta", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        client.assert(response.body.difference === "0.00", "diferenca " + response.body.difference);
+    });
+%}
+
+
+### ------------------------------------------------------------------
+### Retirada dos socios: move caixa, nao e custo
+### ------------------------------------------------------------------
+
+
+### 16. Retirada de 5.000,00 em PIX
+POST {{host}}/api/finance/expenses
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "category": "WITHDRAWAL",
+  "description": "Retirada dos socios {{suffix}}",
+  "amount": "5000.00",
+  "method": "PIX"
+}
+
+> {%
+    client.test("retirada registrada", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+        client.assert(response.body.category === "WITHDRAWAL", "categoria " + response.body.category);
+    });
+%}
+
+
+### ------------------------------------------------------------------
+### Folha de pagamento
+### ------------------------------------------------------------------
+
+
+### 17. Quem sou eu, para ter um id de funcionario de verdade
+GET {{host}}/api/auth/me
+Authorization: Bearer {{adminToken}}
+
+> {%
+    client.test("me retorna o usuario", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+    });
+    client.global.set("employeeId", response.body.id);
+%}
+
+
+### 18. Salario como conta a pagar, nomeando o funcionario
+POST {{host}}/api/finance/expenses
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "category": "PAYROLL",
+  "description": "Salario de outubro {{suffix}}",
+  "amount": "2200.00",
+  "accrualDate": "2026-10-01",
+  "dueDate": "2026-11-05",
+  "employeeId": "{{employeeId}}"
+}
+
+> {%
+    client.test("folha registrada com o funcionario", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+        client.assert(response.body.employeeId === client.global.get("employeeId"), "funcionario nomeado");
+    });
+    client.global.set("payrollId", response.body.id);
+%}
+
+
+### 19. Funcionario em categoria que nao e folha -> 422 INVALID_EXPENSE_EMPLOYEE
+POST {{host}}/api/finance/expenses
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "category": "RENT",
+  "description": "Aluguel errado {{suffix}}",
+  "amount": "100.00",
+  "employeeId": "{{employeeId}}"
+}
+
+> {%
+    client.test("so a folha nomeia funcionario", function() {
+        client.assert(response.status === 422, "esperado 422, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_EXPENSE_EMPLOYEE", "code " + response.body.code);
+    });
+%}
+
+
+### ------------------------------------------------------------------
+### Cancelamento
+### ------------------------------------------------------------------
+
+
+### 20. Cancela a folha com motivo
+POST {{host}}/api/finance/expenses/{{payrollId}}/cancel
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "reason": "lancada em duplicidade"
+}
+
+> {%
+    client.test("folha cancelada, com motivo e autor", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        client.assert(response.body.cancelledAt !== null, "cancelledAt");
+        client.assert(response.body.cancelledBy !== null, "cancelledBy");
+        client.assert(response.body.cancellationReason === "lancada em duplicidade", "motivo");
+        client.assert(response.body.payable === false, "nao esta mais a pagar");
+    });
+%}
+
+
+### 21. Cancelar sem motivo -> 422 INVALID_EXPENSE_CANCELLATION
+POST {{host}}/api/finance/expenses
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "category": "OTHER",
+  "description": "Para cancelar sem motivo {{suffix}}",
+  "amount": "10.00"
+}
+
+> {%
+    client.test("despesa criada", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+    });
+    client.global.set("toCancelId", response.body.id);
+%}
+
+
+### 22. Agora sem motivo
+POST {{host}}/api/finance/expenses/{{toCancelId}}/cancel
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "reason": "   "
+}
+
+> {%
+    client.test("cancelamento precisa de motivo", function() {
+        client.assert(response.status === 422, "esperado 422, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_EXPENSE_CANCELLATION", "code " + response.body.code);
+    });
+%}
+
+
+### ------------------------------------------------------------------
+### Os dois regimes lado a lado
+### ------------------------------------------------------------------
+
+
+### 23. Por competencia: outubro inclui o aluguel e a folha cancelada ficou fora
+GET {{host}}/api/finance/expenses?from=2026-10-01&to=2026-10-31&by=ACCRUAL
+Authorization: Bearer {{adminToken}}
+
+> {%
+    client.test("despesas de outubro por competencia", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        const ids = response.body.expenses.map(function(e) { return e.id; });
+        client.assert(ids.indexOf(client.global.get("rentId")) >= 0, "o aluguel de outubro deveria estar");
+        client.assert(ids.indexOf(client.global.get("payrollId")) < 0, "a folha cancelada nao conta");
+        client.assert(response.body.total !== undefined, "a lista traz o total somado");
+    });
+%}
+
+
+### 24. Por pagamento: o mesmo aluguel aparece no dia em que o dinheiro saiu
+GET {{host}}/api/finance/expenses?from=2026-01-01&to=2030-12-31&by=PAYMENT
+Authorization: Bearer {{adminToken}}
+
+> {%
+    client.test("despesas por data de pagamento", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        const ids = response.body.expenses.map(function(e) { return e.id; });
+        client.assert(ids.indexOf(client.global.get("rentId")) >= 0, "o aluguel pago deveria estar");
+        client.assert(ids.indexOf(client.global.get("toCancelId")) < 0, "despesa nao paga nao entra no caixa");
+    });
+%}
+
+
+### ------------------------------------------------------------------
+### Negativos restantes
+### ------------------------------------------------------------------
+
+
+### 25. Valor zero -> 422 INVALID_EXPENSE_AMOUNT
+POST {{host}}/api/finance/expenses
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "category": "OTHER",
+  "description": "Nada {{suffix}}",
+  "amount": "0.00"
+}
+
+> {%
+    client.test("despesa e maior que zero", function() {
+        client.assert(response.status === 422, "esperado 422, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_EXPENSE_AMOUNT", "code " + response.body.code);
+    });
+%}
+
+
+### 26. Sem descricao -> 422 INVALID_EXPENSE_DESCRIPTION
+POST {{host}}/api/finance/expenses
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "category": "OTHER",
+  "description": "   ",
+  "amount": "10.00"
+}
+
+> {%
+    client.test("despesa precisa de descricao", function() {
+        client.assert(response.status === 422, "esperado 422, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_EXPENSE_DESCRIPTION", "code " + response.body.code);
+    });
+%}
+
+
+### 27. Vencimento antes da competencia -> 422 INVALID_EXPENSE_DATES
+POST {{host}}/api/finance/expenses
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "category": "SUPPLIER",
+  "description": "Datas trocadas {{suffix}}",
+  "amount": "100.00",
+  "accrualDate": "2026-10-01",
+  "dueDate": "2026-09-30"
+}
+
+> {%
+    client.test("nao vence antes do mes a que pertence", function() {
+        client.assert(response.status === 422, "esperado 422, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_EXPENSE_DATES", "code " + response.body.code);
+    });
+%}
+
+
+### 28. Sem categoria -> 400
+POST {{host}}/api/finance/expenses
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "description": "Sem categoria {{suffix}}",
+  "amount": "10.00"
+}
+
+> {%
+    client.test("categoria ausente e erro de requisicao", function() {
+        client.assert(response.status === 400, "esperado 400, recebido " + response.status);
+    });
+%}
+
+
+### 29. Despesa que nao existe -> 404 EXPENSE_NOT_FOUND
+GET {{host}}/api/finance/expenses/00000000-0000-0000-0000-0000000000ff
+Authorization: Bearer {{adminToken}}
+
+> {%
+    client.test("despesa inexistente", function() {
+        client.assert(response.status === 404, "esperado 404, recebido " + response.status);
+        client.assert(response.body.code === "EXPENSE_NOT_FOUND", "code " + response.body.code);
+    });
+%}
+
+
+### 30. O garcom nao ve despesa -> 403
+GET {{host}}/api/finance/expenses?from=2026-10-01&to=2026-10-31
+Authorization: Bearer {{waiterToken}}
+
+> {%
+    client.test("WAITER recebe 403", function() {
+        client.assert(response.status === 403, "esperado 403, recebido " + response.status);
+    });
+%}
+
+
+### 31. A recepcao tambem nao -> 403
+POST {{host}}/api/finance/expenses
+Authorization: Bearer {{frontDeskToken}}
+Content-Type: application/json
+
+{
+  "category": "OTHER",
+  "description": "Nao deveria passar {{suffix}}",
+  "amount": "10.00"
+}
+
+> {%
+    client.test("FRONT_DESK recebe 403", function() {
+        client.assert(response.status === 403, "esperado 403, recebido " + response.status);
+    });
+%}
+
+
+### 32. Contas a pagar tambem e so do ADMIN -> 403
+GET {{host}}/api/finance/payables
+Authorization: Bearer {{waiterToken}}
+
+> {%
+    client.test("contas a pagar sao so do ADMIN", function() {
+        client.assert(response.status === 403, "esperado 403, recebido " + response.status);
+    });
+%}
+
+
+### 33. Sem token -> 401
+GET {{host}}/api/finance/payables
+
+> {%
+    client.test("sem token responde 401", function() {
+        client.assert(response.status === 401, "esperado 401, recebido " + response.status);
+    });
+%}

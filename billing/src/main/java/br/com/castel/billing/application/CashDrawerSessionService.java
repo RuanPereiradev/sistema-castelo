@@ -78,6 +78,22 @@ public class CashDrawerSessionService {
     }
 
     /**
+     * Takes cash out of the drawer to pay an expense (decision D4 of task F1), in the caller's
+     * transaction. Same locking and idempotency as a drop.
+     *
+     * @throws IdempotencyKeyReusedException if another session holds the key
+     */
+    @Transactional
+    public CashDrawerSessionWithTotals payExpense(
+            CashDrawerSessionId sessionId, Money amount, String reason, String idempotencyKey) {
+        String key = Payment.requireValidIdempotencyKey(idempotencyKey);
+        CashDrawerSession session = loadForUpdate(sessionId);
+        rejectKeyHeldByAnother(key, session);
+        session.payExpense(amount, reason, key);
+        return saveReadable(session);
+    }
+
+    /**
      * Closes the session with the count of the drawer.
      *
      * @param closedByAdmin whether the authenticated user is an {@code ADMIN}; the route knows it
@@ -95,6 +111,16 @@ public class CashDrawerSessionService {
                 closedByAdmin,
                 clock.instant());
         return new CashDrawerSessionWithTotals(sessions.save(session), cashPayments);
+    }
+
+    /**
+     * The open session of the property, or empty when the drawer is closed. Unlike {@link #current},
+     * this does not refuse: whoever pays an expense in cash needs to know whether a drawer is open
+     * before deciding anything (decision D4 of task F1).
+     */
+    @Transactional(readOnly = true)
+    public Optional<CashDrawerSession> currentIfOpen() {
+        return sessions.findOpen(currentProperty.id());
     }
 
     /** @throws CashDrawerSessionNotFoundException if no session is open */
