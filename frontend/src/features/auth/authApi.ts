@@ -20,6 +20,7 @@ export function login(username: string, password: string): Promise<LoginResponse
   return request<LoginResponse>('/auth/login', {
     method: 'POST',
     body: { username, password },
+    skipAuth: true,
   });
 }
 
@@ -32,6 +33,7 @@ export function refresh(refreshToken: string): Promise<RefreshResponse> {
   return request<RefreshResponse>('/auth/refresh', {
     method: 'POST',
     body: { refreshToken },
+    skipAuth: true,
   });
 }
 

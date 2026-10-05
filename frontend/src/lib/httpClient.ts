@@ -13,6 +13,7 @@ export interface RequestOptions {
   readonly body?: unknown;
   readonly accessToken?: string;
   readonly skipRefresh?: boolean;
+  readonly skipAuth?: boolean;
 }
 
 async function readCode(response: Response): Promise<string | null> {
@@ -27,13 +28,15 @@ async function readCode(response: Response): Promise<string | null> {
 
 async function makeRequest<T>(
   path: string,
-  options: RequestOptions & { readonly accessToken: string },
+  options: RequestOptions & { readonly accessToken?: string },
 ): Promise<T> {
   const headers: Record<string, string> = { Accept: 'application/json' };
   if (options.body !== undefined) {
     headers['Content-Type'] = 'application/json';
   }
-  headers['Authorization'] = `Bearer ${options.accessToken}`;
+  if (options.accessToken) {
+    headers['Authorization'] = `Bearer ${options.accessToken}`;
+  }
 
   let response: Response;
   try {
@@ -57,6 +60,11 @@ async function makeRequest<T>(
 }
 
 export async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
+  // Requisições públicas (login) não precisam de token
+  if (options.skipAuth) {
+    return makeRequest<T>(path, options);
+  }
+
   const session = currentSession();
   const token = options.accessToken ?? session?.accessToken;
 
