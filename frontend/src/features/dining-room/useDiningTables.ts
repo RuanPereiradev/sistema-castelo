@@ -10,10 +10,6 @@ export interface DiningTable {
   readonly occupiedTabCount: number;
 }
 
-export interface DiningTablesResponse {
-  readonly tables: readonly DiningTable[];
-}
-
 /**
  * Polling automático (5s) das mesas. Em 401, o hook autenticado já redireciona.
  */
@@ -23,8 +19,8 @@ export function useDiningTables() {
   return useQuery({
     queryKey: ['dining-tables'],
     queryFn: async () => {
-      const data = await apiCall<DiningTablesResponse>('/restaurant/dining-tables');
-      return data.tables;
+      const data = await apiCall<readonly DiningTable[]>('/restaurant/dining-tables');
+      return data;
     },
     refetchInterval: 5000,
     staleTime: 2000,
