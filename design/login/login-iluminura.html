@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="_ds/classical-447e33bc-5bdb-40f1-8281-a07d82674e64/styles.css">
+<script src="_ds/classical-447e33bc-5bdb-40f1-8281-a07d82674e64/_ds_bundle.js"></script>
+<style>html,body{margin:0;height:100%;}a{color:#6B1E2E;}a:hover{color:#3D0F1A;}</style>
+</helmet>
+<div style="--color-bg:#F4ECE3; --color-surface:#EADBCD; --color-text:#2A1A1C; --color-accent:#6B1E2E; --color-divider:rgba(107,30,46,.24); width:100%; height:100%; box-sizing:border-box; display:flex; background:#F4ECE3; color:#2A1A1C; font-family:var(--font-body); overflow:hidden;">
+  <sc-if value="{{ isWide }}" hint-placeholder-val="{{ false }}">
+    <aside style="flex:0 0 42%; background:#6B1E2E; color:#F4ECE3; padding:28px; box-sizing:border-box; display:flex;">
+      <div style="flex:1; border:1px solid #E8957F; outline:1px solid rgba(232,149,127,.4); outline-offset:-9px; display:flex; flex-direction:column; justify-content:space-between; padding:52px 44px;">
+        <div style="font-family:var(--font-heading); font-weight:600; font-size:14px; letter-spacing:.32em; text-transform:uppercase; color:#E8957F;">Livro da casa</div>
+        <div style="display:flex; flex-direction:column; gap:22px;">
+          <div style="display:flex; align-items:flex-end; gap:10px;">
+            <span style="font-family:var(--font-heading); font-weight:400; font-size:150px; line-height:.8; color:#3D0F1A; background:#E8957F; padding:18px 22px 8px; outline:1px solid #E8957F; outline-offset:5px;">{{ brandInitial }}</span>
+            <span style="font-family:var(--font-heading); font-weight:400; font-size:58px; line-height:1;">{{ brandRest }}</span>
+          </div>
+          <div style="font-family:var(--font-heading); font-weight:600; font-size:16px; letter-spacing:.22em; text-transform:uppercase; color:#F6D9CE;">Salão · Cozinha · Caixa</div>
+        </div>
+        <div style="font-family:var(--font-heading); font-size:34px; line-height:1; color:#E8957F;">❧</div>
+      </div>
+    </aside>
+  </sc-if>
+  <main style="flex:1; min-width:0; display:flex; align-items:center; justify-content:center; padding:24px 26px; box-sizing:border-box; overflow:auto;">
+    <div style="width:100%; max-width:400px; display:flex; flex-direction:column; gap:16px;">
+      <sc-if value="{{ isPhone }}" hint-placeholder-val="{{ true }}">
+        <div style="display:flex; flex-direction:column; align-items:center; gap:10px; padding-bottom:14px; border-bottom:1px solid rgba(107,30,46,.24);">
+          <div style="width:56px; height:56px; background:#6B1E2E; outline:1px solid #6B1E2E; outline-offset:4px; display:flex; align-items:center; justify-content:center; color:#F6D9CE; font-family:var(--font-heading); font-weight:400; font-size:42px; line-height:1;">{{ brandInitial }}</div>
+          <div style="font-family:var(--font-heading); font-weight:600; font-size:15px; letter-spacing:.34em; text-transform:uppercase; color:#6B1E2E; padding-top:4px;">{{ brandName }}</div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isForm }}" hint-placeholder-val="{{ true }}">
+        <div style="display:flex; flex-direction:column; gap:6px;">
+          <div style="font-family:var(--font-heading); font-weight:600; font-size:14px; letter-spacing:.24em; text-transform:uppercase; color:#6B1E2E;">❧ Entrada</div>
+          <h1 style="margin:0; font-family:var(--font-heading); font-weight:400; font-size:42px; line-height:1.05; color:#2A1A1C;">{{ title }}</h1>
+          <p style="margin:0; font-size:15px; line-height:1.5; color:rgba(42,26,28,.76); text-wrap:pretty;">{{ subtitle }}</p>
+        </div>
+        <sc-if value="{{ hasMsg }}" hint-placeholder-val="{{ false }}">
+          <div ref="{{ msgRef }}" role="alert" style="display:flex; gap:12px; padding:14px 16px; border:1px solid rgba(107,30,46,.45); background:#F6D9CE; border-radius:2px;">
+            <span style="flex:none; color:#6B1E2E; padding-top:2px; display:flex;">
+              <sc-if value="{{ iconAlert }}" hint-placeholder-val="{{ false }}"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" x2="12" y1="8" y2="12"></line><line x1="12" x2="12.01" y1="16" y2="16"></line></svg></sc-if>
+              <sc-if value="{{ iconWait }}" hint-placeholder-val="{{ false }}"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 22h14"></path><path d="M5 2h14"></path><path d="M17 22v-4.172a2 2 0 0 0-.586-1.414L12 12l-4.414 4.414A2 2 0 0 0 7 17.828V22"></path><path d="M7 2v4.172a2 2 0 0 0 .586 1.414L12 12l4.414-4.414A2 2 0 0 0 17 6.172V2"></path></svg></sc-if>
+              <sc-if value="{{ iconInfo }}" hint-placeholder-val="{{ false }}"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path><path d="M3 3v5h5"></path><path d="M12 7v5l4 2"></path></svg></sc-if>
+            </span>
+            <div style="display:flex; flex-direction:column; gap:3px;">
+              <div style="font-family:var(--font-heading); font-weight:600; font-size:18px; line-height:1.2; color:#4A1220;">{{ msgKicker }}</div>
+              <div style="font-size:14px; line-height:1.5; color:#2A1A1C; text-wrap:pretty;">{{ msgText }}</div>
+            </div>
+          </div>
+        </sc-if>
+        <form onSubmit="{{ submit }}" noValidate="{{ true }}" style="display:flex; flex-direction:column; gap:14px; margin:0;">
+          <div class="field">
+            <label for="{{ uidU }}" style="font-family:var(--font-heading); font-weight:600; font-size:14px; letter-spacing:.16em; text-transform:uppercase; color:#6B1E2E; margin-bottom:2px;">Usuário</label>
+            <input id="{{ uidU }}" class="input" type="text" name="username" value="{{ u }}" onChange="{{ onU }}" autoComplete="username" autoCapitalize="none" autoCorrect="off" spellCheck="false" enterKeyHint="next" placeholder="ex.: garcom" style="min-height:50px; font-size:19px; padding:10px 2px; border:0; border-bottom:1px solid rgba(107,30,46,.42); border-radius:0;">
+          </div>
+          <div class="field">
+            <label for="{{ uidP }}" style="font-family:var(--font-heading); font-weight:600; font-size:14px; letter-spacing:.16em; text-transform:uppercase; color:#6B1E2E; margin-bottom:2px;">Senha</label>
+            <div style="position:relative;">
+              <input id="{{ uidP }}" ref="{{ passRef }}" class="input" type="{{ passType }}" name="password" value="{{ p }}" onChange="{{ onP }}" autoComplete="current-password" autoCapitalize="none" autoCorrect="off" spellCheck="false" enterKeyHint="go" style="min-height:50px; font-size:19px; padding:10px 50px 10px 2px; border:0; border-bottom:1px solid rgba(107,30,46,.42); border-radius:0;">
+              <button type="button" class="btn btn-ghost btn-icon" onClick="{{ toggleShow }}" aria-label="{{ showLabel }}" style="position:absolute; right:0; top:3px; width:44px; height:44px;">
+                <sc-if value="{{ show }}" hint-placeholder-val="{{ false }}"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M10.733 5.076a10.744 10.744 0 0 1 11.205 6.575 1 1 0 0 1 0 .696 10.747 10.747 0 0 1-1.444 2.49"></path><path d="M14.084 14.158a3 3 0 0 1-4.242-4.242"></path><path d="M17.479 17.499a10.75 10.75 0 0 1-15.417-5.151 1 1 0 0 1 0-.696 10.75 10.75 0 0 1 4.446-5.143"></path><path d="m2 2 20 20"></path></svg></sc-if>
+                <sc-if value="{{ hidden }}" hint-placeholder-val="{{ true }}"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"></path><circle cx="12" cy="12" r="3"></circle></svg></sc-if>
+              </button>
+            </div>
+          </div>
+          <button type="submit" class="btn btn-primary btn-block" disabled="{{ cannotSubmit }}" style="min-height:54px; font-size:19px; letter-spacing:.16em; text-transform:uppercase; margin-top:6px; box-shadow:inset 0 0 0 3px #F4ECE3, inset 0 0 0 4px rgba(107,30,46,.4); transition:background-color 200ms ease;">{{ btnLabel }}</button>
+        </form>
+        <div style="padding-top:16px; border-top:1px solid rgba(107,30,46,.24); font-size:13.5px; line-height:1.55; color:rgba(42,26,28,.74); text-wrap:pretty;">Perdeu a senha ou o acesso? Fale com o administrador da casa — só ele cria usuários e define senhas.</div>
+      </sc-if>
+
+      <sc-if value="{{ isChoose }}" hint-placeholder-val="{{ false }}">
+        <div style="display:flex; flex-direction:column; gap:6px;">
+          <div style="font-family:var(--font-heading); font-weight:600; font-size:14px; letter-spacing:.2em; text-transform:uppercase; color:#6B1E2E;">{{ greet }}</div>
+          <h1 style="margin:0; font-family:var(--font-heading); font-weight:400; font-size:40px; line-height:1.05;">Onde deseja entrar?</h1>
+          <p style="margin:0; font-size:15px; line-height:1.5; color:rgba(42,26,28,.76); text-wrap:pretty;">Seu perfil alcança mais de uma área. Escolha por onde começar.</p>
+        </div>
+        <div style="display:flex; flex-direction:column; gap:10px;">
+          <sc-for list="{{ destOptions }}" as="d" hint-placeholder-count="3">
+            <button type="button" class="btn btn-secondary" onClick="{{ d.pick }}" style="justify-content:space-between; text-align:left; min-height:70px; padding:12px 16px; width:100%; border-color:rgba(107,30,46,.36); border-radius:2px;">
+              <span style="display:flex; flex-direction:column; gap:3px;">
+                <span style="display:flex; gap:10px; align-items:center; font-size:22px; color:#2A1A1C;">{{ d.title }}<sc-if value="{{ d.isLast }}" hint-placeholder-val="{{ false }}"><span class="tag tag-outline" style="font-family:var(--font-body); font-weight:400; font-size:11px;">última vez</span></sc-if></span>
+                <span style="font-family:var(--font-body); font-weight:400; font-size:13.5px; color:rgba(42,26,28,.72);">{{ d.desc }}</span>
+              </span>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#6B1E2E" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"></path></svg>
+            </button>
+          </sc-for>
+        </div>
+        <button type="button" class="btn btn-ghost" onClick="{{ reset }}" style="align-self:flex-start; min-height:44px; font-size:15px;">Não sou {{ who }} — voltar</button>
+      </sc-if>
+
+      <sc-if value="{{ isDone }}" hint-placeholder-val="{{ false }}">
+        <div style="display:flex; flex-direction:column; gap:8px; padding:8px 0;">
+          <div style="font-family:var(--font-heading); font-weight:600; font-size:14px; letter-spacing:.2em; text-transform:uppercase; color:#6B1E2E;">{{ greet }}</div>
+          <h1 style="margin:0; font-family:var(--font-heading); font-weight:400; font-size:40px; line-height:1.05;">{{ doneTitle }}</h1>
+          <p style="margin:0; font-size:14px; line-height:1.5; color:rgba(42,26,28,.7);">Protótipo — aqui o sistema abriria essa área.</p>
+        </div>
+        <div style="display:flex; gap:10px; flex-wrap:wrap;">
+          <button type="button" class="btn btn-secondary" onClick="{{ askLogout }}" style="min-height:46px; padding:0 18px; font-size:16px;">Sair</button>
+          <button type="button" class="btn btn-ghost" onClick="{{ reset }}" style="min-height:46px; font-size:15px;">Voltar ao login</button>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isLogout }}" hint-placeholder-val="{{ false }}">
+        <div role="dialog" aria-modal="true" class="card elev-lg" style="padding:28px 26px; gap:14px; background:#F4ECE3; border-color:rgba(107,30,46,.42); border-radius:2px; outline:1px solid rgba(107,30,46,.22); outline-offset:4px;">
+          <div style="font-family:var(--font-heading); font-weight:600; font-size:14px; letter-spacing:.22em; text-transform:uppercase; color:#6B1E2E;">❧ Sair</div>
+          <h2 style="margin:0; font-family:var(--font-heading); font-weight:400; font-size:32px; line-height:1.1;">Sair em todos os aparelhos?</h2>
+          <p style="margin:0; font-size:15px; line-height:1.55; text-wrap:pretty;">A sessão de <strong style="font-weight:600;">{{ who }}</strong> será encerrada aqui e em todo aparelho onde estiver aberta — o tablet do balcão, a tela da cozinha. Quem estiver usando lá precisará entrar de novo.</p>
+          <div style="display:flex; gap:10px; justify-content:flex-end; flex-wrap:wrap; padding-top:6px;">
+            <button type="button" class="btn btn-secondary" onClick="{{ stay }}" style="min-height:48px; padding:0 20px; font-size:16px;">Ficar</button>
+            <button type="button" class="btn btn-primary" onClick="{{ confirmLogout }}" style="min-height:48px; padding:0 20px; font-size:16px;">Sair de todos</button>
+          </div>
+        </div>
+      </sc-if>
+    </div>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:390,&quot;height&quot;:800},&quot;device&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;phone&quot;,&quot;wide&quot;],&quot;default&quot;:&quot;phone&quot;,&quot;tsType&quot;:&quot;'phone'|'wide'&quot;},&quot;initialState&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;idle&quot;,&quot;loading&quot;,&quot;e401&quot;,&quot;e429&quot;,&quot;e400&quot;,&quot;expired&quot;,&quot;choose&quot;,&quot;logout&quot;],&quot;default&quot;:&quot;idle&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;sessionReason&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;TOKEN_EXPIRED&quot;,&quot;INVALID_TOKEN&quot;,&quot;USER_INACTIVE&quot;,&quot;SESSION_SUPERSEDED&quot;],&quot;default&quot;:&quot;TOKEN_EXPIRED&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;brandName&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;Hospedaria&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;lastUser&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;garcom&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;noMotion&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;}}">
+class Component extends DCLogic {
+  static USERS = {
+    admin: { fullName: 'Dev Admin', roles: ['ADMIN'] },
+    garcom: { fullName: 'Dev Waiter', roles: ['WAITER'] },
+    recepcao: { fullName: 'Dev Front Desk', roles: ['FRONT_DESK'] },
+    cozinha: { fullName: 'Dev Kitchen', roles: ['KITCHEN'] },
+    gerente: { fullName: 'Dev Manager', roles: ['WAITER', 'FRONT_DESK'] },
+  };
+  static PASS = '1234';
+  static DEST = {
+    KITCHEN: { title: 'Cozinha', desc: 'Monitor de pedidos em preparo' },
+    WAITER: { title: 'Salão e comanda', desc: 'Mesas, pedidos e comandas' },
+    FRONT_DESK: { title: 'Caixa e conta', desc: 'Fechamento e pagamento' },
+  };
+  static SESS = {
+    TOKEN_EXPIRED: 'Sua sessão expirou. Entre de novo para continuar de onde parou.',
+    INVALID_TOKEN: 'Sua sessão deixou de valer. Entre de novo para continuar.',
+    USER_INACTIVE: 'Seu acesso foi desativado. Para voltar a entrar, fale com o administrador da casa.',
+    SESSION_SUPERSEDED: 'Sua sessão foi encerrada porque alguém saiu com este usuário em outro aparelho. Entre de novo.',
+  };
+  uid = 'f' + Math.random().toString(36).slice(2, 8);
+  msgRef = React.createRef();
+  passRef = React.createRef();
+  fails = {};
+  lockUntil = {};
+  state = this.initial(this.props.initialState);
+
+  initial(s) {
+    const base = { u: '', p: '', show: false, status: 'idle', user: null, dest: null, reason: null };
+    const mk = (n) => ({ username: n, ...Component.USERS[n] });
+    const m = {
+      loading: { u: 'garcom', p: '1234', status: 'loading' },
+      e401: { u: 'garcom', status: 'e401' },
+      e429: { u: 'garcom', p: '1234', status: 'e429' },
+      e400: { u: 'garcom', status: 'e400' },
+      expired: { u: this.props.lastUser || 'garcom', status: 'expired', reason: this.props.sessionReason || 'TOKEN_EXPIRED' },
+      choose: { status: 'choose', user: mk('admin') },
+      logout: { status: 'logout', user: mk('garcom'), dest: 'WAITER' },
+    };
+    return { ...base, ...(m[s] || {}) };
+  }
+
+  componentDidUpdate(pp, ps) {
+    if (pp.initialState !== this.props.initialState || pp.sessionReason !== this.props.sessionReason) {
+      this.setState(this.initial(this.props.initialState));
+      return;
+    }
+    if (ps.status !== this.state.status) {
+      const el = this.msgRef.current;
+      if (el && !this.props.noMotion) {
+        el.style.transition = 'none'; el.style.opacity = '0'; el.style.transform = 'translateY(-3px)';
+        requestAnimationFrame(() => requestAnimationFrame(() => {
+          el.style.transition = 'opacity 360ms ease, transform 360ms ease';
+          el.style.opacity = '1'; el.style.transform = 'none';
+        }));
+      }
+      if (this.state.status === 'e401' && this.passRef.current) this.passRef.current.focus({ preventScroll: true });
+    }
+  }
+
+  optionsFor(user) {
+    const r = user.roles || [];
+    const keys = r.includes('ADMIN') ? ['WAITER', 'FRONT_DESK', 'KITCHEN'] : ['WAITER', 'FRONT_DESK', 'KITCHEN'].filter(k => r.includes(k));
+    return keys;
+  }
+
+  route(user) {
+    const keys = this.optionsFor(user);
+    if (keys.length === 1) this.setState({ status: 'done', user, dest: keys[0], p: '' });
+    else this.setState({ status: 'choose', user, p: '' });
+  }
+
+  submit = (e) => {
+    if (e) e.preventDefault();
+    const st = this.state;
+    if (st.status === 'loading') return;
+    const u = st.u.trim().toLowerCase();
+    if (!u || !st.p) return;
+    const pw = st.p;
+    this.setState({ status: 'loading' });
+    setTimeout(() => {
+      const now = Date.now();
+      if ((this.lockUntil[u] || 0) > now) return this.setState({ status: 'e429' });
+      const rec = Component.USERS[u];
+      if (rec && pw === Component.PASS) { this.fails[u] = 0; return this.route({ username: u, ...rec }); }
+      this.fails[u] = (this.fails[u] || 0) + 1;
+      if (this.fails[u] >= 10) { this.lockUntil[u] = now + 60000; this.fails[u] = 0; return this.setState({ status: 'e429' }); }
+      this.setState({ status: 'e401', p: '' });
+    }, 700);
+  };
+
+  renderVals() {
+    const st = this.state;
+    const dev = this.props.device || 'phone';
+    const brand = this.props.brandName || 'Hospedaria';
+    const who = (st.user && st.user.username) || st.u.trim().toLowerCase() || 'este usuário';
+    const MSG = {
+      e401: ['Não foi possível entrar', 'Usuário ou senha não conferem. Confira os dois e tente de novo.', 'alert'],
+      e429: ['Aguarde cerca de um minuto', 'Muitas tentativas seguidas. Até lá, nem a senha certa entra — não a troque.', 'wait'],
+      e400: ['Algo deu errado', 'Não foi possível enviar o pedido de entrada. Tente de novo; se continuar, avise o administrador.', 'alert'],
+      expired: ['Sessão encerrada', Component.SESS[st.reason] || Component.SESS.TOKEN_EXPIRED, 'info'],
+      loggedout: ['Você saiu', 'As sessões de ' + who + ' foram encerradas neste e nos outros aparelhos.', 'info'],
+    };
+    const msg = MSG[st.status];
+    const formStates = ['idle', 'loading', 'e401', 'e429', 'e400', 'expired', 'loggedout'];
+    let last = null;
+    try { last = localStorage.getItem('hospedaria.lastDest'); } catch (e) {}
+    const user = st.user;
+    const destOptions = user ? this.optionsFor(user).map(k => ({
+      ...Component.DEST[k], isLast: k === last,
+      pick: () => { try { localStorage.setItem('hospedaria.lastDest', k); } catch (e) {} this.setState({ status: 'done', dest: k }); },
+    })) : [];
+    return {
+      brandName: brand, brandInitial: brand.charAt(0), brandRest: brand.slice(1),
+      isWide: dev === 'wide', isPhone: dev !== 'wide',
+      isForm: formStates.includes(st.status), isChoose: st.status === 'choose',
+      isDone: st.status === 'done', isLogout: st.status === 'logout',
+      title: st.status === 'expired' ? 'Entre de novo' : 'Identifique-se',
+      subtitle: st.status === 'expired' ? 'Seu usuário já está preenchido; falta só a senha.' : 'Use o usuário e a senha que o administrador lhe entregou.',
+      hasMsg: !!msg, msgKicker: msg ? msg[0] : '', msgText: msg ? msg[1] : '',
+      iconAlert: !!msg && msg[2] === 'alert', iconWait: !!msg && msg[2] === 'wait', iconInfo: !!msg && msg[2] === 'info',
+      msgRef: this.msgRef, passRef: this.passRef,
+      uidU: this.uid + 'u', uidP: this.uid + 'p',
+      u: st.u, p: st.p,
+      onU: (e) => this.setState({ u: e.target.value }),
+      onP: (e) => this.setState({ p: e.target.value }),
+      show: st.show, hidden: !st.show, passType: st.show ? 'text' : 'password',
+      showLabel: st.show ? 'Ocultar senha' : 'Mostrar senha',
+      toggleShow: () => this.setState(s => ({ show: !s.show })),
+      cannotSubmit: st.status === 'loading' || !st.u.trim() || !st.p,
+      btnLabel: st.status === 'loading' ? 'Verificando…' : 'Entrar',
+      submit: this.submit,
+      greet: user ? 'Bem-vindo, ' + user.fullName : '',
+      who,
+      destOptions,
+      doneTitle: st.dest ? Component.DEST[st.dest].title : '',
+      reset: () => this.setState(this.initial('idle')),
+      askLogout: () => this.setState({ status: 'logout' }),
+      stay: () => this.setState({ status: 'done', dest: st.dest || 'WAITER' }),
+      confirmLogout: () => this.setState({ status: 'loggedout', u: (st.user && st.user.username) || st.u, p: '' }),
+    };
+  }
+}
+</script>
+</body>
+</html>

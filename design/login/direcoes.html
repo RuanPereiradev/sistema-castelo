@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<link rel="stylesheet" href="_ds/classical-447e33bc-5bdb-40f1-8281-a07d82674e64/styles.css">
+<script src="_ds/classical-447e33bc-5bdb-40f1-8281-a07d82674e64/_ds_bundle.js"></script>
+<style>body{margin:0;background:#EDE3D8;}a{color:#6B1E2E;}a:hover{color:#3D0F1A;}</style>
+</helmet>
+<section data-screen-label="Rodada 1" style="padding:72px; display:flex; flex-direction:column; gap:64px; background:#EDE3D8; color:#2A1A1C; font-family:var(--font-body); width:max-content;">
+
+  <header style="display:flex; flex-direction:column; gap:12px; max-width:900px;">
+    <div style="font-family:var(--font-heading); font-weight:600; font-size:15px; letter-spacing:.28em; text-transform:uppercase; color:#6B1E2E;">❧ Rodada 1 · para aprovação</div>
+    <h1 style="margin:0; font-family:var(--font-heading); font-weight:400; font-size:72px; line-height:1;">Tela de login — duas direções medievais</h1>
+    <p style="margin:0; font-size:18px; line-height:1.6; color:rgba(42,26,28,.8); text-wrap:pretty;">Uma única tela: entrar. Sem cadastro, sem “esqueci a senha”. Vinho domina, salmão faz a iluminura. Referências: manuscritos iluminados (capitular rubricada, filete duplo), heráldica (escudo, lacre) e arquitetura românica (arco de portal). As telas abaixo funcionam — teste com <strong style="font-weight:600;">admin, garcom, recepcao, cozinha</strong> ou <strong style="font-weight:600;">gerente</strong> (dois perfis, só para demonstração), senha <strong style="font-weight:600;">1234</strong>.</p>
+  </header>
+
+  <div style="display:grid; grid-template-columns:repeat(3, 440px); gap:48px; align-items:start;">
+    <div style="display:flex; flex-direction:column; gap:16px;">
+      <h2 style="margin:0; padding-bottom:10px; border-bottom:1px solid rgba(107,30,46,.3); font-family:var(--font-heading); font-weight:400; font-size:32px;">Paleta</h2>
+      <div style="display:grid; grid-template-columns:56px 1fr; gap:14px 16px; align-items:center;">
+        <div style="height:56px; background:#6B1E2E;"></div><div style="font-size:14px; line-height:1.45;"><strong style="font-weight:600;">Vinho Tinto · #6B1E2E</strong><br>Dominante: tinta de títulos, bordas, botão, painel.</div>
+        <div style="height:56px; background:#3D0F1A;"></div><div style="font-size:14px; line-height:1.45;"><strong style="font-weight:600;">Vinho Lacre · #3D0F1A</strong><br>Fundo da direção B; sombra do vinho.</div>
+        <div style="height:56px; background:#E8957F;"></div><div style="font-size:14px; line-height:1.45;"><strong style="font-weight:600;">Salmão · #E8957F</strong><br>Iluminura: capitular, filetes, foco. Nunca texto corrido sobre claro.</div>
+        <div style="height:56px; background:#F6D9CE; border:1px solid rgba(107,30,46,.2);"></div><div style="font-size:14px; line-height:1.45;"><strong style="font-weight:600;">Salmão Velado · #F6D9CE</strong><br>Fundo das mensagens na direção A.</div>
+        <div style="height:56px; background:#F4ECE3; border:1px solid rgba(107,30,46,.2);"></div><div style="font-size:14px; line-height:1.45;"><strong style="font-weight:600;">Pergaminho · #F4ECE3</strong><br>Fundo da A; texto da B.</div>
+        <div style="height:56px; background:#2A1A1C;"></div><div style="font-size:14px; line-height:1.45;"><strong style="font-weight:600;">Tinta Ferrogálica · #2A1A1C</strong><br>Texto corrido.</div>
+      </div>
+    </div>
+    <div style="display:flex; flex-direction:column; gap:16px;">
+      <h2 style="margin:0; padding-bottom:10px; border-bottom:1px solid rgba(107,30,46,.3); font-family:var(--font-heading); font-weight:400; font-size:32px;">Tipografia</h2>
+      <div style="display:flex; flex-direction:column; gap:18px;">
+        <div><div style="font-family:var(--font-heading); font-weight:400; font-size:44px; line-height:1;">Identifique-se</div><div style="font-size:13px; color:rgba(42,26,28,.7); padding-top:4px;">Cormorant Garamond 400 — títulos e capitular; quanto maior, mais leve.</div></div>
+        <div><div style="font-family:var(--font-heading); font-weight:600; font-size:16px; letter-spacing:.24em; text-transform:uppercase; color:#6B1E2E;">Usuário · Senha</div><div style="font-size:13px; color:rgba(42,26,28,.7); padding-top:4px;">Cormorant 600 em caixa-alta espaçada — rótulos, como inscrição em pedra.</div></div>
+        <div><div style="font-size:18px;">garcom</div><div style="font-size:13px; color:rgba(42,26,28,.7); padding-top:4px;">Lora 400 — texto e campos; 19px nos campos (o celular não dá zoom abaixo de 16).</div></div>
+        <div><div style="font-family:var(--font-heading); font-size:30px; color:#6B1E2E; line-height:1;">❧</div><div style="font-size:13px; color:rgba(42,26,28,.7); padding-top:4px;">Hedera tipográfica — o único ornamento de texto.</div></div>
+      </div>
+    </div>
+    <div style="display:flex; flex-direction:column; gap:16px;">
+      <h2 style="margin:0; padding-bottom:10px; border-bottom:1px solid rgba(107,30,46,.3); font-family:var(--font-heading); font-weight:400; font-size:32px;">Princípios</h2>
+      <ol style="margin:0; padding-left:22px; display:flex; flex-direction:column; gap:10px; font-size:14.5px; line-height:1.5;">
+        <li>Uma porta só. O rodapé manda falar com o administrador, sem link para lugar nenhum.</li>
+        <li>A mensagem diz o que fazer: 401 pede para conferir; 429 pede para esperar e avisa que a senha pode estar certa.</li>
+        <li>Voltar ao login tem motivo visível — e o usuário já vem preenchido.</li>
+        <li>Alvos de toque ≥ 48 px; campo de usuário sem autocorreção nem maiúscula automática.</li>
+        <li>Movimento quase nulo: a mensagem surge em 360 ms e o botão tinge no hover. Mais nada.</li>
+        <li>Ornamento é moldura — filete duplo, capitular, arco — nunca invade o formulário.</li>
+      </ol>
+    </div>
+  </div>
+
+  <div style="display:grid; grid-template-columns:repeat(3, 440px); gap:48px; align-items:start;">
+    <div style="display:flex; flex-direction:column; gap:12px;">
+      <h2 style="margin:0; padding-bottom:10px; border-bottom:1px solid rgba(107,30,46,.3); font-family:var(--font-heading); font-weight:400; font-size:32px;">Wireframe · A</h2>
+      <pre style="margin:0; font-size:12.5px; line-height:1.3; color:#3D0F1A;">celular                tablet / monitor
+┌──────────────────┐   ┌──────────┬───────────┐
+│      ┌───┐       │   │╔════════╗│ ❧ ENTRADA │
+│      │ H │       │   │║ ┌──┐   ║│ Identifi- │
+│   HOSPEDARIA     │   │║ │H │os.║│ que-se    │
+│──────────────────│   │║ └──┘   ║│ USUÁRIO__ │
+│ ❧ ENTRADA        │   │║ Salão· ║│ SENHA ___ │
+│ Identifique-se   │   │║ ❧      ║│ [ENTRAR]  │
+│ [! mensagem    ] │   │╚════════╝│ ─ admin ─ │
+│ USUÁRIO ________ │   └──────────┴───────────┘
+│ SENHA   ______ ◉ │    painel vinho  pergaminho
+│ ╔══════════════╗ │
+│ ║    ENTRAR    ║ │
+│ ╚══════════════╝ │
+│ ─ fale c/ admin ─│
+└──────────────────┘</pre>
+    </div>
+    <div style="display:flex; flex-direction:column; gap:12px;">
+      <h2 style="margin:0; padding-bottom:10px; border-bottom:1px solid rgba(107,30,46,.3); font-family:var(--font-heading); font-weight:400; font-size:32px;">Wireframe · B</h2>
+      <pre style="margin:0; font-size:12.5px; line-height:1.3; color:#3D0F1A;">┌──────────────────────────┐
+│┌────────────────────────┐│
+││      .─~~~~~~~~─.      ││
+││    ╱    ┌───┐     ╲    ││
+││   │     │ H │      │   ││
+││   │   HOSPEDARIA   │   ││
+││   │   ──── ❧ ────  │   ││
+││   │  Identifique-se│   ││
+││   │  USUÁRIO _____ │   ││
+││   │  SENHA ______◉ │   ││
+││   │  [  ENTRAR   ] │   ││
+││   │ ─ fale c/ adm ─│   ││
+││   └────────────────┘   ││
+│└────────────────────────┘│
+└──────────────────────────┘
+ vinho lacre · filetes salmão</pre>
+    </div>
+    <div style="display:flex; flex-direction:column; gap:16px;">
+      <h2 style="margin:0; padding-bottom:10px; border-bottom:1px solid rgba(107,30,46,.3); font-family:var(--font-heading); font-weight:400; font-size:32px;">Respostas</h2>
+      <div style="font-size:14.5px; line-height:1.55; display:flex; flex-direction:column; gap:12px; text-wrap:pretty;">
+        <p style="margin:0;"><strong style="font-weight:600;">Mais de um perfil.</strong> Um destino possível → entra direto (cozinha cai na cozinha). ADMIN ou dois perfis ou mais → “Onde deseja entrar?”, com a última escolha daquele aparelho marcada.</p>
+        <p style="margin:0;"><strong style="font-weight:600;">O que não vem da API:</strong></p>
+        <ul style="margin:0; padding-left:20px; display:flex; flex-direction:column; gap:6px;">
+          <li>Tempo de espera do 429 — sem Retry-After documentado, a tela diz “cerca de um minuto”, sem contador.</li>
+          <li>Motivo da volta ao login — o front guarda o código do refresh que falhou e o último usuário.</li>
+          <li>Perfil → tela é mapa do front; a API só dá os perfis.</li>
+          <li>Nome da casa — “Hospedaria” é provisório.</li>
+          <li>O logout não diz quantas sessões caíram; a confirmação fala em “todo aparelho”.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div style="display:flex; flex-wrap:wrap; gap:64px; align-items:flex-start;">
+
+    <div id="1a" style="display:flex; flex-direction:column; gap:32px; padding:48px; border:1px solid rgba(107,30,46,.3); background:#F7F1EA;">
+      <div style="display:flex; align-items:baseline; gap:18px; flex-wrap:wrap;">
+        <span style="border:1px solid #6B1E2E; color:#6B1E2E; font-family:var(--font-heading); font-weight:600; font-size:22px; padding:2px 12px;">1a</span>
+        <h2 style="margin:0; font-family:var(--font-heading); font-weight:400; font-size:48px;">Iluminura</h2>
+        <p style="margin:0; font-size:16px; color:rgba(42,26,28,.78); max-width:720px;">Página de manuscrito: pergaminho, capitular vinho com mat salmão, filetes duplos. Nos aparelhos grandes, um painel vinho faz o fólio da esquerda.</p>
+      </div>
+      <div style="display:flex; gap:40px; align-items:flex-end;">
+        <figure style="margin:0; display:flex; flex-direction:column; gap:10px;">
+          <div style="width:390px; height:800px; border:10px solid #2A1A1C; border-radius:40px; overflow:hidden;"><dc-import name="LoginIluminura" device="phone" brand-name="{{ brandName }}" no-motion="{{ noMotion }}" hint-size="100%,100%" style="display:block; width:100%; height:100%;"></dc-import></div>
+          <figcaption style="font-size:14px; color:rgba(42,26,28,.75);">Celular do garçom — interativo</figcaption>
+        </figure>
+        <figure style="margin:0; display:flex; flex-direction:column; gap:10px;">
+          <div style="width:768px; height:540px; border:14px solid #2A1A1C; border-radius:22px; overflow:hidden;"><div style="width:1024px; height:720px; transform:scale(.75); transform-origin:0 0;"><dc-import name="LoginIluminura" device="wide" brand-name="{{ brandName }}" no-motion="{{ noMotion }}" hint-size="100%,100%" style="display:block; width:100%; height:100%;"></dc-import></div></div>
+          <figcaption style="font-size:14px; color:rgba(42,26,28,.75);">Tablet do balcão — 1024 × 720</figcaption>
+        </figure>
+        <figure style="margin:0; display:flex; flex-direction:column; gap:10px;">
+          <div style="width:960px; height:540px; border:10px solid #1C1214; border-radius:4px; overflow:hidden;"><div style="width:1280px; height:720px; transform:scale(.75); transform-origin:0 0;"><dc-import name="LoginIluminura" device="wide" initial-state="expired" session-reason="SESSION_SUPERSEDED" last-user="cozinha" brand-name="{{ brandName }}" no-motion="{{ noMotion }}" hint-size="100%,100%" style="display:block; width:100%; height:100%;"></dc-import></div></div>
+          <figcaption style="font-size:14px; color:rgba(42,26,28,.75);">Monitor da cozinha — ampliado 1,5× para leitura a distância · sessão substituída</figcaption>
+        </figure>
+      </div>
+      <div style="display:flex; gap:28px;">
+        <figure style="margin:0; display:flex; flex-direction:column; gap:10px;"><div style="width:390px; height:800px; border:1px solid rgba(42,26,28,.3); overflow:hidden;"><dc-import name="LoginIluminura" device="phone" initial-state="e401" brand-name="{{ brandName }}" no-motion="{{ noMotion }}" hint-size="100%,100%" style="display:block; width:100%; height:100%;"></dc-import></div><figcaption style="font-size:14px; color:rgba(42,26,28,.75);">401 · credenciais</figcaption></figure>
+        <figure style="margin:0; display:flex; flex-direction:column; gap:10px;"><div style="width:390px; height:800px; border:1px solid rgba(42,26,28,.3); overflow:hidden;"><dc-import name="LoginIluminura" device="phone" initial-state="e429" brand-name="{{ brandName }}" no-motion="{{ noMotion }}" hint-size="100%,100%" style="display:block; width:100%; height:100%;"></dc-import></div><figcaption style="font-size:14px; color:rgba(42,26,28,.75);">429 · espera</figcaption></figure>
+        <figure style="margin:0; display:flex; flex-direction:column; gap:10px;"><div style="width:390px; height:800px; border:1px solid rgba(42,26,28,.3); overflow:hidden;"><dc-import name="LoginIluminura" device="phone" initial-state="expired" session-reason="TOKEN_EXPIRED" brand-name="{{ brandName }}" no-motion="{{ noMotion }}" hint-size="100%,100%" style="display:block; width:100%; height:100%;"></dc-import></div><figcaption style="font-size:14px; color:rgba(42,26,28,.75);">Sessão expirada</figcaption></figure>
+        <figure style="margin:0; display:flex; flex-direction:column; gap:10px;"><div style="width:390px; height:800px; border:1px solid rgba(42,26,28,.3); overflow:hidden;"><dc-import name="LoginIluminura" device="phone" initial-state="choose" brand-name="{{ brandName }}" no-motion="{{ noMotion }}" hint-size="100%,100%" style="display:block; width:100%; height:100%;"></dc-import></div><figcaption style="font-size:14px; color:rgba(42,26,28,.75);">ADMIN · escolher destino</figcaption></figure>
+        <figure style="margin:0; display:flex; flex-direction:column; gap:10px;"><div style="width:390px; height:800px; border:1px solid rgba(42,26,28,.3); overflow:hidden;"><dc-import name="LoginIluminura" device="phone" initial-state="logout" brand-name="{{ brandName }}" no-motion="{{ noMotion }}" hint-size="100%,100%" style="display:block; width:100%; height:100%;"></dc-import></div><figcaption style="font-size:14px; color:rgba(42,26,28,.75);">Confirmação de saída</figcaption></figure>
+      </div>
+    </div>
+
+    <div id="1b" style="display:flex; flex-direction:column; gap:32px; padding:48px; border:1px solid rgba(107,30,46,.3); background:#F7F1EA;">
+      <div style="display:flex; align-items:baseline; gap:18px; flex-wrap:wrap;">
+        <span style="border:1px solid #6B1E2E; color:#6B1E2E; font-family:var(--font-heading); font-weight:600; font-size:22px; padding:2px 12px;">1b</span>
+        <h2 style="margin:0; font-family:var(--font-heading); font-weight:400; font-size:48px;">Portal</h2>
+        <p style="margin:0; font-size:16px; color:rgba(42,26,28,.78); max-width:720px;">Sala capitular: fundo vinho lacre, escudo como monograma, o formulário dentro de um arco românico em filete salmão duplo. Mais solene e mais escuro — bom para o monitor da cozinha.</p>
+      </div>
+      <div style="display:flex; gap:40px; align-items:flex-end;">
+        <figure style="margin:0; display:flex; flex-direction:column; gap:10px;">
+          <div style="width:390px; height:800px; border:10px solid #2A1A1C; border-radius:40px; overflow:hidden;"><dc-import name="LoginBrasao" device="phone" brand-name="{{ brandName }}" no-motion="{{ noMotion }}" hint-size="100%,100%" style="display:block; width:100%; height:100%;"></dc-import></div>
+          <figcaption style="font-size:14px; color:rgba(42,26,28,.75);">Celular do garçom — interativo</figcaption>
+        </figure>
+        <figure style="margin:0; display:flex; flex-direction:column; gap:10px;">
+          <div style="width:768px; height:540px; border:14px solid #2A1A1C; border-radius:22px; overflow:hidden;"><div style="width:1024px; height:720px; transform:scale(.75); transform-origin:0 0;"><dc-import name="LoginBrasao" device="wide" brand-name="{{ brandName }}" no-motion="{{ noMotion }}" hint-size="100%,100%" style="display:block; width:100%; height:100%;"></dc-import></div></div>
+          <figcaption style="font-size:14px; color:rgba(42,26,28,.75);">Tablet do balcão — 1024 × 720</figcaption>
+        </figure>
+        <figure style="margin:0; display:flex; flex-direction:column; gap:10px;">
+          <div style="width:960px; height:540px; border:10px solid #1C1214; border-radius:4px; overflow:hidden;"><div style="width:1280px; height:720px; transform:scale(.75); transform-origin:0 0;"><dc-import name="LoginBrasao" device="wide" initial-state="expired" session-reason="SESSION_SUPERSEDED" last-user="cozinha" brand-name="{{ brandName }}" no-motion="{{ noMotion }}" hint-size="100%,100%" style="display:block; width:100%; height:100%;"></dc-import></div></div>
+          <figcaption style="font-size:14px; color:rgba(42,26,28,.75);">Monitor da cozinha — ampliado 1,5× · sessão substituída</figcaption>
+        </figure>
+      </div>
+      <div style="display:flex; gap:28px;">
+        <figure style="margin:0; display:flex; flex-direction:column; gap:10px;"><div style="width:390px; height:800px; border:1px solid rgba(42,26,28,.3); overflow:hidden;"><dc-import name="LoginBrasao" device="phone" initial-state="e401" brand-name="{{ brandName }}" no-motion="{{ noMotion }}" hint-size="100%,100%" style="display:block; width:100%; height:100%;"></dc-import></div><figcaption style="font-size:14px; color:rgba(42,26,28,.75);">401 · credenciais</figcaption></figure>
+        <figure style="margin:0; display:flex; flex-direction:column; gap:10px;"><div style="width:390px; height:800px; border:1px solid rgba(42,26,28,.3); overflow:hidden;"><dc-import name="LoginBrasao" device="phone" initial-state="e429" brand-name="{{ brandName }}" no-motion="{{ noMotion }}" hint-size="100%,100%" style="display:block; width:100%; height:100%;"></dc-import></div><figcaption style="font-size:14px; color:rgba(42,26,28,.75);">429 · espera</figcaption></figure>
+        <figure style="margin:0; display:flex; flex-direction:column; gap:10px;"><div style="width:390px; height:800px; border:1px solid rgba(42,26,28,.3); overflow:hidden;"><dc-import name="LoginBrasao" device="phone" initial-state="expired" session-reason="TOKEN_EXPIRED" brand-name="{{ brandName }}" no-motion="{{ noMotion }}" hint-size="100%,100%" style="display:block; width:100%; height:100%;"></dc-import></div><figcaption style="font-size:14px; color:rgba(42,26,28,.75);">Sessão expirada</figcaption></figure>
+        <figure style="margin:0; display:flex; flex-direction:column; gap:10px;"><div style="width:390px; height:800px; border:1px solid rgba(42,26,28,.3); overflow:hidden;"><dc-import name="LoginBrasao" device="phone" initial-state="choose" brand-name="{{ brandName }}" no-motion="{{ noMotion }}" hint-size="100%,100%" style="display:block; width:100%; height:100%;"></dc-import></div><figcaption style="font-size:14px; color:rgba(42,26,28,.75);">ADMIN · escolher destino</figcaption></figure>
+        <figure style="margin:0; display:flex; flex-direction:column; gap:10px;"><div style="width:390px; height:800px; border:1px solid rgba(42,26,28,.3); overflow:hidden;"><dc-import name="LoginBrasao" device="phone" initial-state="logout" brand-name="{{ brandName }}" no-motion="{{ noMotion }}" hint-size="100%,100%" style="display:block; width:100%; height:100%;"></dc-import></div><figcaption style="font-size:14px; color:rgba(42,26,28,.75);">Confirmação de saída</figcaption></figure>
+      </div>
+    </div>
+
+  </div>
+</section>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;brandName&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;Hospedaria&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;noMotion&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;}}">
+class Component extends DCLogic {
+  renderVals() {
+    return { brandName: this.props.brandName ?? 'Hospedaria', noMotion: !!this.props.noMotion };
+  }
+}
+</script>
+</body>
+</html>
