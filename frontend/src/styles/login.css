@@ -1,0 +1,657 @@
+/* ══════════════════════════════════════════════════════════════════════════
+   Login — the two approved directions, A · Iluminura and B · Portal.
+
+   Both share one form, one set of messages and one state machine; what the
+   frame changes is the chrome around it. Everything a frame owns lives behind
+   `[data-frame="…"]` on the root, so the components below carry no colour.
+
+   Palette (design/ · "Sistema medieval de login"):
+     wine         #6B1E2E   dominant ink: titles, rules, button, panel
+     wine-seal    #3D0F1A   Portal's ground; the wine's own shadow
+     salmon       #E8957F   illumination: capital, rules, focus
+     salmon-veil  #F6D9CE   message ground on Iluminura
+     parchment    #F4ECE3   Iluminura's ground; Portal's text
+     iron-gall    #2A1A1C   running text
+   ══════════════════════════════════════════════════════════════════════════ */
+
+:root {
+  --wine: #6b1e2e;
+  --wine-seal: #3d0f1a;
+  --salmon: #e8957f;
+  --salmon-veil: #f6d9ce;
+  --parchment: #f4ece3;
+  --iron-gall: #2a1a1c;
+
+  /* Motion is close to nil on purpose: the message fades in, the button tints
+     on hover, and nothing else moves. */
+  --login-reveal: 360ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --login-reveal: 0ms;
+  }
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+/* — the two frames, as token overrides — */
+
+[data-frame='iluminura'] {
+  --color-bg: var(--parchment);
+  --color-surface: #eadbcd;
+  --color-text: var(--iron-gall);
+  --color-accent: var(--wine);
+  --color-divider: rgba(107, 30, 46, 0.24);
+
+  --login-rule: rgba(107, 30, 46, 0.42);
+  --login-rule-faint: rgba(107, 30, 46, 0.24);
+  --login-msg-bg: var(--salmon-veil);
+  --login-msg-border: rgba(107, 30, 46, 0.45);
+  --login-msg-kicker: #4a1220;
+  --login-subtle: rgba(42, 26, 28, 0.76);
+  --login-subtler: rgba(42, 26, 28, 0.72);
+}
+
+[data-frame='portal'] {
+  --color-bg: var(--wine-seal);
+  --color-surface: #4a1522;
+  --color-text: var(--parchment);
+  --color-accent: var(--salmon);
+  --color-divider: rgba(232, 149, 127, 0.32);
+
+  --login-rule: rgba(232, 149, 127, 0.5);
+  --login-rule-faint: rgba(232, 149, 127, 0.3);
+  --login-msg-bg: #4a1522;
+  --login-msg-border: rgba(232, 149, 127, 0.6);
+  --login-msg-kicker: var(--salmon);
+  --login-subtle: rgba(244, 236, 227, 0.76);
+  --login-subtler: rgba(244, 236, 227, 0.72);
+}
+
+.login-root {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-body);
+  overflow: hidden;
+}
+
+/* ── A · Iluminura ───────────────────────────────────────────────────────── */
+
+.folio {
+  flex: 0 0 42%;
+  background: var(--wine);
+  color: var(--parchment);
+  padding: 28px;
+  display: flex;
+}
+
+/* The double rule of an illuminated page: a drawn border plus an inset
+   outline, which is one element instead of two nested divs. */
+.folio-plate {
+  flex: 1;
+  border: 1px solid var(--salmon);
+  outline: 1px solid rgba(232, 149, 127, 0.4);
+  outline-offset: -9px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 52px 44px;
+}
+
+.folio-kicker {
+  font-family: var(--font-heading);
+  font-weight: 600;
+  font-size: 14px;
+  letter-spacing: 0.32em;
+  text-transform: uppercase;
+  color: var(--salmon);
+}
+
+.folio-brand {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+.folio-wordmark {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+}
+
+/* The rubricated capital: wine letter on a salmon mat. */
+.folio-capital {
+  font-family: var(--font-heading);
+  font-weight: 400;
+  font-size: 150px;
+  line-height: 0.8;
+  color: var(--wine-seal);
+  background: var(--salmon);
+  padding: 18px 22px 8px;
+  outline: 1px solid var(--salmon);
+  outline-offset: 5px;
+}
+
+.folio-rest {
+  font-family: var(--font-heading);
+  font-weight: 400;
+  font-size: 58px;
+  line-height: 1;
+}
+
+.folio-areas {
+  font-family: var(--font-heading);
+  font-weight: 600;
+  font-size: 16px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--salmon-veil);
+}
+
+.folio-hedera {
+  font-family: var(--font-heading);
+  font-size: 34px;
+  line-height: 1;
+  color: var(--salmon);
+}
+
+.iluminura-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px 26px calc(24px + env(safe-area-inset-bottom));
+  overflow: auto;
+}
+
+.iluminura-column {
+  width: 100%;
+  max-width: 400px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* The phone has no folio panel, so the mark comes back above the form. */
+.iluminura-mark {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--login-rule-faint);
+}
+
+.iluminura-seal {
+  width: 56px;
+  height: 56px;
+  background: var(--wine);
+  outline: 1px solid var(--wine);
+  outline-offset: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--salmon-veil);
+  font-family: var(--font-heading);
+  font-weight: 400;
+  font-size: 42px;
+  line-height: 1;
+}
+
+.iluminura-brand {
+  font-family: var(--font-heading);
+  font-weight: 600;
+  font-size: 15px;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  padding-left: 0.3em;
+  color: var(--wine);
+}
+
+/* ── B · Portal ──────────────────────────────────────────────────────────── */
+
+.portal-root {
+  padding: 10px;
+}
+
+.portal-wall {
+  flex: 1;
+  min-height: 0;
+  border: 1px solid rgba(232, 149, 127, 0.55);
+  outline: 1px solid rgba(232, 149, 127, 0.22);
+  outline-offset: -7px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  padding: 6px 10px calc(6px + env(safe-area-inset-bottom));
+  overflow: auto;
+}
+
+/* The romanesque arch, in a double salmon rule: a border-radius with a
+   generous vertical component on the top corners only. */
+.portal-arch {
+  margin: auto 0;
+  width: 100%;
+  max-width: 440px;
+  border: 1px solid var(--salmon);
+  border-radius: 50% 50% 3px 3px / 170px 170px 3px 3px;
+  padding: 7px;
+}
+
+.portal-arch-inner {
+  border: 1px solid rgba(232, 149, 127, 0.4);
+  border-radius: 50% 50% 2px 2px / 163px 163px 2px 2px;
+  padding: 24px 22px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.portal-crest {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 7px;
+}
+
+/* The monogram shield: a square whose bottom corners round into a point. */
+.portal-shield {
+  width: 44px;
+  height: 52px;
+  border: 1.5px solid var(--salmon);
+  border-radius: 3px 3px 50% 50% / 3px 3px 44% 44%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-heading);
+  font-weight: 400;
+  font-size: 30px;
+  line-height: 1;
+  color: var(--salmon);
+  padding-bottom: 5px;
+}
+
+.portal-brand {
+  font-family: var(--font-heading);
+  font-weight: 600;
+  font-size: 14px;
+  letter-spacing: 0.36em;
+  text-transform: uppercase;
+  color: var(--salmon-veil);
+  padding-left: 0.36em;
+}
+
+.portal-hedera {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 64%;
+  color: var(--salmon);
+}
+
+.portal-hedera span:first-child,
+.portal-hedera span:last-child {
+  flex: 1;
+  height: 1px;
+  background: var(--login-rule);
+}
+
+.portal-hedera-mark {
+  font-family: var(--font-heading);
+  font-size: 20px;
+  line-height: 1;
+}
+
+[data-frame='portal'] .login-panel {
+  text-align: center;
+}
+
+[data-frame='portal'] input::placeholder {
+  color: rgba(244, 236, 227, 0.42);
+}
+
+/* ── shared: headings, message, form, destinations ───────────────────────── */
+
+.login-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.login-heading {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.login-title {
+  margin: 0;
+  font-family: var(--font-heading);
+  font-weight: 400;
+  font-size: 42px;
+  line-height: 1.05;
+  color: var(--color-text);
+}
+
+[data-frame='portal'] .login-title {
+  font-size: 30px;
+}
+
+.login-subtitle {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--login-subtle);
+  text-wrap: pretty;
+}
+
+.login-kicker {
+  font-family: var(--font-heading);
+  font-weight: 600;
+  font-size: 14px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--color-accent);
+}
+
+/* The one piece of motion on the screen. Keyed on the message code, so a new
+   message replays the reveal and the same message standing does not. */
+.login-message {
+  display: flex;
+  gap: 12px;
+  padding: 14px 16px;
+  border: 1px solid var(--login-msg-border);
+  background: var(--login-msg-bg);
+  border-radius: 2px;
+  text-align: left;
+  animation: login-reveal var(--login-reveal) ease both;
+}
+
+@keyframes login-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(-3px);
+  }
+}
+
+.login-message-icon {
+  flex: none;
+  color: var(--color-accent);
+  padding-top: 2px;
+  display: flex;
+}
+
+.login-message-body {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.login-message-kicker {
+  font-family: var(--font-heading);
+  font-weight: 600;
+  font-size: 18px;
+  line-height: 1.2;
+  color: var(--login-msg-kicker);
+}
+
+.login-message-text {
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--color-text);
+  text-wrap: pretty;
+}
+
+.login-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin: 0;
+  text-align: left;
+}
+
+.login-form .field > label {
+  font-family: var(--font-heading);
+  font-weight: 600;
+  font-size: 14px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--color-accent);
+  margin-bottom: 2px;
+}
+
+/* A ruled line, not a box: the field reads as an inscription on the page. */
+.login-input {
+  min-height: 50px;
+  font-size: 19px;
+  padding: 10px 2px;
+  border: 0;
+  border-bottom: 1px solid var(--login-rule);
+  border-radius: 0;
+}
+
+.login-input:hover {
+  border-bottom-color: var(--color-accent);
+}
+
+.login-password {
+  position: relative;
+}
+
+.login-password .login-input {
+  padding-right: 50px;
+}
+
+.login-password-toggle {
+  position: absolute;
+  right: 0;
+  top: 3px;
+  width: 44px;
+  height: 44px;
+}
+
+.login-submit {
+  min-height: 54px;
+  font-size: 19px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  margin-top: 6px;
+  box-shadow:
+    inset 0 0 0 3px var(--color-bg),
+    inset 0 0 0 4px var(--login-rule);
+  transition: background-color 200ms ease;
+}
+
+.login-footnote {
+  padding-top: 16px;
+  border-top: 1px solid var(--login-rule-faint);
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: var(--login-subtler);
+  text-wrap: pretty;
+}
+
+.login-destinations {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.login-destination {
+  justify-content: space-between;
+  text-align: left;
+  min-height: 70px;
+  padding: 12px 16px;
+  width: 100%;
+  border-color: var(--login-rule-faint);
+  border-radius: 2px;
+}
+
+.login-destination-title {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  font-size: 22px;
+  color: var(--color-text);
+}
+
+.login-destination-label {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.login-destination-desc {
+  font-family: var(--font-body);
+  font-weight: 400;
+  font-size: 13.5px;
+  color: var(--login-subtler);
+}
+
+.login-destination .tag-outline {
+  font-family: var(--font-body);
+  font-weight: 400;
+  font-size: 11px;
+}
+
+.login-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+[data-frame='portal'] .login-actions {
+  justify-content: center;
+}
+
+.login-action {
+  min-height: 46px;
+  padding: 0 18px;
+  font-size: 16px;
+}
+
+/* Every repeated target clears 48 px: the waiter taps this standing, one
+   handed, in a dim room. */
+.login-back {
+  align-self: flex-start;
+  min-height: 44px;
+  font-size: 15px;
+}
+
+[data-frame='portal'] .login-back {
+  align-self: center;
+}
+
+.login-dialog {
+  padding: 28px 26px;
+  gap: 14px;
+  background: var(--color-bg);
+  border-color: var(--login-rule);
+  border-radius: 2px;
+  outline: 1px solid var(--login-rule-faint);
+  outline-offset: 4px;
+  text-align: left;
+}
+
+[data-frame='portal'] .login-dialog {
+  padding: 0;
+  background: transparent;
+  border: 0;
+  outline: 0;
+  box-shadow: none;
+  text-align: center;
+}
+
+.login-dialog-title {
+  margin: 0;
+  font-family: var(--font-heading);
+  font-weight: 400;
+  font-size: 32px;
+  line-height: 1.1;
+}
+
+.login-dialog-text {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.55;
+  text-wrap: pretty;
+}
+
+.login-dialog-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  padding-top: 6px;
+}
+
+[data-frame='portal'] .login-dialog-actions {
+  justify-content: center;
+}
+
+.login-dialog-actions .btn {
+  min-height: 48px;
+  padding: 0 20px;
+  font-size: 16px;
+}
+
+/* ── the frame switch, while both directions are in play ─────────────────── */
+
+.frame-switch {
+  position: fixed;
+  top: 0;
+  right: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px calc(8px + env(safe-area-inset-top));
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  font-family: var(--font-heading);
+  font-weight: 600;
+  color: var(--color-accent);
+  background: var(--color-bg);
+  border-bottom: 1px solid var(--login-rule-faint);
+  border-left: 1px solid var(--login-rule-faint);
+}
+
+.frame-switch .seg {
+  border-color: var(--login-rule-faint);
+}
+
+/* ── phone vs. wide ──────────────────────────────────────────────────────────
+   The folio panel is the one thing that depends on width, so it is a media
+   query and not a measured viewport: no JavaScript, nothing to get out of sync
+   on rotation. Below the breakpoint the mark comes back above the form.
+   ────────────────────────────────────────────────────────────────────────── */
+
+.folio {
+  display: none;
+}
+
+.iluminura-mark {
+  display: flex;
+}
+
+@media (min-width: 860px) {
+  .folio {
+    display: flex;
+  }
+
+  .iluminura-mark {
+    display: none;
+  }
+}
