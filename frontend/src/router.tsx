@@ -97,6 +97,16 @@ export const router = createBrowserRouter([
         loader: () => requiredDestinationLoader(['WAITER']),
       },
       {
+        path: 'caixa',
+        element: <div style={{ padding: '2rem' }}>🏗️ Tela de caixa em construção</div>,
+        loader: () => requiredDestinationLoader(['FRONT_DESK']),
+      },
+      {
+        path: 'cozinha',
+        element: <div style={{ padding: '2rem' }}>🏗️ Tela de cozinha em construção</div>,
+        loader: () => requiredDestinationLoader(['KITCHEN']),
+      },
+      {
         path: '*',
         element: <Navigate to="/salao" replace />,
       },

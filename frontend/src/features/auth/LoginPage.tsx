@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { DestinationChoice } from './DestinationChoice';
 import { DestinationPlaceholder } from './DestinationPlaceholder';
 import { FrameSwitch } from './FrameSwitch';
@@ -21,6 +22,7 @@ const FRAME_COMPONENTS = {
 } as const;
 
 export function LoginPage() {
+  const navigate = useNavigate();
   const passwordField = useRef<HTMLInputElement>(null);
   const screen = useLogin(passwordField);
   const [frame, setFrame] = useState<Frame>(storedFrame);
@@ -33,6 +35,25 @@ export function LoginPage() {
   useEffect(() => {
     document.documentElement.dataset['frame'] = frame;
   }, [frame]);
+
+  /**
+   * Quando o usuário escolhe destino, navegue pra lá.
+   */
+  useEffect(() => {
+    if (screen.stage.kind === 'inside') {
+      const destination = screen.stage.destination;
+      // Mapeia destino pra rota
+      const routes: Record<string, string> = {
+        WAITER: '/salao',
+        FRONT_DESK: '/caixa',
+        KITCHEN: '/cozinha',
+      };
+      const path = routes[destination];
+      if (path) {
+        navigate(path, { replace: true });
+      }
+    }
+  }, [screen.stage, navigate]);
 
   const Frame = FRAME_COMPONENTS[frame];
 
