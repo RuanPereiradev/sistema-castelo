@@ -6,6 +6,9 @@ import { useDiningTableTab } from './useDiningTableTab';
 import { AddItemModal } from './AddItemModal';
 import { ConfirmDialog } from './ConfirmDialog';
 import { TabBillModal } from './TabBillModal';
+import { TransferItemsDialog } from './TransferItemsDialog';
+import { MergeTabDialog } from './MergeTabDialog';
+import { MoveTableDialog } from './MoveTableDialog';
 import { useCancelTab, useGetTabBill } from './useTabActions';
 import { formatDistanceToNow } from 'date-fns';
 import { pt } from 'date-fns/locale';
@@ -32,6 +35,9 @@ export function TabDetailsPanel({ table }: Props) {
   const [isCancelTabOpen, setIsCancelTabOpen] = useState(false);
   const [cancelTabReason, setCancelTabReason] = useState('');
   const [isBillOpen, setIsBillOpen] = useState(false);
+  const [isTransferOpen, setIsTransferOpen] = useState(false);
+  const [isMergeOpen, setIsMergeOpen] = useState(false);
+  const [isMoveOpen, setIsMoveOpen] = useState(false);
   const queryClient = useQueryClient();
 
   const isOccupied = table.occupiedTabCount > 0;
@@ -188,8 +194,23 @@ export function TabDetailsPanel({ table }: Props) {
         >
           📋 Pré-conta
         </button>
-        <button className="btn-secondary" disabled>
+        <button
+          className="btn-secondary"
+          onClick={() => setIsTransferOpen(true)}
+        >
           🔄 Transferir
+        </button>
+        <button
+          className="btn-secondary"
+          onClick={() => setIsMergeOpen(true)}
+        >
+          🔗 Juntar
+        </button>
+        <button
+          className="btn-secondary"
+          onClick={() => setIsMoveOpen(true)}
+        >
+          🪑 Trocar mesa
         </button>
         <button
           className="btn-danger"
@@ -243,6 +264,27 @@ export function TabDetailsPanel({ table }: Props) {
         isLoading={loadingBill}
         onClose={() => setIsBillOpen(false)}
       />
+
+      {/* Diálogos de operações avançadas */}
+      {tab && (
+        <>
+          <TransferItemsDialog
+            isOpen={isTransferOpen}
+            tab={tab}
+            onClose={() => setIsTransferOpen(false)}
+          />
+          <MergeTabDialog
+            isOpen={isMergeOpen}
+            tab={tab}
+            onClose={() => setIsMergeOpen(false)}
+          />
+          <MoveTableDialog
+            isOpen={isMoveOpen}
+            tab={tab}
+            onClose={() => setIsMoveOpen(false)}
+          />
+        </>
+      )}
     </div>
   );
 }
