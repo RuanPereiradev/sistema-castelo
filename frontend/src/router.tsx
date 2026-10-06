@@ -7,6 +7,8 @@ import {
 } from 'react-router-dom';
 import { LoginPage } from './features/auth/LoginPage';
 import { DiningRoomPage } from './features/dining-room/DiningRoomPage';
+import { CashierPage } from './features/cashier/CashierPage';
+import { KitchenPage } from './features/kitchen/KitchenPage';
 import { currentSession, type Session } from './features/auth/session';
 import { destinationsFor, type Destination } from './features/auth/destinations';
 import { logout } from './features/auth/authApi';
@@ -98,12 +100,12 @@ export const router = createBrowserRouter([
       },
       {
         path: 'caixa',
-        element: <div style={{ padding: '2rem' }}>🏗️ Tela de caixa em construção</div>,
+        element: <CashierPage />,
         loader: () => requiredDestinationLoader(['FRONT_DESK']),
       },
       {
         path: 'cozinha',
-        element: <div style={{ padding: '2rem' }}>🏗️ Tela de cozinha em construção</div>,
+        element: <KitchenPage />,
         loader: () => requiredDestinationLoader(['KITCHEN']),
       },
       {
