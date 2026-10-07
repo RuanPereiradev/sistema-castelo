@@ -136,7 +136,7 @@ export function DiningRoomPage() {
 
   // Filtered tables
   const passes = (t: TableWithStatus) => {
-    if (t.area !== area) return false;
+    if (t.area?.toLowerCase() !== area) return false;
     if (filter !== 'todas' && t.status !== filter) return false;
     if (mine && !t.isMyTable) return false;
     return true;
@@ -162,6 +162,13 @@ export function DiningRoomPage() {
         onSuccess: () => {
           setNotice(`Mesa ${table.label} aberta`);
           setGuestCount(1);
+        },
+        onError: (error: any) => {
+          if (error?.response?.status === 409) {
+            setNotice(`Mesa ${table.label} já está ocupada`);
+          } else {
+            setNotice(`Erro ao abrir mesa`);
+          }
         },
       },
     );
@@ -396,21 +403,68 @@ export function DiningRoomPage() {
                       onClick={() => handleOpenTab(selectedTableId)}
                       disabled={opening}
                     >
-                      {opening ? 'Abrindo...' : 'Abrir mesa'}
+                      {opening ? 'Abrindo...' : '🍽️ Abrir mesa'}
                     </button>
                   </>
                 ) : selectedTableData?.status === 'ocupada' ? (
-                  <button className="dr-action-btn dr-action-primary">
-                    Lançar pedido
-                  </button>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    <button
+                      className="dr-action-btn dr-action-primary"
+                      onClick={() => alert('➕ Lançar item - em desenvolvimento')}
+                    >
+                      ➕ Lançar item
+                    </button>
+                    <button
+                      className="dr-action-btn dr-action-secondary"
+                      onClick={() => alert('📋 Pedir conta - em desenvolvimento')}
+                    >
+                      📋 Pedir conta
+                    </button>
+                    <button
+                      className="dr-action-btn dr-action-secondary"
+                      onClick={() => alert('⊘ Cancelar comanda - em desenvolvimento')}
+                      style={{ color: '#fca5a5' }}
+                    >
+                      ⊘ Cancelar comanda
+                    </button>
+                  </div>
                 ) : selectedTableData?.status === 'pronto' ? (
-                  <button className="dr-action-btn dr-action-primary">
-                    Marcar como servido
-                  </button>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    <button
+                      className="dr-action-btn dr-action-primary"
+                      onClick={() => alert('✓ Marcar como servido - em desenvolvimento')}
+                    >
+                      ✓ Marcar como servido
+                    </button>
+                    <button
+                      className="dr-action-btn dr-action-secondary"
+                      onClick={() => alert('📋 Pedir conta - em desenvolvimento')}
+                    >
+                      📋 Pedir conta
+                    </button>
+                  </div>
+                ) : selectedTableData?.status === 'conta' ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    <button
+                      className="dr-action-btn dr-action-primary"
+                      onClick={() => alert('💳 Processar pagamento - em desenvolvimento')}
+                    >
+                      💳 Processar pagamento
+                    </button>
+                    <button
+                      className="dr-action-btn dr-action-secondary"
+                      onClick={() => alert('↶ Reabrir comanda - em desenvolvimento')}
+                    >
+                      ↶ Reabrir
+                    </button>
+                  </div>
                 ) : null}
 
-                <button className="dr-action-btn dr-action-secondary">
-                  {selectedTableData?.status === 'livre' ? 'Cancelar' : 'Voltar'}
+                <button
+                  className="dr-action-btn dr-action-secondary"
+                  onClick={handleCloseModal}
+                >
+                  {selectedTableData?.status === 'livre' ? 'Fechar' : 'Voltar'}
                 </button>
               </div>
             </div>

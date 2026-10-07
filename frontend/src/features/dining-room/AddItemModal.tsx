@@ -1,113 +1,145 @@
 import { useState } from 'react';
-import type { MenuItem } from './useMenuItems';
-import { useMenuItems } from './useMenuItems';
-import { AddItemForm } from './AddItemForm';
-import '../../styles/add-item-modal.css';
 
-interface Props {
-  readonly tabId: string;
-  readonly isOpen: boolean;
-  readonly onClose: () => void;
+interface AddItemModalProps {
+  isOpen: boolean;
+  tableLabel: string;
+  tabId: string;
+  onClose: () => void;
+  onAddItem: (quantity: number, itemName: string, price: string) => Promise<void>;
 }
 
-/**
- * Modal pra lançar item na comanda.
- * Mostra cardápio por categoria e abre formulário de cada item.
- */
-export function AddItemModal({ tabId, isOpen, onClose }: Props) {
-  const [selectedItem, setSelectedItem] = useState<MenuItem | null>(null);
-  const { data: categories = [], isLoading, error } = useMenuItems();
+const MENU_ITEMS = [
+  { id: '1', name: '🍺 Chopp Brahma 1L', price: '35.00' },
+  { id: '2', name: '🍺 Cerveja Skol Lata 350ml', price: '8.00' },
+  { id: '3', name: '🥤 Coca Cola 2L', price: '12.50' },
+  { id: '4', name: '💧 Água com Gás 500ml', price: '5.00' },
+  { id: '5', name: '🍷 Vinho Tinto', price: '45.00' },
+  { id: '6', name: '🥃 Batata Frita Grande', price: '25.00' },
+  { id: '7', name: '🍗 Frango Grelhado', price: '35.00' },
+  { id: '8', name: '🐟 Peixe do Dia', price: '42.00' },
+  { id: '9', name: '🥩 Picanha 300g', price: '55.00' },
+  { id: '10', name: '🍝 Macarrão à Carbonara', price: '38.00' },
+];
 
-  if (!isOpen) {
-    return null;
-  }
+export function AddItemModal({ isOpen, tableLabel, tabId, onClose, onAddItem }: AddItemModalProps) {
+  const [quantity, setQuantity] = useState(1);
+  const [selectedItem, setSelectedItem] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
 
-  if (selectedItem) {
-    return (
-      <>
-        <div className="modal-overlay" onClick={() => setSelectedItem(null)} />
-        <div className="modal add-item-modal">
-          <div className="modal-header">
-            <button
-              className="modal-back"
-              onClick={() => setSelectedItem(null)}
-              aria-label="Voltar"
-            >
-              ← Voltar
-            </button>
-          </div>
-          <div className="modal-content">
-            <AddItemForm
-              tabId={tabId}
-              item={selectedItem}
-              onClose={() => {
-                setSelectedItem(null);
-                onClose();
-              }}
-            />
-          </div>
-        </div>
-      </>
-    );
-  }
+  const handleAddItem = async () => {
+    if (!selectedItem) return;
+    
+    const item = MENU_ITEMS.find(i => i.id === selectedItem);
+    if (!item) return;
+
+    setIsLoading(true);
+    try {
+      await onAddItem(quantity, item.name, item.price);
+      setSelectedItem(null);
+      setQuantity(1);
+      onClose();
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  if (!isOpen) return null;
 
   return (
     <>
-      {/* Overlay */}
-      <div className="modal-overlay" onClick={onClose} />
+      <div className="dr-modal-backdrop" onClick={onClose} />
+      <div className="dr-sheet" style={{ maxHeight: '90vh', overflowY: 'auto' }}>
+        <div className="dr-sheet-content">
+          <div className="dr-sheet-header">
+            <div className="dr-sheet-subtitle">Mesa {tableLabel}</div>
+            <h2 className="dr-sheet-title">➕ Lançar item</h2>
+            <button
+              className="dr-sheet-close"
+              onClick={onClose}
+              aria-label="Fechar"
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
+                <path d="M18 6 6 18"></path>
+                <path d="m6 6 12 12"></path>
+              </svg>
+            </button>
+          </div>
 
-      {/* Modal */}
-      <div className="modal add-item-modal">
-        <div className="modal-header">
-          <h2>Lançar Item</h2>
-          <button className="modal-close" onClick={onClose} aria-label="Fechar">
-            ✕
-          </button>
-        </div>
+          <div className="dr-divider">
+            <span className="dr-divider-line"></span>
+            <span className="dr-divider-ornament">❧</span>
+            <span className="dr-divider-line"></span>
+          </div>
 
-        <div className="modal-content">
-          {isLoading && <p className="loading">Carregando cardápio...</p>}
+          <div style={{ padding: '12px 0', maxHeight: '45vh', overflowY: 'auto' }}>
+            {MENU_ITEMS.map(item => (
+              <button
+                key={item.id}
+                className={`dr-menu-item ${selectedItem === item.id ? 'active' : ''}`}
+                onClick={() => setSelectedItem(item.id)}
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  width: '100%',
+                  padding: '12px 0',
+                  border: 'none',
+                  background: selectedItem === item.id ? 'rgba(232, 149, 127, 0.15)' : 'transparent',
+                  color: 'inherit',
+                  cursor: 'pointer',
+                  borderBottom: '1px solid rgba(232, 149, 127, 0.2)',
+                  fontSize: '14px',
+                  transition: 'background 120ms',
+                }}
+              >
+                <span>{item.name}</span>
+                <span style={{ fontWeight: 600, color: '#E8957F' }}>R$ {item.price}</span>
+              </button>
+            ))}
+          </div>
 
-          {error && (
-            <p className="error">
-              Erro ao carregar cardápio.{' '}
-              {error instanceof Error ? error.message : 'Tente novamente'}
-            </p>
+          {selectedItem && (
+            <>
+              <div className="dr-divider">
+                <span className="dr-divider-line"></span>
+                <span className="dr-divider-ornament">❧</span>
+                <span className="dr-divider-line"></span>
+              </div>
+
+              <div style={{ padding: '12px 0', display: 'flex', gap: '8px', alignItems: 'center' }}>
+                <label style={{ fontSize: '13.5px', color: 'var(--color-text)' }}>Quantidade:</label>
+                <input
+                  type="number"
+                  min="1"
+                  max="20"
+                  value={quantity}
+                  onChange={e => setQuantity(Math.max(1, parseInt(e.target.value, 10)))}
+                  style={{
+                    width: '60px',
+                    padding: '4px 8px',
+                    background: 'var(--color-surface)',
+                    border: '1px solid var(--color-divider)',
+                    color: 'var(--color-text)',
+                    borderRadius: '2px',
+                    fontFamily: 'var(--font-body)',
+                  }}
+                />
+              </div>
+            </>
           )}
 
-          {!isLoading && !error && categories.length === 0 && (
-            <p className="empty">Nenhum item disponível</p>
-          )}
-
-          {!isLoading && !error && categories.length > 0 && (
-            <div className="menu-categories">
-              {categories.map((category) => (
-                <div key={category.name} className="menu-category">
-                  <h3 className="category-title">{category.name}</h3>
-                  <div className="menu-items-list">
-                    {category.items.map((item) => (
-                      <button
-                        key={item.id}
-                        type="button"
-                        className={`menu-item-btn ${!item.availableNow ? 'unavailable' : ''}`}
-                        onClick={() => setSelectedItem(item)}
-                        disabled={!item.availableNow}
-                      >
-                        <div className="item-name">{item.name}</div>
-                        {item.description && <div className="item-desc">{item.description}</div>}
-                        <div className="item-footer">
-                          <span className="item-price">
-                            {item.price || item.pricePerKilo || '—'}
-                          </span>
-                          {!item.availableNow && <span className="unavailable-badge">Indisponível</span>}
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
+          <div className="dr-sheet-actions">
+            <button
+              className="dr-action-btn dr-action-primary"
+              onClick={handleAddItem}
+              disabled={!selectedItem || isLoading}
+            >
+              {isLoading ? 'Adicionando...' : '➕ Adicionar'}
+            </button>
+            <button className="dr-action-btn dr-action-secondary" onClick={onClose}>
+              Fechar
+            </button>
+          </div>
         </div>
       </div>
     </>
