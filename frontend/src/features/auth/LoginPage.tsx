@@ -47,6 +47,7 @@ export function LoginPage() {
         WAITER: '/salao',
         FRONT_DESK: '/caixa',
         KITCHEN: '/cozinha',
+        ADMIN: '/caixa',
       };
       const path = routes[destination];
       if (path) {
