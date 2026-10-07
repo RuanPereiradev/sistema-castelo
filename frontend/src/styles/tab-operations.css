@@ -1,0 +1,90 @@
+/* Estilos compartilhados para operações */
+
+.dialog-select {
+  width: 100%;
+  padding: 0.75rem;
+  border: 1px solid var(--border-subtle, #ddd);
+  border-radius: 0.3rem;
+  font-family: inherit;
+  font-size: 0.9rem;
+  background-color: var(--bg-secondary, #f9f9f9);
+  color: var(--fg-primary);
+}
+
+.dialog-select:focus {
+  outline: none;
+  border-color: var(--accent-primary, #3498db);
+  box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.1);
+}
+
+.dialog-select:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Seleção de itens */
+.items-selection {
+  border: 1px solid var(--border-subtle, #ddd);
+  border-radius: 0.3rem;
+  padding: 0.75rem;
+  background-color: var(--bg-secondary, #f9f9f9);
+}
+
+.items-list-transfer {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  max-height: 250px;
+  overflow-y: auto;
+}
+
+.item-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  padding: 0.5rem;
+  border-radius: 0.2rem;
+  transition: background-color 0.2s;
+}
+
+.item-checkbox:hover {
+  background-color: rgba(52, 152, 219, 0.1);
+}
+
+.item-checkbox input[type="checkbox"] {
+  cursor: pointer;
+  width: 18px;
+  height: 18px;
+  accent-color: var(--accent-primary, #3498db);
+}
+
+.item-checkbox input[type="checkbox"]:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.item-label {
+  flex: 1;
+  font-size: 0.9rem;
+  color: var(--fg-primary);
+}
+
+.selection-count {
+  margin-top: 0.75rem;
+  padding: 0.5rem;
+  background-color: var(--bg-highlight, #e3f2fd);
+  border-radius: 0.2rem;
+  font-size: 0.85rem;
+  color: var(--accent-primary, #3498db);
+  font-weight: 500;
+  text-align: center;
+}
+
+.empty-text {
+  margin: 0;
+  padding: 1rem;
+  text-align: center;
+  color: var(--fg-secondary, #666);
+  font-size: 0.9rem;
+}
