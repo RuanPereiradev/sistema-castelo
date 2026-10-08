@@ -101,7 +101,7 @@ export const router = createBrowserRouter([
       {
         path: 'caixa',
         element: <CashierPage />,
-        loader: () => requiredDestinationLoader(['FRONT_DESK', 'ADMIN']),
+        loader: () => requiredDestinationLoader(['FRONT_DESK']),
       },
       {
         path: 'cozinha',

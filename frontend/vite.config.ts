@@ -15,6 +15,11 @@ export default defineConfig({
         target: 'http://localhost:8080',
         changeOrigin: true,
       },
+      // The menu the waiter orders from is the public one, outside `/api`.
+      '/public': {
+        target: 'http://localhost:8080',
+        changeOrigin: true,
+      },
     },
   },
 });

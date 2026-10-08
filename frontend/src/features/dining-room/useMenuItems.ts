@@ -1,6 +1,12 @@
 import { useQuery } from '@tanstack/react-query';
-import { useAuthorizedRequest } from '../../lib/useAuthorizedRequest';
+import { ApiError, NetworkError } from '../../lib/problemDetail';
 
+/**
+ * The menu the waiter orders from is the public one, `GET /public/menu`: active
+ * categories and items with their availability right now, no token needed.
+ * `GET /api/restaurant/menu-items` is the administration list and refuses the
+ * waiter's profile.
+ */
 export interface MenuItemVariant {
   readonly id: string;
   readonly name: string;
@@ -18,9 +24,9 @@ export interface MenuItemModifier {
 export interface MenuItem {
   readonly id: string;
   readonly name: string;
-  readonly description?: string;
-  readonly price?: string;
-  readonly pricePerKilo?: string;
+  readonly description: string | null;
+  /** Unit price, or the price per kilo when `soldByWeight`; null when only variants carry a price. */
+  readonly price: string | null;
   readonly soldByWeight: boolean;
   readonly availableNow: boolean;
   readonly variants: readonly MenuItemVariant[];
@@ -32,22 +38,28 @@ export interface MenuCategory {
   readonly items: readonly MenuItem[];
 }
 
-export interface MenuResponse {
+interface PublicMenuResponse {
   readonly categories: readonly MenuCategory[];
 }
 
-/**
- * Busca cardápio completo com categorias, itens, variações e adicionais.
- */
-export function useMenuItems() {
-  const apiCall = useAuthorizedRequest();
+async function fetchPublicMenu(): Promise<readonly MenuCategory[]> {
+  let response: Response;
+  try {
+    response = await fetch('/public/menu', { headers: { Accept: 'application/json' } });
+  } catch (cause) {
+    throw new NetworkError(cause);
+  }
+  if (!response.ok) {
+    throw new ApiError(response.status, null);
+  }
+  const body = (await response.json()) as PublicMenuResponse;
+  return body.categories;
+}
 
+export function useMenuItems() {
   return useQuery({
-    queryKey: ['menu-items'],
-    queryFn: async () => {
-      const data = await apiCall<MenuResponse>('/restaurant/menu-items');
-      return data.categories;
-    },
-    staleTime: 60000, // 1 minuto — cardápio muda pouco
+    queryKey: ['public-menu'],
+    queryFn: fetchPublicMenu,
+    staleTime: 60_000,
   });
 }

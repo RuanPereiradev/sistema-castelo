@@ -1,145 +1,158 @@
 import { useState } from 'react';
+import { formatMoney } from '../../lib/money';
+import { DINING_ROOM, describeError } from './diningRoomMessages';
+import { useMenuItems, type MenuItem } from './useMenuItems';
+import type { Tab } from './useTab';
+import { AddItemForm } from './AddItemForm';
 
-interface AddItemModalProps {
-  isOpen: boolean;
-  tableLabel: string;
-  tabId: string;
-  onClose: () => void;
-  onAddItem: (quantity: number, itemName: string, price: string) => Promise<void>;
+interface Props {
+  readonly isOpen: boolean;
+  readonly tab: Tab;
+  readonly onClose: () => void;
+  /** Called with the item's name once the backend took the line. */
+  readonly onAdded: (itemName: string) => void;
 }
 
-const MENU_ITEMS = [
-  { id: '1', name: '🍺 Chopp Brahma 1L', price: '35.00' },
-  { id: '2', name: '🍺 Cerveja Skol Lata 350ml', price: '8.00' },
-  { id: '3', name: '🥤 Coca Cola 2L', price: '12.50' },
-  { id: '4', name: '💧 Água com Gás 500ml', price: '5.00' },
-  { id: '5', name: '🍷 Vinho Tinto', price: '45.00' },
-  { id: '6', name: '🥃 Batata Frita Grande', price: '25.00' },
-  { id: '7', name: '🍗 Frango Grelhado', price: '35.00' },
-  { id: '8', name: '🐟 Peixe do Dia', price: '42.00' },
-  { id: '9', name: '🥩 Picanha 300g', price: '55.00' },
-  { id: '10', name: '🍝 Macarrão à Carbonara', price: '38.00' },
-];
+const MENU = {
+  title: 'Lançar pedido',
+  loading: 'Carregando o cardápio…',
+  failed: 'Não deu para carregar o cardápio.',
+  empty: 'O cardápio está vazio. Peça ao administrador para cadastrar os itens.',
+  unavailable: 'Indisponível',
+  perKilo: '/kg',
+  back: 'Voltar ao cardápio',
+} as const;
 
-export function AddItemModal({ isOpen, tableLabel, tabId, onClose, onAddItem }: AddItemModalProps) {
-  const [quantity, setQuantity] = useState(1);
-  const [selectedItem, setSelectedItem] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
+function priceOf(item: MenuItem): string {
+  if (item.price) {
+    return formatMoney(item.price) + (item.soldByWeight ? MENU.perKilo : '');
+  }
+  const first = item.variants[0];
+  return first ? `a partir de ${formatMoney(first.price)}` : '';
+}
 
-  const handleAddItem = async () => {
-    if (!selectedItem) return;
-    
-    const item = MENU_ITEMS.find(i => i.id === selectedItem);
-    if (!item) return;
+/**
+ * The public menu, by category, in the same sheet as the table. Tapping an
+ * item opens its form; the backend decides what the item accepts.
+ */
+export function AddItemModal({ isOpen, tab, onClose, onAdded }: Props) {
+  const menu = useMenuItems();
+  const [selected, setSelected] = useState<MenuItem | null>(null);
 
-    setIsLoading(true);
-    try {
-      await onAddItem(quantity, item.name, item.price);
-      setSelectedItem(null);
-      setQuantity(1);
-      onClose();
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  if (!isOpen) {
+    return null;
+  }
 
-  if (!isOpen) return null;
+  function close() {
+    setSelected(null);
+    onClose();
+  }
 
   return (
     <>
-      <div className="dr-modal-backdrop" onClick={onClose} />
-      <div className="dr-sheet" style={{ maxHeight: '90vh', overflowY: 'auto' }}>
+      <div className="dr-modal-backdrop" onClick={close} />
+      <div className="dr-sheet dr-sheet-tall" role="dialog" aria-modal="true">
         <div className="dr-sheet-content">
           <div className="dr-sheet-header">
-            <div className="dr-sheet-subtitle">Mesa {tableLabel}</div>
-            <h2 className="dr-sheet-title">➕ Lançar item</h2>
+            <div className="dr-sheet-subtitle">
+              {DINING_ROOM.table} {tab.diningTableLabel}
+            </div>
+            <h2 className="dr-sheet-title dr-sheet-title-small">
+              {selected ? selected.name : MENU.title}
+            </h2>
             <button
+              type="button"
               className="dr-sheet-close"
-              onClick={onClose}
-              aria-label="Fechar"
+              onClick={close}
+              aria-label={DINING_ROOM.close}
             >
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
-                <path d="M18 6 6 18"></path>
-                <path d="m6 6 12 12"></path>
+              <svg
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.6"
+                strokeLinecap="round"
+                aria-hidden="true"
+              >
+                <path d="M18 6 6 18" />
+                <path d="m6 6 12 12" />
               </svg>
             </button>
           </div>
 
-          <div className="dr-divider">
-            <span className="dr-divider-line"></span>
+          <div className="dr-divider" aria-hidden="true">
+            <span className="dr-divider-line" />
             <span className="dr-divider-ornament">❧</span>
-            <span className="dr-divider-line"></span>
+            <span className="dr-divider-line" />
           </div>
 
-          <div style={{ padding: '12px 0', maxHeight: '45vh', overflowY: 'auto' }}>
-            {MENU_ITEMS.map(item => (
+          {selected ? (
+            <AddItemForm
+              tabId={tab.id}
+              item={selected}
+              onBack={() => setSelected(null)}
+              onAdded={(name) => {
+                setSelected(null);
+                onAdded(name);
+              }}
+            />
+          ) : menu.isPending ? (
+            <p className="dr-state" role="status">{MENU.loading}</p>
+          ) : menu.error ? (
+            <div className="dr-state" role="alert">
+              <p>{MENU.failed}</p>
+              <p className="dr-state-detail">{describeError(menu.error)}</p>
               <button
-                key={item.id}
-                className={`dr-menu-item ${selectedItem === item.id ? 'active' : ''}`}
-                onClick={() => setSelectedItem(item.id)}
-                style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  width: '100%',
-                  padding: '12px 0',
-                  border: 'none',
-                  background: selectedItem === item.id ? 'rgba(232, 149, 127, 0.15)' : 'transparent',
-                  color: 'inherit',
-                  cursor: 'pointer',
-                  borderBottom: '1px solid rgba(232, 149, 127, 0.2)',
-                  fontSize: '14px',
-                  transition: 'background 120ms',
-                }}
+                type="button"
+                className="dr-action-btn dr-action-secondary"
+                onClick={() => void menu.refetch()}
               >
-                <span>{item.name}</span>
-                <span style={{ fontWeight: 600, color: '#E8957F' }}>R$ {item.price}</span>
+                {DINING_ROOM.retry}
               </button>
-            ))}
-          </div>
-
-          {selectedItem && (
-            <>
-              <div className="dr-divider">
-                <span className="dr-divider-line"></span>
-                <span className="dr-divider-ornament">❧</span>
-                <span className="dr-divider-line"></span>
-              </div>
-
-              <div style={{ padding: '12px 0', display: 'flex', gap: '8px', alignItems: 'center' }}>
-                <label style={{ fontSize: '13.5px', color: 'var(--color-text)' }}>Quantidade:</label>
-                <input
-                  type="number"
-                  min="1"
-                  max="20"
-                  value={quantity}
-                  onChange={e => setQuantity(Math.max(1, parseInt(e.target.value, 10)))}
-                  style={{
-                    width: '60px',
-                    padding: '4px 8px',
-                    background: 'var(--color-surface)',
-                    border: '1px solid var(--color-divider)',
-                    color: 'var(--color-text)',
-                    borderRadius: '2px',
-                    fontFamily: 'var(--font-body)',
-                  }}
-                />
-              </div>
-            </>
+            </div>
+          ) : !menu.data || menu.data.every((category) => category.items.length === 0) ? (
+            <p className="dr-state">{MENU.empty}</p>
+          ) : (
+            <div className="dr-menu">
+              {menu.data
+                .filter((category) => category.items.length > 0)
+                .map((category) => (
+                  <section key={category.name} className="dr-menu-category">
+                    <h3 className="dr-menu-category-title">❧ {category.name}</h3>
+                    {category.items.map((item) => (
+                      <button
+                        key={item.id}
+                        type="button"
+                        className="dr-menu-item"
+                        onClick={() => setSelected(item)}
+                        disabled={!item.availableNow}
+                      >
+                        <span className="dr-menu-item-body">
+                          <span className="dr-menu-item-name">{item.name}</span>
+                          {item.description && (
+                            <span className="dr-menu-item-desc">{item.description}</span>
+                          )}
+                          {!item.availableNow && (
+                            <span className="dr-menu-item-unavailable">{MENU.unavailable}</span>
+                          )}
+                        </span>
+                        <span className="dr-menu-item-price">{priceOf(item)}</span>
+                      </button>
+                    ))}
+                  </section>
+                ))}
+            </div>
           )}
 
-          <div className="dr-sheet-actions">
-            <button
-              className="dr-action-btn dr-action-primary"
-              onClick={handleAddItem}
-              disabled={!selectedItem || isLoading}
-            >
-              {isLoading ? 'Adicionando...' : '➕ Adicionar'}
-            </button>
-            <button className="dr-action-btn dr-action-secondary" onClick={onClose}>
-              Fechar
-            </button>
-          </div>
+          {!selected && (
+            <div className="dr-sheet-actions">
+              <button type="button" className="dr-action-btn dr-action-ghost" onClick={close}>
+                {DINING_ROOM.back}
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </>
