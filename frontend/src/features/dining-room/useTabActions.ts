@@ -1,19 +1,21 @@
 import { useMutation } from '@tanstack/react-query';
 import { useAuthorizedRequest } from '../../lib/useAuthorizedRequest';
+import type { Tab } from './useTab';
 
 /**
- * Hooks pra ações na comanda (cancelar item/comanda, fechar, etc).
+ * The actions of one tab. Each one answers what the backend answers; the caller
+ * re-reads the tab and the active list afterwards instead of patching the cache.
  */
+
 export function useCancelTabItem(tabId: string) {
   const apiCall = useAuthorizedRequest();
 
   return useMutation({
-    mutationFn: async (data: { itemId: string; reason: string }) => {
-      return await apiCall<void>(`/restaurant/tabs/${tabId}/items/${data.itemId}/cancel`, {
+    mutationFn: (data: { readonly itemId: string; readonly reason: string }) =>
+      apiCall<void>(`/restaurant/tabs/${tabId}/items/${data.itemId}/cancel`, {
         method: 'POST',
         body: { reason: data.reason },
-      });
-    },
+      }),
   });
 }
 
@@ -21,49 +23,57 @@ export function useCancelTab(tabId: string) {
   const apiCall = useAuthorizedRequest();
 
   return useMutation({
-    mutationFn: async (reason: string) => {
-      return await apiCall<void>(`/restaurant/tabs/${tabId}/cancel`, {
-        method: 'POST',
-        body: { reason },
-      });
-    },
+    mutationFn: (reason: string) =>
+      apiCall<Tab>(`/restaurant/tabs/${tabId}/cancel`, { method: 'POST', body: { reason } }),
   });
 }
 
+/** `TabBillResponse`: everything already computed, the front only displays. */
 export interface TabBill {
   readonly tabId: string;
-  readonly total: string;
+  readonly status: string;
+  readonly guestCount: number | null;
+  readonly serviceChargeApplied: boolean;
+  readonly subtotal: string;
+  readonly serviceChargeBase: string;
+  readonly serviceChargeRate: string;
   readonly serviceCharge: string;
+  readonly total: string;
+  readonly paid: string;
   readonly balance: string;
-  readonly items: readonly {
-    readonly id: string;
-    readonly name: string;
-    readonly price: string;
-    readonly quantity: number;
-    readonly total: string;
-  }[];
+  readonly evenSplitParts: number | null;
+  readonly evenSplit: readonly string[];
+  readonly balanceEvenSplit: readonly string[];
 }
 
-export function useGetTabBill(tabId: string) {
+/** 1 to 99; zero or absent answers `INVALID_GUEST_COUNT`. */
+export function useRecordGuestCount(tabId: string) {
   const apiCall = useAuthorizedRequest();
 
   return useMutation({
-    mutationFn: async () => {
-      return await apiCall<TabBill>(`/restaurant/tabs/${tabId}/bill`, {
-        method: 'GET',
-      });
-    },
+    mutationFn: (guestCount: number) =>
+      apiCall<TabBill>(`/restaurant/tabs/${tabId}/guest-count`, {
+        method: 'PUT',
+        body: { guestCount },
+      }),
   });
 }
 
-export function useCloseTab(tabId: string) {
+/** "Pedir a conta": freezes the service charge and hands the tab to the cashier. */
+export function useStartClosing(tabId: string) {
   const apiCall = useAuthorizedRequest();
 
   return useMutation({
-    mutationFn: async () => {
-      return await apiCall<void>(`/restaurant/tabs/${tabId}/close`, {
-        method: 'POST',
-      });
-    },
+    mutationFn: () => apiCall<TabBill>(`/restaurant/tabs/${tabId}/closing`, { method: 'POST' }),
+  });
+}
+
+/** Takes a `CLOSING` tab back to `OPEN`; the reason stays on the trail. */
+export function useReopenTab(tabId: string) {
+  const apiCall = useAuthorizedRequest();
+
+  return useMutation({
+    mutationFn: (reason: string) =>
+      apiCall<Tab>(`/restaurant/tabs/${tabId}/reopen`, { method: 'POST', body: { reason } }),
   });
 }

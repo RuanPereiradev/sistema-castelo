@@ -1,98 +1,111 @@
 import { useState } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
+import { describeError } from './diningRoomMessages';
 import type { Tab } from './useTab';
 import { useDiningTables } from './useDiningTables';
+import { tabsByTable, useActiveTabs } from './useActiveTabs';
 import { useMoveTab } from './useTabOperations';
 import '../../styles/confirm-dialog.css';
+import '../../styles/tab-operations.css';
 
 interface Props {
   readonly isOpen: boolean;
   readonly tab: Tab;
   readonly onClose: () => void;
+  /** Called with the label of the table the tab now sits on. */
+  readonly onDone: (destinationLabel: string) => void;
 }
 
-/**
- * Dialog pra trocar comanda de mesa.
- */
-export function MoveTableDialog({ isOpen, tab, onClose }: Props) {
-  const [destinationTableId, setDestinationTableId] = useState<string>('');
-  const queryClient = useQueryClient();
+const TEXT = {
+  title: 'Trocar de mesa',
+  message: 'A comanda inteira vai para a mesa escolhida, com todos os itens.',
+  destination: 'Nova mesa',
+  choose: 'Escolha a mesa…',
+  noDestination: 'Nenhuma mesa livre.',
+  cancel: 'Voltar',
+  confirm: 'Trocar de mesa',
+  working: 'Movendo…',
+} as const;
 
-  const { data: tables = [] } = useDiningTables();
-  const { mutate: moveTab, isPending } = useMoveTab(tab.id);
-
-  // Filtrar mesas livres (exceto a atual)
-  const availableTables = tables.filter((t) => t.occupiedTabCount === 0 && t.id !== tab.diningTableId);
-
-  function handleMove() {
-    if (!destinationTableId) {
-      return;
-    }
-
-    moveTab(destinationTableId, {
-      onSuccess: () => {
-        setDestinationTableId('');
-        onClose();
-        queryClient.invalidateQueries({ queryKey: ['dining-table-tab'] });
-        queryClient.invalidateQueries({ queryKey: ['dining-tables'] });
-      },
-    });
-  }
+/** Destination is any active table without an active tab. */
+export function MoveTableDialog({ isOpen, tab, onClose, onDone }: Props) {
+  const [diningTableId, setDiningTableId] = useState('');
+  const tables = useDiningTables();
+  const activeTabs = useActiveTabs();
+  const move = useMoveTab(tab.id);
 
   if (!isOpen) {
     return null;
   }
 
-  const canMove = !!destinationTableId;
+  const occupied = tabsByTable(activeTabs.data ?? []);
+  const freeTables = (tables.data ?? []).filter(
+    (table) => table.isActive && table.id !== tab.diningTableId && !occupied.has(table.id),
+  );
+  const canMove = diningTableId !== '' && !move.isPending;
 
   return (
     <>
       <div className="dialog-overlay" onClick={onClose} />
-      <div className="dialog confirm-dialog">
+      <div className="dialog confirm-dialog" role="dialog" aria-modal="true">
         <div className="dialog-header">
-          <h3 className="dialog-title">Trocar de mesa</h3>
+          <h3 className="dialog-title">{TEXT.title}</h3>
         </div>
 
         <div className="dialog-content">
-          <p className="dialog-message">
-            A comanda será movida para a mesa selecionada. Todos os itens virão com.
-          </p>
+          <p className="dialog-message">{TEXT.message}</p>
 
           <div className="dialog-field">
-            <label htmlFor="destination-table" className="dialog-label">
-              Nova mesa
+            <label htmlFor="move-destination" className="dialog-label">
+              {TEXT.destination}
             </label>
             <select
-              id="destination-table"
-              value={destinationTableId}
-              onChange={(e) => setDestinationTableId(e.target.value)}
-              disabled={isPending}
+              id="move-destination"
               className="dialog-select"
+              value={diningTableId}
+              onChange={(event) => setDiningTableId(event.target.value)}
+              disabled={move.isPending || freeTables.length === 0}
             >
-              <option value="">Selecione uma mesa...</option>
-              {availableTables.length === 0 ? (
-                <option disabled>Nenhuma mesa disponível</option>
-              ) : (
-                availableTables.map((table) => (
-                  <option key={table.id} value={table.id}>
-                    {table.label}
-                  </option>
-                ))
-              )}
+              <option value="">{freeTables.length === 0 ? TEXT.noDestination : TEXT.choose}</option>
+              {freeTables.map((table) => (
+                <option key={table.id} value={table.id}>
+                  {table.label}
+                </option>
+              ))}
             </select>
           </div>
+
+          {move.error && (
+            <p className="dr-error-line" role="alert">
+              {describeError(move.error)}
+            </p>
+          )}
         </div>
 
         <div className="dialog-actions">
-          <button className="btn btn-secondary" onClick={onClose} disabled={isPending}>
-            Cancelar
+          <button
+            type="button"
+            className="btn btn-secondary"
+            onClick={() => {
+              setDiningTableId('');
+              onClose();
+            }}
+            disabled={move.isPending}
+          >
+            {TEXT.cancel}
           </button>
           <button
+            type="button"
             className="btn btn-primary"
-            onClick={handleMove}
-            disabled={isPending || !canMove}
+            onClick={() => {
+              if (!canMove) return;
+              const destination = freeTables.find((table) => table.id === diningTableId);
+              move.mutate(diningTableId, {
+                onSuccess: () => onDone(destination?.label ?? ''),
+              });
+            }}
+            disabled={!canMove}
           >
-            {isPending ? 'Movendo...' : 'Trocar de mesa'}
+            {move.isPending ? TEXT.working : TEXT.confirm}
           </button>
         </div>
       </div>

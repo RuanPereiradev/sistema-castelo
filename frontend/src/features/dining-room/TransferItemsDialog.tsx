@@ -1,138 +1,158 @@
 import { useState } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
-import type { Tab } from './useTab';
-import { useDiningTables } from './useDiningTables';
+import { describeError } from './diningRoomMessages';
+import { activeItems, type Tab } from './useTab';
+import { useActiveTabs } from './useActiveTabs';
 import { useTransferItems } from './useTabOperations';
 import '../../styles/confirm-dialog.css';
+import '../../styles/tab-operations.css';
 
 interface Props {
   readonly isOpen: boolean;
   readonly tab: Tab;
   readonly onClose: () => void;
+  readonly onDone: () => void;
 }
 
-/**
- * Dialog pra transferir itens de uma comanda pra outra.
- */
-export function TransferItemsDialog({ isOpen, tab, onClose }: Props) {
-  const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
-  const [destinationTableId, setDestinationTableId] = useState<string>('');
-  const queryClient = useQueryClient();
+const TEXT = {
+  title: 'Transferir itens',
+  items: 'Itens a transferir',
+  noItems: 'Nenhum item ativo na comanda.',
+  selected: (count: number) => `${count} ${count === 1 ? 'item selecionado' : 'itens selecionados'}`,
+  destination: 'Para a comanda da mesa',
+  choose: 'Escolha a mesa…',
+  noDestination: 'Nenhuma outra comanda aberta.',
+  cancel: 'Voltar',
+  confirm: 'Transferir',
+  working: 'Transferindo…',
+} as const;
 
-  const { data: tables = [] } = useDiningTables();
-  const { mutate: transferItems, isPending } = useTransferItems(tab.id);
-
-  // Filtrar mesas ocupadas (exceto a atual)
-  const availableTables = tables.filter((t) => t.occupiedTabCount > 0 && t.id !== tab.diningTableId);
-
-  function toggleItem(itemId: string) {
-    const newSelected = new Set(selectedItems);
-    if (newSelected.has(itemId)) {
-      newSelected.delete(itemId);
-    } else {
-      newSelected.add(itemId);
-    }
-    setSelectedItems(newSelected);
-  }
-
-  function handleTransfer() {
-    if (selectedItems.size === 0 || !destinationTableId) {
-      return;
-    }
-
-    transferItems(
-      {
-        itemIds: Array.from(selectedItems),
-        destinationTabId: destinationTableId,
-      },
-      {
-        onSuccess: () => {
-          setSelectedItems(new Set());
-          setDestinationTableId('');
-          onClose();
-          queryClient.invalidateQueries({ queryKey: ['dining-table-tab'] });
-          queryClient.invalidateQueries({ queryKey: ['dining-tables'] });
-        },
-      },
-    );
-  }
+/** Whole lines of this tab go to another open tab, chosen by its table. */
+export function TransferItemsDialog({ isOpen, tab, onClose, onDone }: Props) {
+  const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
+  const [toTabId, setToTabId] = useState('');
+  const activeTabs = useActiveTabs();
+  const transfer = useTransferItems(tab.id);
 
   if (!isOpen) {
     return null;
   }
 
-  const canTransfer = selectedItems.size > 0 && destinationTableId;
+  const destinations = (activeTabs.data ?? []).filter(
+    (candidate) => candidate.id !== tab.id && candidate.status === 'OPEN' && candidate.diningTableId,
+  );
+  const lines = activeItems(tab);
+  const canTransfer = selected.size > 0 && toTabId !== '' && !transfer.isPending;
+
+  function toggle(itemId: string) {
+    setSelected((current) => {
+      const next = new Set(current);
+      if (next.has(itemId)) {
+        next.delete(itemId);
+      } else {
+        next.add(itemId);
+      }
+      return next;
+    });
+  }
+
+  function reset() {
+    setSelected(new Set());
+    setToTabId('');
+  }
+
+  function handleTransfer() {
+    if (!canTransfer) return;
+    transfer.mutate(
+      { itemIds: [...selected], toTabId },
+      {
+        onSuccess: () => {
+          reset();
+          onDone();
+        },
+      },
+    );
+  }
 
   return (
     <>
       <div className="dialog-overlay" onClick={onClose} />
-      <div className="dialog confirm-dialog">
+      <div className="dialog confirm-dialog" role="dialog" aria-modal="true">
         <div className="dialog-header">
-          <h3 className="dialog-title">Transferir itens</h3>
+          <h3 className="dialog-title">{TEXT.title}</h3>
         </div>
 
         <div className="dialog-content">
-          {/* Seleção de itens */}
           <div className="dialog-field">
-            <label className="dialog-label">Itens a transferir</label>
-            <div className="items-selection">
-              {tab.items.length === 0 ? (
-                <p className="empty-text">Nenhum item na comanda</p>
-              ) : (
-                <div className="items-list-transfer">
-                  {tab.items.map((item) => (
-                    <label key={item.id} className="item-checkbox">
-                      <input
-                        type="checkbox"
-                        checked={selectedItems.has(item.id)}
-                        onChange={() => toggleItem(item.id)}
-                        disabled={isPending}
-                      />
-                      <span className="item-label">
-                        {item.itemName} ({item.quantity}x)
-                      </span>
-                    </label>
-                  ))}
-                </div>
-              )}
-            </div>
-            {selectedItems.size > 0 && (
-              <div className="selection-count">{selectedItems.size} item(ns) selecionado(s)</div>
+            <span className="dialog-label">{TEXT.items}</span>
+            {lines.length === 0 ? (
+              <p className="empty-text">{TEXT.noItems}</p>
+            ) : (
+              <div className="items-list-transfer">
+                {lines.map((item) => (
+                  <label key={item.id} className="item-checkbox">
+                    <input
+                      type="checkbox"
+                      checked={selected.has(item.id)}
+                      onChange={() => toggle(item.id)}
+                      disabled={transfer.isPending}
+                    />
+                    <span className="item-label">
+                      {item.quantity}× {item.itemName}
+                      {item.variantName && ` (${item.variantName})`}
+                    </span>
+                  </label>
+                ))}
+              </div>
             )}
+            {selected.size > 0 && <div className="selection-count">{TEXT.selected(selected.size)}</div>}
           </div>
 
-          {/* Seleção de mesa de destino */}
           <div className="dialog-field">
-            <label htmlFor="destination-table" className="dialog-label">
-              Mesa de destino
+            <label htmlFor="transfer-destination" className="dialog-label">
+              {TEXT.destination}
             </label>
             <select
-              id="destination-table"
-              value={destinationTableId}
-              onChange={(e) => setDestinationTableId(e.target.value)}
-              disabled={isPending}
+              id="transfer-destination"
               className="dialog-select"
+              value={toTabId}
+              onChange={(event) => setToTabId(event.target.value)}
+              disabled={transfer.isPending || destinations.length === 0}
             >
-              <option value="">Selecione uma mesa...</option>
-              {availableTables.map((table) => (
-                <option key={table.id} value={table.id}>
-                  {table.label}
+              <option value="">{destinations.length === 0 ? TEXT.noDestination : TEXT.choose}</option>
+              {destinations.map((candidate) => (
+                <option key={candidate.id} value={candidate.id}>
+                  {candidate.diningTableLabel}
                 </option>
               ))}
             </select>
           </div>
+
+          {transfer.error && (
+            <p className="dr-error-line" role="alert">
+              {describeError(transfer.error)}
+            </p>
+          )}
         </div>
 
         <div className="dialog-actions">
-          <button className="btn btn-secondary" onClick={onClose} disabled={isPending}>
-            Cancelar
+          <button
+            type="button"
+            className="btn btn-secondary"
+            onClick={() => {
+              reset();
+              onClose();
+            }}
+            disabled={transfer.isPending}
+          >
+            {TEXT.cancel}
           </button>
           <button
+            type="button"
             className="btn btn-primary"
             onClick={handleTransfer}
-            disabled={isPending || !canTransfer}
+            disabled={!canTransfer}
           >
-            {isPending ? 'Transferindo...' : 'Transferir'}
+            {transfer.isPending ? TEXT.working : TEXT.confirm}
           </button>
         </div>
       </div>
