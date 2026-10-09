@@ -72,6 +72,7 @@ export const DINING_ROOM = {
     billCancelled: (label: string) => `Pedido de conta da mesa ${label} cancelado`,
     tabCancelled: (label: string) => `Comanda da mesa ${label} cancelada`,
     itemAdded: (name: string) => `${name} lançado`,
+    itemCancelled: 'Item cancelado',
     itemsTransferred: 'Itens transferidos',
     tabsMerged: 'Comandas juntadas',
     tableMoved: (label: string) => `Comanda movida para a mesa ${label}`,

@@ -9,6 +9,7 @@ import { activeItems, tabKey, useOpenTab, useTab, type Tab, type TabItem } from 
 import { useCancelTab, useReopenTab, useStartClosing } from './useTabActions';
 import { minutesSince, statusLabel, statusOf } from './tableStatus';
 import { AddItemModal } from './AddItemModal';
+import { CancelItemDialog } from './CancelItemDialog';
 import { ConfirmDialog } from './ConfirmDialog';
 import { TransferItemsDialog } from './TransferItemsDialog';
 import { MergeTabDialog } from './MergeTabDialog';
@@ -74,9 +75,10 @@ export function TableSheet({ table, areaLabel, summary, now, onClose, onNotice }
   );
   const [moreActions, setMoreActions] = useState(false);
   const [dialog, setDialog] = useState<
-    'none' | 'add-item' | 'request-bill' | 'cancel-bill' | 'cancel-tab' | 'transfer' | 'merge' | 'move'
+    'none' | 'add-item' | 'request-bill' | 'cancel-bill' | 'cancel-tab' | 'transfer' | 'merge' | 'move' | 'cancel-item'
   >('none');
   const [reason, setReason] = useState('');
+  const [cancellingItemId, setCancellingItemId] = useState<string | null>(null);
 
   const apiCall = useAuthorizedRequest();
   const openTab = useOpenTab();
@@ -249,32 +251,60 @@ export function TableSheet({ table, areaLabel, summary, now, onClose, onNotice }
               ) : (
                 <div className="dr-sheet-items">
                   {lines.map((item) => (
-                    <div key={item.id} className={`dr-sheet-item status-${item.status.toLowerCase()}`}>
-                      <span className="dr-sheet-item-qty">{quantityOf(item)}</span>
-                      <span className="dr-sheet-item-body">
-                        <span className="dr-sheet-item-name">
-                          {item.itemName}
-                          {item.variantName && ` (${item.variantName})`}
+                    <div key={item.id}>
+                      <div className={`dr-sheet-item status-${item.status.toLowerCase()}`}>
+                        <span className="dr-sheet-item-qty">{quantityOf(item)}</span>
+                        <span className="dr-sheet-item-body">
+                          <span className="dr-sheet-item-name">
+                            {item.itemName}
+                            {item.variantName && ` (${item.variantName})`}
+                          </span>
+                          {item.modifiers.length > 0 && (
+                            <span className="dr-sheet-item-detail">
+                              {item.modifiers
+                                .map((m) => `+ ${m.quantity > 1 ? `${m.quantity}× ` : ''}${m.name}`)
+                                .join(' · ')}
+                            </span>
+                          )}
+                          {item.specialInstructions && (
+                            <span className="dr-sheet-item-detail dr-sheet-item-note">
+                              {item.specialInstructions}
+                            </span>
+                          )}
+                          {item.status !== 'DELIVERED' && (
+                            <span className={`dr-sheet-item-status status-${item.status.toLowerCase()}`}>
+                              {DINING_ROOM.itemStatus[item.status] ?? item.status}
+                            </span>
+                          )}
                         </span>
-                        {item.modifiers.length > 0 && (
-                          <span className="dr-sheet-item-detail">
-                            {item.modifiers
-                              .map((m) => `+ ${m.quantity > 1 ? `${m.quantity}× ` : ''}${m.name}`)
-                              .join(' · ')}
-                          </span>
-                        )}
-                        {item.specialInstructions && (
-                          <span className="dr-sheet-item-detail dr-sheet-item-note">
-                            {item.specialInstructions}
-                          </span>
-                        )}
-                        {item.status !== 'DELIVERED' && (
-                          <span className={`dr-sheet-item-status status-${item.status.toLowerCase()}`}>
-                            {DINING_ROOM.itemStatus[item.status] ?? item.status}
-                          </span>
-                        )}
-                      </span>
-                      <span className="dr-sheet-item-price">{formatMoney(item.lineTotal)}</span>
+                        <span className="dr-sheet-item-price">{formatMoney(item.lineTotal)}</span>
+                      </div>
+                      {item.status !== 'DELIVERED' && item.status !== 'CANCELLED' && (
+                        <div style={{ display: 'flex', gap: '8px', padding: '8px 0', justifyContent: 'flex-end' }}>
+                          {item.status === 'READY' && (
+                            <button
+                              type="button"
+                              className="dr-action-btn dr-action-small"
+                              onClick={() => {
+                                setCancellingItemId(item.id);
+                                setDialog('cancel-item');
+                              }}
+                            >
+                              ✓ Entregar
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            className="dr-action-btn dr-action-small"
+                            onClick={() => {
+                              setCancellingItemId(item.id);
+                              setDialog('cancel-item');
+                            }}
+                          >
+                            ✕ Cancelar
+                          </button>
+                        </div>
+                      )}
                     </div>
                   ))}
                   <div className="dr-sheet-summary">
@@ -448,6 +478,25 @@ export function TableSheet({ table, areaLabel, summary, now, onClose, onNotice }
             }
             onCancel={closeDialog}
           />
+
+          {cancellingItemId && (
+            <CancelItemDialog
+              isOpen={dialog === 'cancel-item'}
+              tab={tab}
+              itemId={cancellingItemId}
+              itemName={tab.items.find((i) => i.id === cancellingItemId)?.itemName ?? ''}
+              onClose={() => {
+                closeDialog();
+                setCancellingItemId(null);
+              }}
+              onCancelled={() => {
+                closeDialog();
+                setCancellingItemId(null);
+                onNotice(DINING_ROOM.notice.itemCancelled);
+                void refreshAll();
+              }}
+            />
+          )}
 
           <TransferItemsDialog
             isOpen={dialog === 'transfer'}
