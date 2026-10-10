@@ -9,6 +9,7 @@ import { activeItems, tabKey, useOpenTab, useTab, type Tab, type TabItem } from 
 import { useCancelTab, useReopenTab, useStartClosing } from './useTabActions';
 import { minutesSince, statusLabel, statusOf } from './tableStatus';
 import { AddItemModal } from './AddItemModal';
+import { BillSplitDialog } from './BillSplitDialog';
 import { CancelItemDialog } from './CancelItemDialog';
 import { ConfirmDialog } from './ConfirmDialog';
 import { TransferItemsDialog } from './TransferItemsDialog';
@@ -75,7 +76,16 @@ export function TableSheet({ table, areaLabel, summary, now, onClose, onNotice }
   );
   const [moreActions, setMoreActions] = useState(false);
   const [dialog, setDialog] = useState<
-    'none' | 'add-item' | 'request-bill' | 'cancel-bill' | 'cancel-tab' | 'transfer' | 'merge' | 'move' | 'cancel-item'
+    | 'none'
+    | 'add-item'
+    | 'request-bill'
+    | 'bill-split'
+    | 'cancel-bill'
+    | 'cancel-tab'
+    | 'transfer'
+    | 'merge'
+    | 'move'
+    | 'cancel-item'
   >('none');
   const [reason, setReason] = useState('');
   const [cancellingItemId, setCancellingItemId] = useState<string | null>(null);
@@ -345,7 +355,7 @@ export function TableSheet({ table, areaLabel, summary, now, onClose, onNotice }
                     <button
                       type="button"
                       className="dr-action-btn dr-action-secondary"
-                      onClick={() => setDialog('request-bill')}
+                      onClick={() => setDialog('bill-split')}
                       disabled={busy}
                     >
                       {DINING_ROOM.requestBill}
@@ -427,17 +437,15 @@ export function TableSheet({ table, areaLabel, summary, now, onClose, onNotice }
             }}
           />
 
-          <ConfirmDialog
-            isOpen={dialog === 'request-bill'}
-            title={DINING_ROOM.requestBillTitle}
-            message={DINING_ROOM.requestBillMessage}
-            confirmLabel={DINING_ROOM.requestBillConfirm}
-            cancelLabel={DINING_ROOM.keep}
-            isLoading={startClosing.isPending}
-            onConfirm={() =>
-              void run(() => startClosing.mutateAsync(), DINING_ROOM.notice.billSent(table.label))
-            }
-            onCancel={closeDialog}
+          <BillSplitDialog
+            isOpen={dialog === 'bill-split'}
+            tab={tab}
+            onClose={closeDialog}
+            onBillRequested={() => {
+              closeDialog();
+              onNotice(DINING_ROOM.notice.billSent(table.label));
+              void refreshAll();
+            }}
           />
 
           <ConfirmDialog
