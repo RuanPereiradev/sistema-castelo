@@ -1,11 +1,11 @@
 import { useState } from 'react';
 import { ADMIN } from './adminMessages';
 import {
-  AdminDiningTable,
+  type AdminDiningTable,
   useCreateDiningTable,
   useUpdateDiningTable,
-  CreateDiningTableRequest,
-  UpdateDiningTableRequest,
+  type CreateDiningTableRequest,
+  type UpdateDiningTableRequest,
 } from './useAdminTables';
 
 interface TableFormProps {
@@ -21,7 +21,7 @@ export function TableForm({ table, onSuccess, onCancel }: TableFormProps) {
 
   const [formData, setFormData] = useState({
     label: table?.label ?? '',
-    seats: table?.seats ?? '',
+    seats: table?.seats?.toString() ?? '',
     area: table?.area ?? '',
   });
 

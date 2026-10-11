@@ -1,12 +1,12 @@
 import { useState } from 'react';
 import { ADMIN } from './adminMessages';
 import {
-  MenuItem,
-  MenuCategory,
+  type MenuItem,
+  type MenuCategory,
   useCreateMenuItem,
   useUpdateMenuItem,
-  CreateMenuItemRequest,
-  UpdateMenuItemRequest,
+  type CreateMenuItemRequest,
+  type UpdateMenuItemRequest,
 } from './useAdminMenu';
 
 interface ItemFormProps {

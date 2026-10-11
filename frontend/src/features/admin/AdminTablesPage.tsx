@@ -4,7 +4,7 @@ import {
   useAdminDiningTables,
   useDeactivateDiningTable,
   useActivateDiningTable,
-  AdminDiningTable,
+  type AdminDiningTable,
 } from './useAdminTables';
 import { TableForm } from './TableForm';
 

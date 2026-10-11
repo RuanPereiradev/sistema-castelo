@@ -5,7 +5,7 @@ import {
   useMenuCategories,
   useMarkItemUnavailable,
   useMarkItemAvailable,
-  MenuItem,
+  type MenuItem,
 } from './useAdminMenu';
 import { ItemForm } from './ItemForm';
 

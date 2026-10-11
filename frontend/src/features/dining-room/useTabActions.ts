@@ -77,3 +77,12 @@ export function useReopenTab(tabId: string) {
       apiCall<Tab>(`/restaurant/tabs/${tabId}/reopen`, { method: 'POST', body: { reason } }),
   });
 }
+
+export function useDeliverTabItem(tabId: string) {
+  const apiCall = useAuthorizedRequest();
+
+  return useMutation({
+    mutationFn: (itemId: string) =>
+      apiCall<Tab>(`/restaurant/tabs/${tabId}/items/${itemId}/deliver`, { method: 'POST' }),
+  });
+}

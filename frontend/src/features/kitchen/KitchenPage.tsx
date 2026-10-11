@@ -1,16 +1,24 @@
 import { useState } from 'react';
 import { useKitchenTickets } from './useKitchenTickets';
+import { useKitchenSocket } from './useKitchenSocket';
 import { TicketCard } from './TicketCard';
 import { TicketDetail } from './TicketDetail';
 import '../../styles/kitchen.css';
 
+type Station = 'KITCHEN' | 'PIZZA' | 'BAR';
+
 /**
- * Tela de Cozinha (KITCHEN).
- * Fila de pedidos, status dos itens, prioridade.
+ * Tela de Cozinha (KITCHEN) com WebSocket em tempo real.
+ * Fila de pedidos por status, atualização via STOMP.
+ * Três setores independentes (KITCHEN, PIZZA, BAR).
  */
 export function KitchenPage() {
   const [selectedTicketId, setSelectedTicketId] = useState<string | null>(null);
+  const [station, setStation] = useState<Station>('KITCHEN');
+
+  // Dados e WebSocket
   const { data: tickets = [], isLoading } = useKitchenTickets();
+  const { isConnected, reconnect } = useKitchenSocket({ station, enabled: true });
 
   const selectedTicket = tickets.find((t) => t.id === selectedTicketId);
 
@@ -21,6 +29,36 @@ export function KitchenPage() {
 
   return (
     <div className="kitchen-container">
+      {/* Cabeçalho com seleção de setor */}
+      <div className="kitchen-header">
+        <div className="station-tabs">
+          {(['KITCHEN', 'PIZZA', 'BAR'] as const).map((s) => (
+            <button
+              key={s}
+              className={`station-tab ${station === s ? 'active' : ''}`}
+              onClick={() => setStation(s)}
+            >
+              {s === 'KITCHEN' && '👨‍🍳'}
+              {s === 'PIZZA' && '🍕'}
+              {s === 'BAR' && '🍷'}
+              {' '}
+              {s === 'KITCHEN' ? 'Cozinha' : s === 'PIZZA' ? 'Pizza' : 'Bar'}
+            </button>
+          ))}
+        </div>
+
+        {/* Status de conexão */}
+        <div className={`connection-status ${isConnected ? 'connected' : 'disconnected'}`}>
+          <span className="connection-dot" />
+          {isConnected ? 'Conectado' : 'Desconectado'}
+          {!isConnected && (
+            <button className="reconnect-btn" onClick={reconnect}>
+              Reconectar
+            </button>
+          )}
+        </div>
+      </div>
+
       {/* Fila por status */}
       <div className="kitchen-queues">
         {/* Pendentes */}

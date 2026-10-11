@@ -120,7 +120,6 @@ const ERROR_MESSAGES: Readonly<Record<string, string>> = {
 };
 
 const GENERIC_FAILURE = 'Não deu certo. Tente de novo; se continuar, avise o administrador.';
-const OFFLINE = 'Sem conexão com o servidor. Veja a rede e tente de novo.';
 
 /**
  * A code without translation never reaches the admin raw: it shows the generic
