@@ -84,6 +84,17 @@ async function requiredDestinationLoader(roles: readonly Destination[]): Promise
   return session;
 }
 
+async function requiredAdminLoader(): Promise<Session> {
+  const session = currentSession();
+  if (!session) {
+    throw new Response('Unauthorized', { status: 401 });
+  }
+  if (!session.user.roles.includes('ADMIN')) {
+    throw new Response('Forbidden', { status: 403 });
+  }
+  return session;
+}
+
 export const router = createBrowserRouter([
   {
     path: '/',
@@ -118,7 +129,7 @@ export const router = createBrowserRouter([
       {
         path: 'admin',
         element: <AdminPage />,
-        loader: () => requiredDestinationLoader(['ADMIN']),
+        loader: requiredAdminLoader,
       },
       {
         path: '*',
