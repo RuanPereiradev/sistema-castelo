@@ -220,6 +220,17 @@
   background-color: rgba(39, 174, 96, 0.08);
 }
 
+.ticket-card.time-status-warning {
+  border: 2px solid #f39c12 !important;
+  background-color: rgba(243, 156, 18, 0.15) !important;
+}
+
+.ticket-card.time-status-late {
+  border: 2px solid #e74c3c !important;
+  background-color: rgba(231, 76, 60, 0.15) !important;
+  box-shadow: 0 0 0 2px rgba(231, 76, 60, 0.3);
+}
+
 .ticket-header {
   display: flex;
   justify-content: space-between;
@@ -394,9 +405,10 @@
   border-radius: 0.2rem;
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
+  align-items: center;
   gap: 0.75rem;
   font-size: 0.85rem;
+  flex-wrap: wrap;
 }
 
 .item-row.status-pending {
@@ -491,6 +503,33 @@
 
 .item-action-btn.action-undo {
   background-color: #95a5a6;
+}
+
+.detail-error {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem;
+  background-color: rgba(231, 76, 60, 0.1);
+  border: 1px solid #e74c3c;
+  border-radius: 0.2rem;
+  color: #e74c3c;
+  font-size: 0.85rem;
+}
+
+.error-close {
+  width: 1.5rem;
+  height: 1.5rem;
+  border: none;
+  background-color: transparent;
+  color: #e74c3c;
+  cursor: pointer;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
 }
 
 .detail-actions {

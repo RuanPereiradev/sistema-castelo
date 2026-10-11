@@ -18,16 +18,24 @@ export interface KitchenTicket {
   readonly openedAt: string;
 }
 
+export interface KitchenQueueResponse {
+  readonly items: readonly KitchenTicket[];
+  readonly warningAfterMinutes: number;
+  readonly lateAfterMinutes: number;
+  readonly serverTime: string;
+}
+
 /**
- * Busca tickets da cozinha (fila de pedidos).
+ * Busca tickets da cozinha (fila de pedidos) com limites de tempo.
+ * A API retorna a fila com os limites de warning/late e o serverTime.
  */
-export function useKitchenTickets() {
+export function useKitchenTickets(station: 'KITCHEN' | 'PIZZA' | 'BAR' = 'KITCHEN') {
   const apiCall = useAuthorizedRequest();
 
   return useQuery({
-    queryKey: ['kitchen-tickets'],
+    queryKey: ['kitchen-tickets', station],
     queryFn: async () => {
-      const data = await apiCall<readonly KitchenTicket[]>('/kitchen/queue', {
+      const data = await apiCall<KitchenQueueResponse>(`/kitchen/queue?station=${station}`, {
         method: 'GET',
       });
       return data;

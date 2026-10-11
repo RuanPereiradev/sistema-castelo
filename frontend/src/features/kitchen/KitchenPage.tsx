@@ -17,8 +17,13 @@ export function KitchenPage() {
   const [station, setStation] = useState<Station>('KITCHEN');
 
   // Dados e WebSocket
-  const { data: tickets = [], isLoading } = useKitchenTickets();
+  const { data: queueData, isLoading } = useKitchenTickets(station);
   const { isConnected, reconnect } = useKitchenSocket({ station, enabled: true });
+
+  const tickets = queueData?.items ?? [];
+  const serverTime = queueData?.serverTime;
+  const warningAfterMinutes = queueData?.warningAfterMinutes;
+  const lateAfterMinutes = queueData?.lateAfterMinutes;
 
   const selectedTicket = tickets.find((t) => t.id === selectedTicketId);
 
@@ -78,6 +83,9 @@ export function KitchenPage() {
                 isSelected={selectedTicketId === ticket.id}
                 onSelect={() => setSelectedTicketId(ticket.id)}
                 priority="pending"
+                serverTime={serverTime}
+                warningAfterMinutes={warningAfterMinutes}
+                lateAfterMinutes={lateAfterMinutes}
               />
             ))}
           </div>
@@ -99,6 +107,9 @@ export function KitchenPage() {
                 isSelected={selectedTicketId === ticket.id}
                 onSelect={() => setSelectedTicketId(ticket.id)}
                 priority="in-progress"
+                serverTime={serverTime}
+                warningAfterMinutes={warningAfterMinutes}
+                lateAfterMinutes={lateAfterMinutes}
               />
             ))}
           </div>
@@ -120,6 +131,9 @@ export function KitchenPage() {
                 isSelected={selectedTicketId === ticket.id}
                 onSelect={() => setSelectedTicketId(ticket.id)}
                 priority="ready"
+                serverTime={serverTime}
+                warningAfterMinutes={warningAfterMinutes}
+                lateAfterMinutes={lateAfterMinutes}
               />
             ))}
           </div>
