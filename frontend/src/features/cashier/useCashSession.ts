@@ -55,8 +55,7 @@ export function useCashSession() {
 export async function openCashSession(apiCall: ReturnType<typeof useAuthorizedRequest>, openingFloat: string): Promise<CashDrawerSession> {
   return apiCall<CashDrawerSession>('/billing/cash-sessions', {
     method: 'POST',
-    body: JSON.stringify({ openingFloat }),
-    headers: { 'Content-Type': 'application/json' },
+    body: { openingFloat },
   });
 }
 
@@ -69,14 +68,9 @@ export async function dropCash(
   amount: string,
   reason: string,
 ): Promise<CashDrawerSession> {
-  const idempotencyKey = crypto.randomUUID();
   return apiCall<CashDrawerSession>(`/billing/cash-sessions/${sessionId}/drops`, {
     method: 'POST',
-    body: JSON.stringify({ amount, reason }),
-    headers: {
-      'Content-Type': 'application/json',
-      'Idempotency-Key': idempotencyKey,
-    },
+    body: { amount, reason },
   });
 }
 
@@ -89,14 +83,9 @@ export async function supplyCash(
   amount: string,
   reason: string,
 ): Promise<CashDrawerSession> {
-  const idempotencyKey = crypto.randomUUID();
   return apiCall<CashDrawerSession>(`/billing/cash-sessions/${sessionId}/supplies`, {
     method: 'POST',
-    body: JSON.stringify({ amount, reason }),
-    headers: {
-      'Content-Type': 'application/json',
-      'Idempotency-Key': idempotencyKey,
-    },
+    body: { amount, reason },
   });
 }
 
@@ -111,7 +100,6 @@ export async function closeCashSession(
 ): Promise<CashDrawerSession> {
   return apiCall<CashDrawerSession>(`/billing/cash-sessions/${sessionId}/close`, {
     method: 'POST',
-    body: JSON.stringify({ countedAmount, note: note || null }),
-    headers: { 'Content-Type': 'application/json' },
+    body: { countedAmount, note: note || null },
   });
 }

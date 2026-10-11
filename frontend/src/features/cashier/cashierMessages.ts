@@ -1,3 +1,5 @@
+import { ApiError, NetworkError } from '../../lib/problemDetail';
+
 /**
  * Every Portuguese string of the cashier lives here, never in a component.
  * The first block is what the screen says; the second translates the stable
@@ -31,12 +33,13 @@ export const CASHIER = {
   noFolios: 'Nenhuma conta aberta',
   folioNumber: 'Folio',
   guestName: 'Nome',
-  folioStatus: 'Status',
+  folioStatusLabel: 'Status',
   charges: 'Lançamentos',
   payments: 'Pagamentos',
   totalCharges: 'Total lançado',
   totalPayments: 'Total pago',
   balance: 'Saldo',
+  foliaTABClosureNote: 'A comanda só pode ser fechada pelo garçom.',
 
   // Actions
   receivePayment: 'Receber pagamento',
@@ -44,6 +47,10 @@ export const CASHIER = {
   reverseCharge: 'Estornar lançamento',
   refundPayment: 'Estornar pagamento',
   closeFolio: 'Fechar conta',
+  cancel: 'Cancelar',
+  amountToReceive: 'Valor a receber',
+  paymentMethod: 'Forma de pagamento',
+  processing: 'Processando…',
 
   // Charge types
   chargeType: {
@@ -86,8 +93,8 @@ export const CASHIER = {
   } as Readonly<Record<string, string>>,
 
   // Tabs
-  cashDrawerTab: 'Turno',
-  foliosTab: 'Contas',
+  cashDrawerTabLabel: 'Turno',
+  foliosTabLabel: 'Contas',
 
   // Messages
   loadingSessions: 'Carregando turno…',
@@ -120,15 +127,19 @@ const ERROR_MESSAGES: Readonly<Record<string, string>> = {
   CASH_DRAWER_SESSION_NOT_FOUND: 'Este turno não existe mais.',
   CASH_DRAWER_SESSION_CLOSED: 'Este turno já foi fechado.',
   MISSING_IDEMPOTENCY_KEY: 'Tente de novo; se continuar, avise o gerente.',
+  INVALID_IDEMPOTENCY_KEY: 'Tente de novo; se continuar, avise o gerente.',
+  IDEMPOTENCY_KEY_REUSED: 'Este pagamento foi recusado. Verifique o valor e tente de novo.',
   INVALID_AMOUNT: 'Informe um valor válido.',
+  INVALID_PAYMENT_AMOUNT: 'Informe um valor de pagamento válido.',
   INVALID_REASON: 'Escreva o motivo.',
+  PAYMENT_EXCEEDS_BALANCE: 'O valor não pode ser maior que o saldo.',
+  PAYMENT_METHOD_NOT_ACCEPTED: 'Esta forma de pagamento não é aceita.',
   FORBIDDEN: 'Seu perfil não pode fazer isso.',
+  ACCESS_DENIED: 'Seu perfil não pode fazer isso.',
 };
 
 const GENERIC_FAILURE = 'Não deu certo. Tente de novo; se continuar, avise o gerente.';
 const OFFLINE = 'Sem conexão com o servidor. Veja a rede e tente de novo.';
-
-import { ApiError, NetworkError } from '../../lib/problemDetail';
 
 /**
  * A code without translation never reaches the cashier raw: it shows the generic

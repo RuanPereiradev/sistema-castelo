@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<link rel="stylesheet" href="_ds/classical-447e33bc-5bdb-40f1-8281-a07d82674e64/styles.css">
+<script src="_ds/classical-447e33bc-5bdb-40f1-8281-a07d82674e64/_ds_bundle.js"></script>
+<style>body{margin:0;background:#2A0A12;}a{color:#6B1E2E;}a:hover{color:#3D0F1A;}</style>
+</helmet>
+<section data-screen-label="Mapa das mesas" style="padding:72px; display:flex; flex-direction:column; gap:56px; background:#2A0A12; color:#F4ECE3; font-family:var(--font-body); width:max-content;">
+  <header style="display:flex; flex-direction:column; gap:12px; max-width:980px;">
+    <div style="font-family:var(--font-heading); font-weight:600; font-size:15px; letter-spacing:.28em; text-transform:uppercase; color:#E8957F;">❧ Tela 2 · Mapa das mesas</div>
+    <h1 style="margin:0; font-family:var(--font-heading); font-weight:400; font-size:72px; line-height:1;">Garçom no celular, caixa no computador</h1>
+    <p style="margin:0; font-size:18px; line-height:1.6; color:rgba(244,236,227,.8); text-wrap:pretty;">Mesmos dados nas duas telas, com prioridades diferentes. O garçom vê uma grade por área: toca na mesa, vê a comanda e age. O caixa vê todas as mesas agrupadas por área — sem planta, porque cada casa tem a sua — com a fila de contas pedidas num portal à direita. As cinco situações da mesa se distinguem pelo contorno e pelo nome, não só pela cor: tracejado para livre, filete duplo para reservada, contorno salmão para ocupada, pergaminho para conta pedida e salmão cheio para prato pronto. Tudo é clicável.</p>
+  </header>
+  <div style="display:flex; gap:48px; align-items:flex-end;">
+    <figure style="margin:0; display:flex; flex-direction:column; gap:10px;">
+      <div style="width:390px; height:844px; border:10px solid #120306; border-radius:44px; overflow:hidden;"><dc-import name="MapaMesasPortal" device="phone" hint-size="100%,100%" style="display:block; width:100%; height:100%;"></dc-import></div>
+      <figcaption style="font-size:14px; color:rgba(244,236,227,.75);">Garçom · mapa do salão</figcaption>
+    </figure>
+    <figure style="margin:0; display:flex; flex-direction:column; gap:10px;">
+      <div style="width:390px; height:844px; border:10px solid #120306; border-radius:44px; overflow:hidden;"><dc-import name="MapaMesasPortal" device="phone" initial-selected="{{ three }}" no-motion="{{ true }}" hint-size="100%,100%" style="display:block; width:100%; height:100%;"></dc-import></div>
+      <figcaption style="font-size:14px; color:rgba(244,236,227,.75);">Garçom · mesa 3 com prato pronto</figcaption>
+    </figure>
+    <figure style="margin:0; display:flex; flex-direction:column; gap:10px;">
+      <div style="width:390px; height:844px; border:10px solid #120306; border-radius:44px; overflow:hidden;"><dc-import name="MapaMesasPortal" device="phone" initial-filter="conta" hint-size="100%,100%" style="display:block; width:100%; height:100%;"></dc-import></div>
+      <figcaption style="font-size:14px; color:rgba(244,236,227,.75);">Garçom · filtro “conta pedida”</figcaption>
+    </figure>
+  </div>
+  <div style="display:flex; gap:48px; align-items:flex-start;">
+    <figure style="margin:0; display:flex; flex-direction:column; gap:10px;">
+      <div style="width:1080px; height:675px; border:10px solid #120306; border-radius:4px; overflow:hidden;"><div style="width:1440px; height:900px; transform:scale(.75); transform-origin:0 0;"><dc-import name="MapaMesasPortal" device="desktop" hint-size="100%,100%" style="display:block; width:100%; height:100%;"></dc-import></div></div>
+      <figcaption style="font-size:14px; color:rgba(244,236,227,.75);">Caixa · mesas por área e fila de contas (1440 × 900)</figcaption>
+    </figure>
+    <figure style="margin:0; display:flex; flex-direction:column; gap:10px;">
+      <div style="width:1080px; height:675px; border:10px solid #120306; border-radius:4px; overflow:hidden;"><div style="width:1440px; height:900px; transform:scale(.75); transform-origin:0 0;"><dc-import name="MapaMesasPortal" device="desktop" initial-selected="{{ nine }}" hint-size="100%,100%" style="display:block; width:100%; height:100%;"></dc-import></div></div>
+      <figcaption style="font-size:14px; color:rgba(244,236,227,.75);">Caixa · mesa 9 selecionada, pronta para fechar</figcaption>
+    </figure>
+  </div>
+</section>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  renderVals() { return { three: 3, nine: 9 }; }
+}
+</script>
+</body>
+</html>
