@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuthorizedRequest } from '../../lib/useAuthorizedRequest';
 import { useCashSession, closeCashSession } from './useCashSession';
-import { CASHIER } from './cashierMessages';
+import { CASHIER, describeError } from './cashierMessages';
 import '../../styles/cashier.css';
 
 /**
@@ -14,15 +14,17 @@ export function CashDrawerSessionComponent() {
   const [closingNote, setClosingNote] = useState('');
   const [isClosing, setIsClosing] = useState(false);
   const [showDifference, setShowDifference] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const apiCall = useAuthorizedRequest();
   const queryClient = useQueryClient();
 
-  const { data: session, isLoading, error } = useCashSession();
+  const { data: session, isLoading, error: loadError } = useCashSession();
 
   async function handleCloseSession() {
     if (!session || !countedAmount) return;
 
     setIsClosing(true);
+    setError(null);
     try {
       await closeCashSession(apiCall, session.id, countedAmount, closingNote);
       queryClient.invalidateQueries({ queryKey: ['cash-session-current'] });
@@ -30,7 +32,7 @@ export function CashDrawerSessionComponent() {
       setClosingNote('');
       setShowDifference(false);
     } catch (err) {
-      console.error('Erro ao fechar turno:', err);
+      setError(describeError(err));
     } finally {
       setIsClosing(false);
     }
@@ -44,7 +46,7 @@ export function CashDrawerSessionComponent() {
     );
   }
 
-  if (error || !session) {
+  if (loadError || !session) {
     return (
       <div className="cash-session-container">
         <p className="error">{CASHIER.sessionFailed}</p>
@@ -121,6 +123,8 @@ export function CashDrawerSessionComponent() {
       {!isClosed && session.expectedAmount !== null && (
         <div className="closing-section">
           <p className="closing-instruction">{CASHIER.countingBlind}</p>
+
+          {error && <p className="error-message">{error}</p>}
 
           <div className="closing-form">
             <div className="form-group">

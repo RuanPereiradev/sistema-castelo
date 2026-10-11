@@ -49,7 +49,7 @@ export const CASHIER = {
   closeFolio: 'Fechar conta',
   cancel: 'Cancelar',
   amountToReceive: 'Valor a receber',
-  paymentMethod: 'Forma de pagamento',
+  paymentMethodLabel: 'Forma de pagamento',
   processing: 'Processando…',
 
   // Charge types

@@ -89,7 +89,7 @@ export function PaymentDialog({ isOpen, folio, onClose, onSuccess }: Props) {
           </div>
 
           <div className="payment-field">
-            <label htmlFor="method">{CASHIER.paymentMethod}</label>
+            <label htmlFor="method">{CASHIER.paymentMethodLabel}</label>
             <select
               id="method"
               value={paymentMethod}
