@@ -9,6 +9,8 @@ import { LoginPage } from './features/auth/LoginPage';
 import { DiningRoomPage } from './features/dining-room/DiningRoomPage';
 import { CashierPage } from './features/cashier/CashierPage';
 import { KitchenPage } from './features/kitchen/KitchenPage';
+import { SelfServicePage } from './features/self-service/SelfServicePage';
+import { AdminPage } from './pages/AdminPage';
 import { currentSession, type Session } from './features/auth/session';
 import { destinationsFor, type Destination } from './features/auth/destinations';
 import { logout } from './features/auth/authApi';
@@ -107,6 +109,16 @@ export const router = createBrowserRouter([
         path: 'cozinha',
         element: <KitchenPage />,
         loader: () => requiredDestinationLoader(['KITCHEN']),
+      },
+      {
+        path: 'self-service',
+        element: <SelfServicePage />,
+        loader: () => requiredDestinationLoader(['WAITER']),
+      },
+      {
+        path: 'admin',
+        element: <AdminPage />,
+        loader: () => requiredDestinationLoader(['ADMIN']),
       },
       {
         path: '*',
