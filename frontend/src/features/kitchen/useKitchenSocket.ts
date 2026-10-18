@@ -25,7 +25,7 @@ export function useKitchenSocket({ station, enabled = true }: UseKitchenSocketOp
   const subscriptionsRef = useRef<string[]>([]);
 
   const handleMessage = useCallback(
-    (message: KitchenMessage) => {
+    () => {
       // Invalidar a query para recarregar a fila
       // As mensagens podem chegar fora de ordem; a verdade é o servidor
       queryClient.invalidateQueries({ queryKey: ['kitchen-tickets'] });

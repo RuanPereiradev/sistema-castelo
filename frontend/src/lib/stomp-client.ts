@@ -1,4 +1,4 @@
-import { Client, StompSubscription } from 'stompjs';
+import { Client, type StompSubscription } from '@stomp/stompjs';
 import { currentSession } from '../features/auth/session';
 
 /**
@@ -8,8 +8,6 @@ import { currentSession } from '../features/auth/session';
 class StompClientManager {
   private client: Client | null = null;
   private subscriptions: Map<string, StompSubscription> = new Map();
-  private reconnectAttempts = 0;
-  private maxReconnectAttempts = 10;
   private reconnectDelay = 3000; // 3 segundos
 
   connect(): Promise<void> {
@@ -27,13 +25,12 @@ class StompClientManager {
 
       this.client = new Client({
         brokerURL: this.getWebSocketURL(),
+        // The backend authenticates the CONNECT frame by this native header only.
         connectHeaders: {
-          login: 'kitchen',
-          passcode: session.accessToken,
-          'X-Auth-Token': session.accessToken,
+          Authorization: `Bearer ${session.accessToken}`,
         },
         debug: (str) => {
-          if (process.env.NODE_ENV === 'development') {
+          if (import.meta.env.DEV) {
             console.log('[STOMP]', str);
           }
         },
@@ -41,7 +38,6 @@ class StompClientManager {
         heartbeatIncoming: 4000,
         heartbeatOutgoing: 4000,
         onConnect: () => {
-          this.reconnectAttempts = 0;
           resolve();
         },
         onStompError: (frame) => {

@@ -7,9 +7,9 @@ interface Props {
   readonly isSelected: boolean;
   readonly onSelect: () => void;
   readonly priority: 'pending' | 'in-progress' | 'ready';
-  readonly serverTime?: string;
-  readonly warningAfterMinutes?: number;
-  readonly lateAfterMinutes?: number;
+  readonly serverTime?: string | undefined;
+  readonly warningAfterMinutes?: number | undefined;
+  readonly lateAfterMinutes?: number | undefined;
 }
 
 /**
