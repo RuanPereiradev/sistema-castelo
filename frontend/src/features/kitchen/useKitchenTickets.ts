@@ -40,7 +40,7 @@ export function useKitchenTickets(station: 'KITCHEN' | 'PIZZA' | 'BAR' = 'KITCHE
       });
       return data;
     },
-    refetchInterval: 3000, // 3 segundos (mais rápido que o salão)
+    // Sem polling: o useKitchenSocket recarrega a fila a cada mensagem e a cada reconexão.
     staleTime: 1000,
   });
 }
