@@ -1,76 +1,125 @@
-import { formatDistanceToNow } from 'date-fns';
-import { pt } from 'date-fns/locale';
-import type { KitchenTicket } from './useKitchenTickets';
+import { useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import { useAuthorizedRequest } from '../../lib/useAuthorizedRequest';
+import { KITCHEN, describeKitchenError } from './kitchenMessages';
+import type { KitchenItemStatus, KitchenTicket } from './useKitchenTickets';
+
+type Action = 'start' | 'ready' | 'undo';
+
+/** K2 lets a pending item go straight to ready; K3 undoes one step. */
+const ACTIONS: Record<KitchenItemStatus, readonly { action: Action; label: string }[]> = {
+  PENDING: [
+    { action: 'start', label: KITCHEN.start },
+    { action: 'ready', label: KITCHEN.markReady },
+  ],
+  IN_PREPARATION: [
+    { action: 'ready', label: KITCHEN.markReady },
+    { action: 'undo', label: KITCHEN.undo },
+  ],
+  READY: [{ action: 'undo', label: KITCHEN.undo }],
+};
 
 interface Props {
   readonly ticket: KitchenTicket;
-  readonly isSelected: boolean;
-  readonly onSelect: () => void;
-  readonly priority: 'pending' | 'in-progress' | 'ready';
-  readonly serverTime?: string | undefined;
-  readonly warningAfterMinutes?: number | undefined;
-  readonly lateAfterMinutes?: number | undefined;
+  /** Minutes since the item was ordered, measured against the server clock. */
+  readonly minutesWaiting: number;
+  readonly warningAfterMinutes: number;
+  readonly lateAfterMinutes: number;
 }
 
-/**
- * Card de um ticket (pedido) da cozinha.
- * Mostra indicadores de warning (amarelo) e late (vermelho) baseado no tempo.
- */
-export function TicketCard({
-  ticket,
-  isSelected,
-  onSelect,
-  priority,
-  serverTime,
-  warningAfterMinutes = 20,
-  lateAfterMinutes = 30,
-}: Props) {
-  const itemCount = ticket.items.length;
-  const readyItems = ticket.items.filter((i) => i.status === 'READY').length;
+/** One item of the queue, with the buttons that move it. */
+export function TicketCard({ ticket, minutesWaiting, warningAfterMinutes, lateAfterMinutes }: Props) {
+  const apiCall = useAuthorizedRequest();
+  const queryClient = useQueryClient();
+  const [working, setWorking] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  // Calcular tempo decorrido
-  let timeStatus = '';
-  if (serverTime && ticket.openedAt) {
-    const now = new Date(serverTime).getTime();
-    const opened = new Date(ticket.openedAt).getTime();
-    const minutesElapsed = (now - opened) / 1000 / 60;
+  const timeStatus =
+    ticket.status === 'READY'
+      ? ''
+      : minutesWaiting >= lateAfterMinutes
+        ? 'late'
+        : minutesWaiting >= warningAfterMinutes
+          ? 'warning'
+          : '';
 
-    if (minutesElapsed >= lateAfterMinutes) {
-      timeStatus = 'late';
-    } else if (minutesElapsed >= warningAfterMinutes) {
-      timeStatus = 'warning';
+  const where =
+    ticket.origin === 'SELF_SERVICE'
+      ? `${KITCHEN.card} ${ticket.cardNumber ?? ''}`
+      : (ticket.diningTableLabel ?? KITCHEN.counter);
+
+  const run = async (action: Action) => {
+    setWorking(true);
+    setError(null);
+    try {
+      await apiCall(`/kitchen/items/${ticket.itemId}/${action}`, { method: 'POST' });
+    } catch (failure) {
+      setError(describeKitchenError(failure));
+    } finally {
+      setWorking(false);
+      // Success or conflict, the server's queue is the truth.
+      void queryClient.invalidateQueries({ queryKey: ['kitchen-tickets', ticket.prepStation] });
     }
-  }
+  };
 
   return (
-    <button
-      className={`ticket-card ${isSelected ? 'selected' : ''} priority-${priority} ${timeStatus ? `time-status-${timeStatus}` : ''}`}
-      onClick={onSelect}
+    <article
+      className={`ticket-card priority-${ticket.status.toLowerCase().replace('_', '-')} ${
+        timeStatus ? `time-status-${timeStatus}` : ''
+      }`}
     >
       <div className="ticket-header">
-        <span className="ticket-table">{ticket.tableLabel}</span>
+        <span className="ticket-table">{where}</span>
         <span className={`ticket-time ${timeStatus}`}>
-          {formatDistanceToNow(new Date(ticket.openedAt), { locale: pt, addSuffix: false })}
+          {minutesWaiting} {KITCHEN.minutes}
           {timeStatus === 'late' && ' ⚠️'}
           {timeStatus === 'warning' && ' ⏰'}
         </span>
       </div>
 
-      <div className="ticket-info">
-        <span className="guest-count">👥 {ticket.guestCount} pessoas</span>
-        <span className="item-count">
-          {readyItems}/{itemCount} pronto
+      <div className="ticket-item">
+        <span className="item-qty">{ticket.quantity}×</span>{' '}
+        <span className="item-name">
+          {ticket.itemName}
+          {ticket.variantName && ` (${ticket.variantName})`}
         </span>
       </div>
 
-      <div className="ticket-items-preview">
-        {ticket.items.slice(0, 2).map((item) => (
-          <div key={item.id} className={`preview-item status-${item.status.toLowerCase()}`}>
-            {item.quantity}x {item.itemName}
-          </div>
+      {ticket.modifiers.length > 0 && (
+        <ul className="ticket-modifiers">
+          {ticket.modifiers.map((modifier) => (
+            <li key={modifier.name}>
+              + {modifier.quantity > 1 ? `${modifier.quantity}× ` : ''}
+              {modifier.name}
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {ticket.specialInstructions && (
+        <p className="item-instructions">
+          {KITCHEN.notes} {ticket.specialInstructions}
+        </p>
+      )}
+
+      <div className="item-actions">
+        {ACTIONS[ticket.status].map((button) => (
+          <button
+            key={button.action}
+            className={`item-action-btn action-${button.action}`}
+            onClick={() => void run(button.action)}
+            disabled={working}
+          >
+            {working ? KITCHEN.working : button.label}
+          </button>
         ))}
-        {itemCount > 2 && <div className="preview-more">+{itemCount - 2} itens</div>}
       </div>
-    </button>
+
+      {error && (
+        <p className="ticket-error" role="alert">
+          {error}
+        </p>
+      )}
+    </article>
   );
 }
