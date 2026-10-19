@@ -1,42 +1,26 @@
 import { useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuthorizedRequest } from '../../lib/useAuthorizedRequest';
-import { useCashSession, closeCashSession } from './useCashSession';
+import { formatMoney } from '../../lib/money';
+import { ConfirmDialog } from '../dining-room/ConfirmDialog';
+import {
+  CURRENT_SESSION_KEY,
+  closeCashSession,
+  openCashSession,
+  registerCashMovement,
+  useCashSession,
+  type CashDrawerSession,
+} from './useCashSession';
 import { CASHIER, describeError } from './cashierMessages';
 import '../../styles/cashier.css';
 
 /**
- * Tela de turno de caixa com fechamento cego.
- * O operador conta o dinheiro sem ver o total esperado.
+ * Turno de caixa: abrir com fundo de troco, sangria, suprimento e fechamento cego.
+ * Ninguém vê a diferença antes de fechar; o resultado vem da resposta do fechamento.
  */
 export function CashDrawerSessionComponent() {
-  const [countedAmount, setCountedAmount] = useState('');
-  const [closingNote, setClosingNote] = useState('');
-  const [isClosing, setIsClosing] = useState(false);
-  const [showDifference, setShowDifference] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const apiCall = useAuthorizedRequest();
-  const queryClient = useQueryClient();
-
-  const { data: session, isLoading, error: loadError } = useCashSession();
-
-  async function handleCloseSession() {
-    if (!session || !countedAmount) return;
-
-    setIsClosing(true);
-    setError(null);
-    try {
-      await closeCashSession(apiCall, session.id, countedAmount, closingNote);
-      queryClient.invalidateQueries({ queryKey: ['cash-session-current'] });
-      setCountedAmount('');
-      setClosingNote('');
-      setShowDifference(false);
-    } catch (err) {
-      setError(describeError(err));
-    } finally {
-      setIsClosing(false);
-    }
-  }
+  const { data: session, isLoading, isError, refetch } = useCashSession();
+  const [justClosed, setJustClosed] = useState<CashDrawerSession | null>(null);
 
   if (isLoading) {
     return (
@@ -46,70 +30,131 @@ export function CashDrawerSessionComponent() {
     );
   }
 
-  if (loadError || !session) {
+  if (isError) {
     return (
       <div className="cash-session-container">
         <p className="error">{CASHIER.sessionFailed}</p>
+        <button className="btn btn-secondary" onClick={() => void refetch()}>
+          {CASHIER.retry}
+        </button>
       </div>
     );
   }
 
-  const isClosed = session.status === 'CLOSED';
-  const parsed = parseFloat(countedAmount || '0');
-  const expected = session.expectedAmount ? parseFloat(session.expectedAmount) : 0;
-  const difference = showDifference ? parsed - expected : 0;
+  if (!session) {
+    return (
+      <div className="cash-session-container">
+        {justClosed && <ClosedSessionSummary session={justClosed} />}
+        <OpenSessionForm onOpened={() => setJustClosed(null)} />
+      </div>
+    );
+  }
 
   return (
     <div className="cash-session-container">
+      <OpenSessionView session={session} />
+      <CashMovementForm sessionId={session.id} />
+      <CloseSessionForm sessionId={session.id} onClosed={setJustClosed} />
+    </div>
+  );
+}
+
+function OpenSessionForm({ onOpened }: { readonly onOpened: () => void }) {
+  const apiCall = useAuthorizedRequest();
+  const queryClient = useQueryClient();
+  const [openingFloat, setOpeningFloat] = useState('');
+  const [working, setWorking] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function open() {
+    setWorking(true);
+    setError(null);
+    try {
+      await openCashSession(apiCall, openingFloat);
+      onOpened();
+    } catch (failure) {
+      setError(describeError(failure));
+    } finally {
+      setWorking(false);
+      // Aberto aqui ou por outra pessoa no mesmo instante: o servidor diz qual é o turno.
+      void queryClient.invalidateQueries({ queryKey: CURRENT_SESSION_KEY });
+    }
+  }
+
+  return (
+    <div className="closing-section">
+      <h2>{CASHIER.noOpenSession}</h2>
+      <p className="closing-instruction">{CASHIER.openSessionInstruction}</p>
+      {error && <p className="error-message">{error}</p>}
+      <div className="closing-form">
+        <div className="form-group">
+          <label htmlFor="openingFloat">{CASHIER.openingFloat}</label>
+          <input
+            id="openingFloat"
+            type="text"
+            inputMode="decimal"
+            value={openingFloat}
+            onChange={(event) => setOpeningFloat(event.target.value)}
+            disabled={working}
+            placeholder="0,00"
+            className="form-input"
+          />
+        </div>
+        <button
+          className="btn btn-primary"
+          onClick={() => void open()}
+          disabled={working || openingFloat.trim() === ''}
+        >
+          {working ? CASHIER.processing : CASHIER.openSession}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function OpenSessionView({ session }: { readonly session: CashDrawerSession }) {
+  const hidden = '—';
+  return (
+    <>
       <div className="session-header">
         <h2>{CASHIER.currentSession}</h2>
-        <span className={`session-status ${session.status.toLowerCase()}`}>
-          {CASHIER.statusLabel[session.status as keyof typeof CASHIER.statusLabel] || session.status}
-        </span>
+        <span className="session-status open">{CASHIER.statusLabel['OPEN']}</span>
       </div>
 
-      {/* Informações do turno */}
       <div className="session-info">
-        <div className="info-row">
-          <span className="info-label">{CASHIER.openingFloat}</span>
-          <span className="info-value">{session.openingFloat}</span>
-        </div>
-        <div className="info-row">
-          <span className="info-label">{CASHIER.totalDrops}</span>
-          <span className="info-value">{session.totalDrops}</span>
-        </div>
-        <div className="info-row">
-          <span className="info-label">{CASHIER.totalSupplies}</span>
-          <span className="info-value">{session.totalSupplies}</span>
-        </div>
-        <div className="info-row">
-          <span className="info-label">{CASHIER.cashPaymentsTotal}</span>
-          <span className="info-value">{session.cashPaymentsTotal || '—'}</span>
-        </div>
-        <div className="info-row">
-          <span className="info-label">{CASHIER.paymentCount}</span>
-          <span className="info-value">{session.cashPaymentCount}</span>
-        </div>
+        <InfoRow label={CASHIER.openedAt} value={new Date(session.openedAt).toLocaleString('pt-BR')} />
+        <InfoRow label={CASHIER.openingFloat} value={formatMoney(session.openingFloat)} />
+        <InfoRow label={CASHIER.totalDrops} value={formatMoney(session.totalDrops)} />
+        <InfoRow label={CASHIER.totalSupplies} value={formatMoney(session.totalSupplies)} />
+        <InfoRow label={CASHIER.paymentCount} value={String(session.cashPaymentCount)} />
+        {/* Só o ADMIN recebe estes dois com o turno aberto (fechamento cego). */}
+        <InfoRow
+          label={CASHIER.cashPaymentsTotal}
+          value={session.cashPaymentsTotal === null ? hidden : formatMoney(session.cashPaymentsTotal)}
+        />
+        <InfoRow
+          label={CASHIER.expectedAmount}
+          value={session.expectedAmount === null ? hidden : formatMoney(session.expectedAmount)}
+        />
       </div>
 
-      {/* Movimentações */}
       {session.movements.length > 0 && (
         <div className="movements-section">
-          <h3>{CASHIER.title}</h3>
+          <h3>{CASHIER.movements}</h3>
           <table className="movements-table">
             <thead>
               <tr>
-                <th>Tipo</th>
-                <th>Valor</th>
-                <th>Motivo</th>
-                <th>Data</th>
+                <th>{CASHIER.movementColumns.type}</th>
+                <th>{CASHIER.movementColumns.amount}</th>
+                <th>{CASHIER.movementColumns.reason}</th>
+                <th>{CASHIER.movementColumns.time}</th>
               </tr>
             </thead>
             <tbody>
               {session.movements.map((movement) => (
                 <tr key={movement.id}>
-                  <td>{movement.type}</td>
-                  <td className="amount">{movement.amount}</td>
+                  <td>{CASHIER.movementType[movement.type]}</td>
+                  <td className="amount">{formatMoney(movement.amount)}</td>
                   <td>{movement.reason}</td>
                   <td>{new Date(movement.createdAt).toLocaleTimeString('pt-BR')}</td>
                 </tr>
@@ -118,114 +163,218 @@ export function CashDrawerSessionComponent() {
           </table>
         </div>
       )}
+    </>
+  );
+}
 
-      {/* Fechamento do turno (apenas se aberto) */}
-      {!isClosed && session.expectedAmount !== null && (
-        <div className="closing-section">
-          <p className="closing-instruction">{CASHIER.countingBlind}</p>
+function newAttemptKey(): string {
+  return crypto.randomUUID();
+}
 
-          {error && <p className="error-message">{error}</p>}
+function CashMovementForm({ sessionId }: { readonly sessionId: string }) {
+  const apiCall = useAuthorizedRequest();
+  const queryClient = useQueryClient();
+  const [kind, setKind] = useState<'drops' | 'supplies'>('drops');
+  const [amount, setAmount] = useState('');
+  const [reason, setReason] = useState('');
+  // Uma chave por tentativa: o retry depois de uma falha reusa a mesma e não lança duas vezes.
+  const [attemptKey, setAttemptKey] = useState(newAttemptKey);
+  const [working, setWorking] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
 
-          <div className="closing-form">
-            <div className="form-group">
-              <label htmlFor="countedAmount">{CASHIER.enterCountedAmount}</label>
-              <input
-                id="countedAmount"
-                type="text"
-                inputMode="decimal"
-                value={countedAmount}
-                onChange={(e) => {
-                  setCountedAmount(e.target.value);
-                  setShowDifference(false);
-                }}
-                disabled={isClosing}
-                placeholder="0.00"
-                className="form-input"
-              />
-            </div>
+  function edit(change: () => void) {
+    change();
+    setNotice(null);
+    // Mudou o que se lança: é outra tentativa, com outra chave.
+    setAttemptKey(newAttemptKey());
+  }
 
-            <div className="form-group">
-              <label htmlFor="closingNote">{CASHIER.closingNote} {CASHIER.closingNoteOptional}</label>
-              <textarea
-                id="closingNote"
-                value={closingNote}
-                onChange={(e) => setClosingNote(e.target.value)}
-                disabled={isClosing}
-                placeholder="Ex: diferença de 5 reais encontrada..."
-                className="form-textarea"
-                rows={2}
-              />
-            </div>
+  async function register() {
+    setWorking(true);
+    setError(null);
+    try {
+      await registerCashMovement(apiCall, sessionId, kind, amount, reason.trim(), attemptKey);
+      setNotice(kind === 'drops' ? CASHIER.notice.dropRegistered : CASHIER.notice.supplyRegistered);
+      setAmount('');
+      setReason('');
+      setAttemptKey(newAttemptKey());
+    } catch (failure) {
+      setError(describeError(failure));
+    } finally {
+      setWorking(false);
+      void queryClient.invalidateQueries({ queryKey: CURRENT_SESSION_KEY });
+    }
+  }
 
-            {/* Botão para revelar diferença */}
-            {countedAmount && !showDifference && (
-              <button
-                className="btn btn-secondary"
-                onClick={() => setShowDifference(true)}
-                disabled={isClosing}
-              >
-                Revelar diferença
-              </button>
-            )}
+  return (
+    <div className="closing-section">
+      <h3>{CASHIER.registerMovement}</h3>
+      <div className="cashier-tabs">
+        {(['drops', 'supplies'] as const).map((option) => (
+          <button
+            key={option}
+            className={`tab-button ${kind === option ? 'active' : ''}`}
+            onClick={() => edit(() => setKind(option))}
+            disabled={working}
+          >
+            {option === 'drops' ? CASHIER.movementType.CASH_DROP : CASHIER.movementType.CASH_SUPPLY}
+          </button>
+        ))}
+      </div>
+      {error && <p className="error-message">{error}</p>}
+      {notice && <p className="notice-message">{notice}</p>}
+      <div className="closing-form">
+        <div className="form-group">
+          <label htmlFor="movementAmount">{CASHIER.movementColumns.amount}</label>
+          <input
+            id="movementAmount"
+            type="text"
+            inputMode="decimal"
+            value={amount}
+            onChange={(event) => edit(() => setAmount(event.target.value))}
+            disabled={working}
+            placeholder="0,00"
+            className="form-input"
+          />
+        </div>
+        <div className="form-group">
+          <label htmlFor="movementReason">{CASHIER.movementColumns.reason}</label>
+          <input
+            id="movementReason"
+            type="text"
+            value={reason}
+            onChange={(event) => edit(() => setReason(event.target.value))}
+            disabled={working}
+            className="form-input"
+          />
+        </div>
+        <button
+          className="btn btn-primary"
+          onClick={() => void register()}
+          disabled={working || amount.trim() === '' || reason.trim() === ''}
+        >
+          {working
+            ? CASHIER.processing
+            : kind === 'drops'
+              ? CASHIER.registerDrop
+              : CASHIER.registerSupply}
+        </button>
+      </div>
+    </div>
+  );
+}
 
-            {/* Resumo da contagem */}
-            {showDifference && (
-              <div className="closing-summary">
-                <div className="summary-row">
-                  <span>{CASHIER.expectedAmount}</span>
-                  <span className="value">{session.expectedAmount}</span>
-                </div>
-                <div className="summary-row">
-                  <span>{CASHIER.countedAmount}</span>
-                  <span className="value">{countedAmount}</span>
-                </div>
-                <div className={`summary-row total ${difference === 0 ? 'balanced' : 'unbalanced'}`}>
-                  <span>{CASHIER.difference}</span>
-                  <span className="value">{difference >= 0 ? '+' : ''}{difference.toFixed(2)}</span>
-                </div>
-              </div>
-            )}
+function CloseSessionForm({
+  sessionId,
+  onClosed,
+}: {
+  readonly sessionId: string;
+  readonly onClosed: (closed: CashDrawerSession) => void;
+}) {
+  const apiCall = useAuthorizedRequest();
+  const queryClient = useQueryClient();
+  const [countedAmount, setCountedAmount] = useState('');
+  const [note, setNote] = useState('');
+  const [confirming, setConfirming] = useState(false);
+  const [working, setWorking] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-            {/* Botão para fechar turno */}
-            {showDifference && (
-              <button
-                className="btn btn-primary"
-                onClick={handleCloseSession}
-                disabled={isClosing || !countedAmount}
-              >
-                {isClosing ? 'Fechando…' : CASHIER.closeSession}
-              </button>
-            )}
-          </div>
+  async function close() {
+    setWorking(true);
+    setError(null);
+    try {
+      onClosed(await closeCashSession(apiCall, sessionId, countedAmount, note));
+    } catch (failure) {
+      setError(describeError(failure));
+    } finally {
+      setWorking(false);
+      setConfirming(false);
+      void queryClient.invalidateQueries({ queryKey: CURRENT_SESSION_KEY });
+    }
+  }
+
+  return (
+    <div className="closing-section">
+      <h3>{CASHIER.closeSession}</h3>
+      <p className="closing-instruction">{CASHIER.countingBlind}</p>
+      {error && <p className="error-message">{error}</p>}
+      <div className="closing-form">
+        <div className="form-group">
+          <label htmlFor="countedAmount">{CASHIER.enterCountedAmount}</label>
+          <input
+            id="countedAmount"
+            type="text"
+            inputMode="decimal"
+            value={countedAmount}
+            onChange={(event) => setCountedAmount(event.target.value)}
+            disabled={working}
+            placeholder="0,00"
+            className="form-input"
+          />
+        </div>
+        <div className="form-group">
+          <label htmlFor="closingNote">
+            {CASHIER.closingNote} {CASHIER.closingNoteOptional}
+          </label>
+          <textarea
+            id="closingNote"
+            value={note}
+            onChange={(event) => setNote(event.target.value)}
+            disabled={working}
+            className="form-textarea"
+            rows={2}
+          />
+        </div>
+        <button
+          className="btn btn-primary"
+          onClick={() => setConfirming(true)}
+          disabled={working || countedAmount.trim() === ''}
+        >
+          {CASHIER.closeSession}
+        </button>
+      </div>
+
+      <ConfirmDialog
+        isOpen={confirming}
+        title={CASHIER.closeSessionConfirmTitle}
+        message={CASHIER.closeSessionConfirmMessage(countedAmount.trim())}
+        onConfirm={() => void close()}
+        onCancel={() => setConfirming(false)}
+        isLoading={working}
+        confirmLabel={CASHIER.closeSession}
+        cancelLabel={CASHIER.cancel}
+        isDanger
+      />
+    </div>
+  );
+}
+
+function ClosedSessionSummary({ session }: { readonly session: CashDrawerSession }) {
+  const balanced = session.difference === '0.00';
+  return (
+    <div className="closed-session-info">
+      <h3>{CASHIER.sessionClosed}</h3>
+      {session.expectedAmount && <InfoRow label={CASHIER.expectedAmount} value={formatMoney(session.expectedAmount)} />}
+      {session.countedAmount && <InfoRow label={CASHIER.countedAmount} value={formatMoney(session.countedAmount)} />}
+      {session.difference && (
+        <div className="info-row">
+          <span className="info-label">{CASHIER.difference}</span>
+          <span className={`info-value ${balanced ? 'balanced' : 'unbalanced'}`}>
+            {formatMoney(session.difference)}
+          </span>
         </div>
       )}
+      {session.closingNote && <InfoRow label={CASHIER.closingNote} value={session.closingNote} />}
+    </div>
+  );
+}
 
-      {/* Turno já fechado */}
-      {isClosed && (
-        <div className="closed-session-info">
-          <h3>{CASHIER.sessionClosed}</h3>
-          <div className="info-row">
-            <span className="info-label">{CASHIER.expectedAmount}</span>
-            <span className="info-value">{session.expectedAmount}</span>
-          </div>
-          <div className="info-row">
-            <span className="info-label">{CASHIER.countedAmount}</span>
-            <span className="info-value">{session.countedAmount}</span>
-          </div>
-          <div className="info-row">
-            <span className="info-label">{CASHIER.difference}</span>
-            <span className={`info-value ${session.difference === '0.00' ? 'balanced' : 'unbalanced'}`}>
-              {session.difference}
-            </span>
-          </div>
-          {session.closingNote && (
-            <div className="info-row">
-              <span className="info-label">Nota</span>
-              <span className="info-value">{session.closingNote}</span>
-            </div>
-          )}
-        </div>
-      )}
+function InfoRow({ label, value }: { readonly label: string; readonly value: string }) {
+  return (
+    <div className="info-row">
+      <span className="info-label">{label}</span>
+      <span className="info-value">{value}</span>
     </div>
   );
 }
