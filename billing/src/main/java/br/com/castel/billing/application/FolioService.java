@@ -28,6 +28,7 @@ import br.com.castel.sharedkernel.CurrentProperty;
 import br.com.castel.sharedkernel.Money;
 import br.com.castel.sharedkernel.Settings;
 import java.time.Clock;
+import java.util.List;
 import java.util.Optional;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -174,6 +175,12 @@ public class FolioService implements FolioFacade {
     @Transactional(readOnly = true)
     public Folio find(FolioId folioId) {
         return load(folioId);
+    }
+
+    /** The open folios of the current property, stay and tab, the oldest first. */
+    @Transactional(readOnly = true)
+    public List<Folio> findOpen() {
+        return folios.findOpen(currentProperty.id());
     }
 
     /** @throws FolioNotFoundException if no open stay folio answers the code */

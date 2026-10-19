@@ -2,6 +2,7 @@ package br.com.castel.billing.domain;
 
 import br.com.castel.billing.api.FolioId;
 import br.com.castel.billing.api.FolioOwner;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -20,6 +21,9 @@ public interface FolioRepository {
 
     /** The open stay folio of the property under this reference code, if any. */
     Optional<Folio> findOpenStayByReferenceCode(UUID propertyId, String referenceCode);
+
+    /** The open folios of the property, stay and tab, the oldest first. */
+    List<Folio> findOpen(UUID propertyId);
 
     /** Whether the owner already has a folio, open or closed. */
     boolean existsByOwner(FolioOwner owner);

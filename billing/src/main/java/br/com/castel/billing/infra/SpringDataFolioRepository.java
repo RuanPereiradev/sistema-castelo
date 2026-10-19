@@ -5,6 +5,7 @@ import br.com.castel.billing.api.FolioType;
 import br.com.castel.billing.domain.Folio;
 import jakarta.persistence.LockModeType;
 import jakarta.persistence.QueryHint;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -32,6 +33,9 @@ interface SpringDataFolioRepository extends JpaRepository<Folio, UUID> {
             @Param("referenceCode") String referenceCode,
             @Param("status") FolioStatus status,
             @Param("type") FolioType type);
+
+    @Query("select f from Folio f where f.propertyId = :propertyId and f.status = :status order by f.openedAt, f.id")
+    List<Folio> findByStatus(@Param("propertyId") UUID propertyId, @Param("status") FolioStatus status);
 
     @Query("select count(f) > 0 from Folio f where f.type = :type and f.ownerId = :ownerId")
     boolean existsByOwner(@Param("type") FolioType type, @Param("ownerId") UUID ownerId);
