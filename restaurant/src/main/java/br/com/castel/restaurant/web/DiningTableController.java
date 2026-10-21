@@ -75,4 +75,10 @@ public class DiningTableController {
     public DiningTableResponse activateDiningTable(@PathVariable("diningTableId") String diningTableId) {
         return DiningTableResponse.from(diningTables.activate(DiningTableId.of(diningTableId)));
     }
+
+    /** A new QR code for the table; the printed one stops answering (decision #15 of task qr-table-ordering). */
+    @PostMapping("/{diningTableId}/ordering-token")
+    public DiningTableResponse regenerateOrderingToken(@PathVariable("diningTableId") String diningTableId) {
+        return DiningTableResponse.from(diningTables.regenerateOrderingToken(DiningTableId.of(diningTableId)));
+    }
 }

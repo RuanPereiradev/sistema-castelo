@@ -24,6 +24,11 @@ class JpaDiningTableRepository implements DiningTableRepository {
     }
 
     @Override
+    public Optional<DiningTable> findActiveByOrderingToken(UUID orderingToken) {
+        return springData.findActiveByOrderingToken(orderingToken);
+    }
+
+    @Override
     public boolean existsByLabel(UUID propertyId, String label) {
         return springData.existsByLabel(propertyId, label);
     }

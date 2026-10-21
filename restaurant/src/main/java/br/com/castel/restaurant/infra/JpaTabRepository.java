@@ -7,6 +7,7 @@ import br.com.castel.restaurant.domain.TabAlreadyOpenForDiningTableException;
 import br.com.castel.restaurant.domain.TabId;
 import br.com.castel.restaurant.domain.TabItemId;
 import br.com.castel.restaurant.domain.TabRepository;
+import br.com.castel.restaurant.domain.TabStatus;
 import br.com.castel.restaurant.domain.TabsForTransfer;
 import java.util.Comparator;
 import java.util.List;
@@ -91,6 +92,16 @@ class JpaTabRepository implements TabRepository {
     public List<Tab> findActive(UUID propertyId, DiningTableId diningTableIdOrNull, Integer cardNumberOrNull) {
         UUID diningTableId = diningTableIdOrNull == null ? null : diningTableIdOrNull.value();
         return springData.findActive(propertyId, diningTableId, cardNumberOrNull);
+    }
+
+    @Override
+    public Optional<TabId> findActiveIdOnDiningTable(DiningTableId diningTableId) {
+        return springData.findActiveIdOnDiningTable(diningTableId);
+    }
+
+    @Override
+    public Optional<TabStatus> findActiveStatusOnDiningTable(DiningTableId diningTableId) {
+        return springData.findActiveStatusOnDiningTable(diningTableId);
     }
 
     @Override

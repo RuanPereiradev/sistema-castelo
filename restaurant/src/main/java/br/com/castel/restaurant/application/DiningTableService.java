@@ -81,6 +81,19 @@ public class DiningTableService {
         return diningTables.save(diningTable);
     }
 
+    /**
+     * A new code for the QR of the table; the printed one stops answering (decision #15 of task
+     * qr-table-ordering).
+     *
+     * @throws DiningTableNotFoundException if the table does not exist
+     */
+    @Transactional
+    public DiningTable regenerateOrderingToken(DiningTableId id) {
+        DiningTable diningTable = load(id);
+        diningTable.regenerateOrderingToken();
+        return diningTables.save(diningTable);
+    }
+
     /** @throws DiningTableNotFoundException if the table does not exist */
     @Transactional(readOnly = true)
     public DiningTable find(DiningTableId id) {

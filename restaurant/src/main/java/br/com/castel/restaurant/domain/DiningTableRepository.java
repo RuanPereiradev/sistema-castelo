@@ -9,6 +9,12 @@ public interface DiningTableRepository {
 
     Optional<DiningTable> findById(DiningTableId id);
 
+    /**
+     * The active table printed with this QR code. Empty for a code that never existed, one that was
+     * regenerated and one of a deactivated table alike (decision #24).
+     */
+    Optional<DiningTable> findActiveByOrderingToken(UUID orderingToken);
+
     /** Whether the property already has a table under this label, ignoring letter case. */
     boolean existsByLabel(UUID propertyId, String label);
 

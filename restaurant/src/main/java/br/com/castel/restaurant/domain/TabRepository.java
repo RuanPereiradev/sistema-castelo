@@ -51,6 +51,18 @@ public interface TabRepository {
      */
     List<Tab> findActive(UUID propertyId, DiningTableId diningTableIdOrNull, Integer cardNumberOrNull);
 
+    /**
+     * The id of the {@code OPEN} or {@code CLOSING} tab of the table, read without loading the tab,
+     * so a later {@link #findByIdForItemEntry} loads it fresh under its lock (task qr-table-ordering).
+     */
+    Optional<TabId> findActiveIdOnDiningTable(DiningTableId diningTableId);
+
+    /**
+     * The status of the {@code OPEN} or {@code CLOSING} tab of the table, read without loading the
+     * tab: all the public read of the QR code needs (task qr-table-ordering).
+     */
+    Optional<TabStatus> findActiveStatusOnDiningTable(DiningTableId diningTableId);
+
     /** Whether the table has an {@code OPEN} or {@code CLOSING} tab (decision #8). */
     boolean existsActiveOnDiningTable(DiningTableId diningTableId);
 
