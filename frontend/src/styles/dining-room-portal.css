@@ -1,6 +1,9 @@
 /* Salão — direção Portal. Vinho como fundo, salmão como filete, pergaminho como texto. */
 
-:root {
+/* Also on the room itself: `classical.css` is imported after this file and its
+   `:root` wins, which left the room in the light theme. */
+:root,
+.dining-room-portal {
   --color-bg: #3D0F1A;
   --color-surface: #4A1522;
   --color-text: #F4ECE3;
@@ -1034,4 +1037,143 @@
   .dr-action-btn {
     transition: none;
   }
+}
+
+/* ---- phone order requests (customer at the table, via QR) */
+
+.dr-requests-btn {
+  min-height: 44px;
+  padding: 0 14px;
+  border: 1px solid var(--color-divider-strong);
+  outline: 1px solid var(--color-divider-subtle);
+  outline-offset: 3px;
+  background: transparent;
+  color: var(--color-accent-7);
+  font-family: var(--font-heading);
+  font-weight: 600;
+  font-size: 14px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.dr-requests-btn.has-pending {
+  border-color: var(--color-accent);
+  background: var(--color-accent);
+  color: var(--color-bg);
+}
+
+/* The table with a request waiting keeps its status look and gains the badge. */
+.dr-table-btn.has-request {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 3px;
+}
+
+.dr-table-request-badge {
+  position: absolute;
+  top: -10px;
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: calc(100% + 10px);
+  padding: 2px 4px;
+  background: var(--color-accent);
+  color: var(--color-bg);
+  border: 1px solid var(--color-bg);
+  font-family: var(--font-heading);
+  font-weight: 600;
+  font-size: 10px;
+  letter-spacing: 0;
+  text-transform: uppercase;
+  line-height: 1.25;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  z-index: 1;
+}
+
+.dr-sheet-request-note {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  border-color: var(--color-accent);
+}
+
+.dr-sheet-request-note p {
+  margin: 0;
+}
+
+.dr-requests {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.dr-request {
+  border: 1px solid var(--color-accent);
+  outline: 1px solid rgba(232, 149, 127, 0.14);
+  outline-offset: 3px;
+  background: var(--color-surface);
+  padding: 14px 14px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.dr-request-top,
+.dr-request-who {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.dr-request-table {
+  font-family: var(--font-heading);
+  font-size: 26px;
+  line-height: 1.05;
+}
+
+.dr-request-expiry,
+.dr-request-time {
+  font-size: 13px;
+  color: var(--color-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.dr-request-expiry.is-urgent {
+  color: var(--color-danger);
+}
+
+.dr-request-customer {
+  font-family: var(--font-heading);
+  font-weight: 600;
+  font-size: 13px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--color-accent);
+}
+
+.dr-request-lines {
+  list-style: none;
+  margin: 0;
+  padding: 4px 0 0;
+  border-top: 1px solid rgba(232, 149, 127, 0.2);
+  display: flex;
+  flex-direction: column;
+}
+
+.dr-request-line {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  padding: 6px 0;
+  border-bottom: 1px solid rgba(232, 149, 127, 0.12);
+  font-size: 14.5px;
+}
+
+.dr-request-actions {
+  display: grid;
+  grid-template-columns: 1fr 1.4fr;
+  gap: 10px;
 }

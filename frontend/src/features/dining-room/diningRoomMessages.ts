@@ -76,6 +76,38 @@ export const DINING_ROOM = {
     itemsTransferred: 'Itens transferidos',
     tabsMerged: 'Comandas juntadas',
     tableMoved: (label: string) => `Comanda movida para a mesa ${label}`,
+    requestConfirmed: (label: string) => `Pedido da mesa ${label} confirmado e lançado`,
+    requestRejected: (label: string) => `Pedido da mesa ${label} recusado`,
+  },
+  orderRequests: {
+    open: 'Pedidos do celular',
+    openWithCount: (count: number) => `Pedidos do celular · ${count}`,
+    title: 'Pedidos do celular',
+    subtitle: 'Aguardando o garçom',
+    tableBadge: 'Pedido aguardando',
+    tableBadgeCount: (count: number) => `${count} pedidos aguardando`,
+    loading: 'Carregando os pedidos do celular…',
+    failed: 'Não deu para carregar os pedidos do celular.',
+    empty: 'Nenhum pedido do celular aguardando.',
+    emptyForTable: 'Esta mesa não tem pedido do celular aguardando.',
+    showAll: 'Ver todos',
+    inSheet: (count: number) =>
+      count === 1 ? 'Há um pedido do celular aguardando nesta mesa.' : `Há ${count} pedidos do celular aguardando nesta mesa.`,
+    seeRequests: 'Ver pedido do celular',
+    anonymous: 'Cliente sem nome',
+    requestedAt: (time: string) => `Pedido às ${time}`,
+    expiresIn: (minutes: number) => (minutes <= 0 ? 'Expira agora' : `Expira em ${minutes} min`),
+    expiresAt: (time: string) => `às ${time}`,
+    noQuantity: 'sem quantidade',
+    confirm: 'Confirmar',
+    confirming: 'Confirmando…',
+    reject: 'Recusar',
+    rejecting: 'Recusando…',
+    rejectTitle: 'Recusar o pedido?',
+    rejectMessage: (label: string, customer: string) =>
+      `O pedido de ${customer} na mesa ${label} sai da fila e nada é lançado. Avise o cliente; não há desfazer.`,
+    rejectConfirm: 'Recusar pedido',
+    keep: 'Voltar',
   },
 } as const;
 
@@ -117,7 +149,34 @@ const ERROR_MESSAGES: Readonly<Record<string, string>> = {
   SOLD_BY_WEIGHT_REJECTS_MODIFIER: 'Item por peso não leva adicional.',
   SOLD_BY_UNIT_REJECTS_WEIGHT: 'Este item não é vendido por peso.',
   FORBIDDEN: 'Seu perfil não pode fazer isso.',
+  TABLE_ORDER_REQUEST_NOT_PENDING: 'Outro garçom já resolveu este pedido. A lista vai se atualizar.',
+  TABLE_ORDER_REQUEST_EXPIRED: 'Este pedido passou do prazo e expirou. Fale com o cliente e lance você mesmo, se for o caso.',
+  TABLE_ORDER_REQUEST_NOT_FOUND: 'Este pedido não existe mais. A lista vai se atualizar.',
 };
+
+/**
+ * A confirmation refused by the posting keeps the request pending (#21 of
+ * qr-table-ordering): the waiter reads why and rejects, or fixes and retries.
+ */
+const CONFIRM_REQUEST_MESSAGES: Readonly<Record<string, string>> = {
+  MENU_ITEM_UNAVAILABLE: 'Um item deste pedido está esgotado. Recuse o pedido e avise o cliente.',
+  MENU_ITEM_OUTSIDE_AVAILABILITY_WINDOW: 'Um item deste pedido não é servido neste horário. Recuse o pedido e avise o cliente.',
+  MENU_ITEM_VARIANT_UNAVAILABLE: 'Um tamanho escolhido está indisponível. Recuse o pedido e avise o cliente.',
+  MENU_ITEM_NOT_FOUND: 'Um item deste pedido saiu do cardápio. Recuse o pedido e avise o cliente.',
+  TAB_NOT_OPEN: 'A comanda da mesa não aceita item agora (a conta foi pedida). Recuse o pedido ou reabra a comanda.',
+  TAB_ALREADY_OPEN_FOR_DINING_TABLE: 'A mesa ganhou comanda ao mesmo tempo. Tente confirmar de novo.',
+  INACTIVE_DINING_TABLE: 'Esta mesa foi desativada. Recuse o pedido.',
+};
+
+export function describeConfirmRequestError(error: unknown): string {
+  if (error instanceof ApiError && error.code) {
+    const specific = CONFIRM_REQUEST_MESSAGES[error.code];
+    if (specific) {
+      return specific;
+    }
+  }
+  return describeError(error);
+}
 
 const GENERIC_FAILURE = 'Não deu certo. Tente de novo; se continuar, avise o caixa.';
 const OFFLINE = 'Sem conexão com o servidor. Veja a rede e tente de novo.';

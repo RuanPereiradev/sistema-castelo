@@ -12,6 +12,8 @@ import {
   type TableStatus,
 } from './tableStatus';
 import { TableSheet } from './TableSheet';
+import { TableOrderRequestsSheet } from './TableOrderRequestsSheet';
+import { requestsByTable, useNewRequestChime, useTableOrderRequests } from './useTableOrderRequests';
 import '../../styles/dining-room-portal.css';
 
 type StatusFilter = TableStatus | 'all';
@@ -70,12 +72,16 @@ function tableMeta(table: DiningTable, tab: TabSummary | undefined, now: number)
 export function DiningRoomPage() {
   const tablesQuery = useDiningTables();
   const tabsQuery = useActiveTabs();
+  const requestsQuery = useTableOrderRequests();
+  useNewRequestChime(requestsQuery.data);
   const now = useNow();
 
   const [selectedTableId, setSelectedTableId] = useState<string | null>(null);
   const [filter, setFilter] = useState<StatusFilter>('all');
   const [areaKey, setAreaKey] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  /** The phone-requests sheet: closed, every table, or one table's id. */
+  const [requestsFor, setRequestsFor] = useState<'all' | string | null>(null);
 
   useEffect(() => {
     if (!notice) return;
@@ -88,6 +94,8 @@ export function DiningRoomPage() {
     [tablesQuery.data],
   );
   const tabByTable = useMemo(() => tabsByTable(tabsQuery.data ?? []), [tabsQuery.data]);
+  const requestByTable = useMemo(() => requestsByTable(requestsQuery.data ?? []), [requestsQuery.data]);
+  const pendingRequestCount = requestsQuery.data?.length ?? 0;
   const areas = useMemo(() => areasOf(tables), [tables]);
   const currentArea = areas.find((area) => area.key === areaKey) ?? areas[0] ?? null;
 
@@ -162,6 +170,16 @@ export function DiningRoomPage() {
           <div className="dr-avatar" aria-hidden="true">{userInitial}</div>
         </div>
 
+        <button
+          type="button"
+          className={`dr-requests-btn ${pendingRequestCount > 0 ? 'has-pending' : ''}`}
+          onClick={() => setRequestsFor('all')}
+        >
+          {pendingRequestCount > 0
+            ? DINING_ROOM.orderRequests.openWithCount(pendingRequestCount)
+            : DINING_ROOM.orderRequests.open}
+        </button>
+
         {areas.length > 1 && (
           <div
             className="dr-area-filters"
@@ -211,14 +229,24 @@ export function DiningRoomPage() {
             {visibleTables.map((table) => {
               const tab = tabByTable.get(table.id);
               const status = statusOf(tab);
+              const waiting = requestByTable.get(table.id)?.length ?? 0;
+              const badge =
+                waiting > 1
+                  ? DINING_ROOM.orderRequests.tableBadgeCount(waiting)
+                  : DINING_ROOM.orderRequests.tableBadge;
               return (
                 <button
                   key={table.id}
                   type="button"
-                  className={`dr-table-btn ${statusClass(status)}`}
+                  className={`dr-table-btn ${statusClass(status)} ${waiting > 0 ? 'has-request' : ''}`}
                   onClick={() => setSelectedTableId(table.id)}
-                  aria-label={`${DINING_ROOM.table} ${table.label}, ${statusLabel(status)}`}
+                  aria-label={`${DINING_ROOM.table} ${table.label}, ${statusLabel(status)}${waiting > 0 ? `, ${badge}` : ''}`}
                 >
+                  {waiting > 0 && (
+                    <span className="dr-table-request-badge" aria-hidden="true">
+                      {badge}
+                    </span>
+                  )}
                   <span className="dr-table-number">{table.label}</span>
                   <span className="dr-table-info">
                     <span className="dr-table-label">{statusLabel(status)}</span>
@@ -238,7 +266,22 @@ export function DiningRoomPage() {
           areaLabel={areaOf(selectedTable).label}
           summary={tabByTable.get(selectedTable.id)}
           now={now}
+          pendingRequestCount={requestByTable.get(selectedTable.id)?.length ?? 0}
+          onShowRequests={() => {
+            setSelectedTableId(null);
+            setRequestsFor(selectedTable.id);
+          }}
           onClose={() => setSelectedTableId(null)}
+          onNotice={setNotice}
+        />
+      )}
+
+      {requestsFor !== null && (
+        <TableOrderRequestsSheet
+          diningTableId={requestsFor === 'all' ? null : requestsFor}
+          now={now}
+          onShowAll={() => setRequestsFor('all')}
+          onClose={() => setRequestsFor(null)}
           onNotice={setNotice}
         />
       )}

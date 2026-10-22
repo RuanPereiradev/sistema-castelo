@@ -9,6 +9,7 @@ import { LoginPage } from './features/auth/LoginPage';
 import { DiningRoomPage } from './features/dining-room/DiningRoomPage';
 import { CashierPage } from './features/cashier/CashierPage';
 import { KitchenPage } from './features/kitchen/KitchenPage';
+import { CustomerTablePage } from './features/customer-table/CustomerTablePage';
 import { currentSession, type Session } from './features/auth/session';
 import { destinationsFor, type Destination } from './features/auth/destinations';
 import { logout } from './features/auth/authApi';
@@ -86,6 +87,11 @@ export const router = createBrowserRouter([
   {
     path: '/',
     element: <LoginPage />,
+  },
+  {
+    // The customer at the table, opened by the table's QR: public, outside the shell, no login.
+    path: '/mesa/:orderingToken',
+    element: <CustomerTablePage />,
   },
   {
     path: '/',
