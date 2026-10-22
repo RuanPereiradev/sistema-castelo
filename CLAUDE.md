@@ -93,6 +93,11 @@ aqui, **pergunte antes de nomear**.
 | Movimento de item entre comandas | `TabItemTransfer` (tabela `tab_item_transfer`) |
 | Tipo do movimento | `TabTransferKind` |
 | Origem do item transferido | `transferredFromTabId` |
+| Pedido do cliente pelo QR da mesa | `TableOrderRequest` (tabela `table_order_request`) |
+| Código do QR da mesa | `orderingToken` (em `DiningTable`) |
+| Item do pedido do cliente | `TableOrderRequestLine` |
+| Adicional no item do pedido do cliente | `TableOrderRequestLineModifier` |
+| Evento do pedido do cliente | `TableOrderRequestStatusChanged` |
 
 ### Financeiro
 
@@ -147,6 +152,7 @@ TabTransferKind    TRANSFER · MERGE · MOVE
 TabItemStatus      PENDING · IN_PREPARATION · READY · DELIVERED · CANCELLED
 TabDestination     DIRECT_PAYMENT · ROOM_ACCOUNT
 PrepStation        KITCHEN · PIZZA · BAR
+TableOrderRequestStatus  PENDING · CONFIRMED · REJECTED · EXPIRED
 FolioType          STAY · TAB
 FolioStatus        OPEN · CLOSED
 PaymentStatus      PENDING · CONFIRMED · FAILED · REFUNDED

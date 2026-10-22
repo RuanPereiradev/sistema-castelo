@@ -85,7 +85,9 @@ public class KitchenDisplayWebSocketConfig implements WebSocketMessageBrokerConf
 
     /**
      * Who may do what on the session: the kitchen topics for {@code KITCHEN} and {@code ADMIN} (K1,
-     * K8), the ready items for {@code WAITER} and {@code ADMIN} (K10), and nothing else.
+     * K8), the ready items for {@code WAITER} and {@code ADMIN} (K10), the requests sent from the QR
+     * code of the tables for {@code WAITER} and {@code ADMIN} (decision #25 of task
+     * qr-table-ordering), and nothing else.
      * {@code DISCONNECT} is free, so a session that never authenticated still closes quietly.
      */
     private static AuthorizationManager<Message<?>> messageAuthorization() {
@@ -95,6 +97,7 @@ public class KitchenDisplayWebSocketConfig implements WebSocketMessageBrokerConf
                         .authenticated()
                 .simpSubscribeDestMatchers("/topic/kitchen/*").hasAnyRole("KITCHEN", "ADMIN")
                 .simpSubscribeDestMatchers("/topic/restaurant/ready-items").hasAnyRole("WAITER", "ADMIN")
+                .simpSubscribeDestMatchers("/topic/restaurant/table-order-requests").hasAnyRole("WAITER", "ADMIN")
                 .anyMessage().denyAll()
                 .build();
     }

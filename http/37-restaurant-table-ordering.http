@@ -1,0 +1,761 @@
+### Task qr-table-ordering - pedido do cliente pelo QR da mesa
+### Ambiente: selecione "dev" no IntelliJ HTTP Client, com http-client.env.json
+### + http-client.private.env.json (copie o .example). Ver http/README.md.
+###
+### Pre-requisito: aplicacao rodando no perfil "dev" com o seed habilitado
+### (usuarios admin, garcom e recepcao). Rode o arquivo inteiro, em ordem: a
+### preparacao e o caminho feliz salvam os ids que os cenarios negativos usam.
+###
+### Nomes e mesas levam um sufixo aleatorio (sao unicos por propriedade), entao
+### cada execucao trabalha numa mesa nova. As rotas /public nao levam token.
+###
+### Fora da bancada: a expiracao de 30 minutos (TABLE_ORDER_REQUEST_EXPIRED) nao
+### cabe numa execucao do arquivo; ela e provada no teste de integracao, com o
+### relogio controlado.
+
+
+### ------------------------------------------------------------------
+### Preparacao: logins, cardapio e mesas
+### ------------------------------------------------------------------
+
+
+### 0. Login do admin
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{
+  "username": "{{adminUsername}}",
+  "password": "{{password}}"
+}
+
+> {%
+    client.test("login do admin retorna 200", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+    });
+    client.global.set("adminToken", response.body.accessToken);
+    client.global.set("suffix", Math.random().toString(36).substring(2, 8));
+%}
+
+
+### 1. Login do garcom
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{
+  "username": "{{waiterUsername}}",
+  "password": "{{password}}"
+}
+
+> {%
+    client.test("login do garcom retorna 200", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+    });
+    client.global.set("waiterToken", response.body.accessToken);
+%}
+
+
+### 2. Login da recepcao
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{
+  "username": "{{frontDeskUsername}}",
+  "password": "{{password}}"
+}
+
+> {%
+    client.test("login da recepcao retorna 200", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+    });
+    client.global.set("frontDeskToken", response.body.accessToken);
+%}
+
+
+### 3. Cria a categoria
+POST {{host}}/api/restaurant/menu-categories
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "name": "QR {{suffix}}",
+  "displayOrder": 1
+}
+
+> {%
+    client.test("categoria criada", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+    });
+    client.global.set("categoryId", response.body.id);
+%}
+
+
+### 4. Cria a pizza, preparada no setor PIZZA
+POST {{host}}/api/restaurant/menu-items
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "categoryId": "{{categoryId}}",
+  "name": "Pizza QR {{suffix}}",
+  "prepStation": "PIZZA",
+  "soldByWeight": false,
+  "price": "40.00"
+}
+
+> {%
+    client.test("pizza criada", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+    });
+    client.global.set("pizzaId", response.body.id);
+%}
+
+
+### 5. Adicional borda recheada
+POST {{host}}/api/restaurant/modifiers
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "name": "Borda QR {{suffix}}",
+  "price": "8.50"
+}
+
+> {%
+    client.test("adicional criado", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+    });
+    client.global.set("crustId", response.body.id);
+%}
+
+
+### 6. Oferece a borda na pizza, ate 2 por pizza
+PUT {{host}}/api/restaurant/menu-items/{{pizzaId}}/modifiers/{{crustId}}
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "maxQuantity": 2
+}
+
+> {%
+    client.test("borda oferecida na pizza", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+    });
+%}
+
+
+### 7. Cria o suco, que vai esgotar entre o pedido e a confirmacao
+POST {{host}}/api/restaurant/menu-items
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "categoryId": "{{categoryId}}",
+  "name": "Suco QR {{suffix}}",
+  "prepStation": "BAR",
+  "soldByWeight": false,
+  "price": "9.00"
+}
+
+> {%
+    client.test("suco criado", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+    });
+    client.global.set("juiceId", response.body.id);
+%}
+
+
+### 8. Cria o buffet vendido por peso, que o celular nao pede
+POST {{host}}/api/restaurant/menu-items
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "categoryId": "{{categoryId}}",
+  "name": "Buffet QR {{suffix}}",
+  "prepStation": "KITCHEN",
+  "soldByWeight": true,
+  "price": "59.90"
+}
+
+> {%
+    client.test("buffet criado", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+    });
+    client.global.set("buffetId", response.body.id);
+%}
+
+
+### 9. Cria a mesa do QR: a resposta traz o orderingToken
+POST {{host}}/api/restaurant/dining-tables
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "label": "QR {{suffix}}",
+  "seats": 4,
+  "area": "Salao"
+}
+
+> {%
+    client.test("mesa criada com codigo do QR", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+        client.assert(typeof response.body.orderingToken === "string" && response.body.orderingToken.length === 36,
+            "orderingToken " + response.body.orderingToken);
+    });
+    client.global.set("tableId", response.body.id);
+    client.global.set("orderingToken", response.body.orderingToken);
+%}
+
+
+### 10. Cria uma segunda mesa, para o pedido de outra mesa
+POST {{host}}/api/restaurant/dining-tables
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "label": "QR2 {{suffix}}"
+}
+
+> {%
+    client.test("segunda mesa criada", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+    });
+    client.global.set("otherOrderingToken", response.body.orderingToken);
+%}
+
+
+### ------------------------------------------------------------------
+### Caminho feliz
+### ------------------------------------------------------------------
+
+
+### 11. Cliente escaneia o QR: mesa aceita pedido, nada aguardando
+GET {{host}}/public/tables/{{orderingToken}}
+
+> {%
+    client.test("mesa lida sem login", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        client.assert(response.body.diningTableLabel === "QR " + client.global.get("suffix"), "label " + response.body.diningTableLabel);
+        client.assert(response.body.acceptsOrders === true, "deveria aceitar pedido");
+        client.assert(response.body.pendingRequestId === null, "nada aguardando");
+        client.assert(response.body.id === undefined, "nao expoe o id da mesa");
+    });
+%}
+
+
+### 12. Cliente pede 2 pizzas com 1 borda e um suco
+POST {{host}}/public/tables/{{orderingToken}}/order-requests
+Content-Type: application/json
+
+{
+  "lines": [
+    {
+      "menuItemId": "{{pizzaId}}",
+      "quantity": 2,
+      "modifiers": [{"modifierId": "{{crustId}}", "quantity": 1}],
+      "specialInstructions": "sem cebola"
+    },
+    {
+      "menuItemId": "{{juiceId}}",
+      "quantity": 1
+    }
+  ]
+}
+
+> {%
+    client.test("pedido enviado: 201 PENDING com janela de 30 min", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+        client.assert(response.body.status === "PENDING", "status " + response.body.status);
+        const window = new Date(response.body.expiresAt) - new Date(response.body.requestedAt);
+        client.assert(window === 30 * 60 * 1000, "janela " + window);
+    });
+    client.global.set("requestId", response.body.id);
+%}
+
+
+### 13. O QR mostra o pedido aguardando
+GET {{host}}/public/tables/{{orderingToken}}
+
+> {%
+    client.test("pendingRequestId e o pedido enviado", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        client.assert(response.body.pendingRequestId === client.global.get("requestId"), "pending " + response.body.pendingRequestId);
+    });
+%}
+
+
+### 14. Celular le o estado do pedido
+GET {{host}}/public/tables/{{orderingToken}}/order-requests/{{requestId}}
+
+> {%
+    client.test("pedido aguardando, sem dados de quem atende", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        client.assert(response.body.status === "PENDING", "status " + response.body.status);
+        client.assert(response.body.resolvedBy === undefined, "nao expoe usuario");
+    });
+%}
+
+
+### 15. Garcom ve a fila: nomes de item, adicional e mesa
+GET {{host}}/api/restaurant/table-order-requests
+Authorization: Bearer {{waiterToken}}
+
+> {%
+    client.test("pedido na fila com os nomes resolvidos", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        const request = response.body.find(r => r.id === client.global.get("requestId"));
+        client.assert(request !== undefined, "pedido nao esta na fila");
+        client.assert(request.diningTableLabel === "QR " + client.global.get("suffix"), "mesa " + request.diningTableLabel);
+        client.assert(request.lines.length === 2, "linhas " + request.lines.length);
+        client.assert(request.lines[0].menuItemName === "Pizza QR " + client.global.get("suffix"), "item " + request.lines[0].menuItemName);
+        client.assert(request.lines[0].modifiers[0].modifierName === "Borda QR " + client.global.get("suffix"), "adicional");
+        client.assert(request.lines[0].specialInstructions === "sem cebola", "observacao");
+    });
+%}
+
+
+### 16. Garcom confirma: a comanda da mesa abre e recebe os itens
+POST {{host}}/api/restaurant/table-order-requests/{{requestId}}/confirm
+Authorization: Bearer {{waiterToken}}
+
+> {%
+    client.test("confirmado com a comanda aberta", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        client.assert(response.body.request.status === "CONFIRMED", "status " + response.body.request.status);
+        client.assert(typeof response.body.tabId === "string", "tabId " + response.body.tabId);
+    });
+    client.global.set("tabId", response.body.tabId);
+%}
+
+
+### 17. A comanda tem as duas linhas: (40,00 + 8,50) x 2 + 9,00 = 106,00
+GET {{host}}/api/restaurant/tabs/{{tabId}}
+Authorization: Bearer {{waiterToken}}
+
+> {%
+    client.test("itens na comanda, com subtotal 106,00", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        client.assert(response.body.status === "OPEN", "status " + response.body.status);
+        client.assert(response.body.items.length === 2, "itens " + response.body.items.length);
+        client.assert(response.body.subtotal === "106.00", "subtotal " + response.body.subtotal);
+    });
+%}
+
+
+### 18. A pizza chegou na fila do setor PIZZA
+GET {{host}}/api/kitchen/queue?station=PIZZA
+Authorization: Bearer {{adminToken}}
+
+> {%
+    client.test("pizza da mesa QR na fila da cozinha", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        const ticket = response.body.items.find(t => t.tabId === client.global.get("tabId"));
+        client.assert(ticket !== undefined, "pizza nao chegou na fila");
+        client.assert(ticket.quantity === 2, "quantidade " + ticket.quantity);
+    });
+%}
+
+
+### 19. Celular ve o pedido confirmado
+GET {{host}}/public/tables/{{orderingToken}}/order-requests/{{requestId}}
+
+> {%
+    client.test("pedido confirmado no celular", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        client.assert(response.body.status === "CONFIRMED", "status " + response.body.status);
+    });
+%}
+
+
+### 20. Recepcao le a lista de comandas abertas
+GET {{host}}/api/restaurant/tabs
+Authorization: Bearer {{frontDeskToken}}
+
+> {%
+    client.test("recepcao le as comandas: 200", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        client.assert(response.body.some(t => t.id === client.global.get("tabId")), "comanda da mesa QR");
+    });
+%}
+
+
+### 21. Recepcao le uma comanda com itens
+GET {{host}}/api/restaurant/tabs/{{tabId}}
+Authorization: Bearer {{frontDeskToken}}
+
+> {%
+    client.test("recepcao le a comanda: 200", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        client.assert(response.body.items.length === 2, "itens " + response.body.items.length);
+    });
+%}
+
+
+### 22. Segundo pedido na mesa com comanda aberta
+POST {{host}}/public/tables/{{orderingToken}}/order-requests
+Content-Type: application/json
+
+{
+  "lines": [{"menuItemId": "{{pizzaId}}", "quantity": 1}]
+}
+
+> {%
+    client.test("segundo pedido aceito: 201", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+    });
+    client.global.set("secondRequestId", response.body.id);
+%}
+
+
+### 23. Confirmado, entra na mesma comanda
+POST {{host}}/api/restaurant/table-order-requests/{{secondRequestId}}/confirm
+Authorization: Bearer {{waiterToken}}
+
+> {%
+    client.test("mesma comanda", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        client.assert(response.body.tabId === client.global.get("tabId"), "tabId " + response.body.tabId);
+    });
+%}
+
+
+### 24. Terceiro pedido, que o garcom vai recusar
+POST {{host}}/public/tables/{{orderingToken}}/order-requests
+Content-Type: application/json
+
+{
+  "lines": [{"menuItemId": "{{juiceId}}", "quantity": 12}]
+}
+
+> {%
+    client.test("terceiro pedido: 201", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+    });
+    client.global.set("rejectedRequestId", response.body.id);
+%}
+
+
+### 25. Garcom recusa o pedido inteiro, sem motivo
+POST {{host}}/api/restaurant/table-order-requests/{{rejectedRequestId}}/reject
+Authorization: Bearer {{waiterToken}}
+
+> {%
+    client.test("recusado", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        client.assert(response.body.status === "REJECTED", "status " + response.body.status);
+        client.assert(response.body.tabId === null, "recusa nao liga comanda");
+    });
+%}
+
+
+### 26. Celular ve o pedido recusado
+GET {{host}}/public/tables/{{orderingToken}}/order-requests/{{rejectedRequestId}}
+
+> {%
+    client.test("recusado no celular", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        client.assert(response.body.status === "REJECTED", "status " + response.body.status);
+    });
+%}
+
+
+### ------------------------------------------------------------------
+### Cenarios negativos: um por codigo de erro
+### ------------------------------------------------------------------
+
+
+### 27. Confirmar pedido ja recusado -> 409 TABLE_ORDER_REQUEST_NOT_PENDING
+POST {{host}}/api/restaurant/table-order-requests/{{rejectedRequestId}}/confirm
+Authorization: Bearer {{waiterToken}}
+
+> {%
+    client.test("pedido resolvido: 409 TABLE_ORDER_REQUEST_NOT_PENDING", function() {
+        client.assert(response.status === 409, "esperado 409, recebido " + response.status);
+        client.assert(response.body.code === "TABLE_ORDER_REQUEST_NOT_PENDING", "code " + response.body.code);
+    });
+%}
+
+
+### 28. Pedido com o suco, que vai esgotar antes da confirmacao
+POST {{host}}/public/tables/{{orderingToken}}/order-requests
+Content-Type: application/json
+
+{
+  "lines": [{"menuItemId": "{{juiceId}}", "quantity": 1}]
+}
+
+> {%
+    client.test("pedido do suco: 201", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+    });
+    client.global.set("soldOutRequestId", response.body.id);
+%}
+
+
+### 29. Segundo pedido com um aguardando -> 409 TABLE_ORDER_REQUEST_ALREADY_PENDING
+POST {{host}}/public/tables/{{orderingToken}}/order-requests
+Content-Type: application/json
+
+{
+  "lines": [{"menuItemId": "{{pizzaId}}", "quantity": 1}]
+}
+
+> {%
+    client.test("um pendente por mesa: 409 TABLE_ORDER_REQUEST_ALREADY_PENDING", function() {
+        client.assert(response.status === 409, "esperado 409, recebido " + response.status);
+        client.assert(response.body.code === "TABLE_ORDER_REQUEST_ALREADY_PENDING", "code " + response.body.code);
+    });
+%}
+
+
+### 30. O suco esgota
+POST {{host}}/api/restaurant/menu-items/{{juiceId}}/unavailable
+Authorization: Bearer {{adminToken}}
+
+> {%
+    client.test("suco esgotado", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+    });
+%}
+
+
+### 31. Confirmar com o item esgotado -> 422 MENU_ITEM_UNAVAILABLE, pedido segue aguardando
+POST {{host}}/api/restaurant/table-order-requests/{{soldOutRequestId}}/confirm
+Authorization: Bearer {{waiterToken}}
+
+> {%
+    client.test("confirmacao recusada pelo lancamento: 422 MENU_ITEM_UNAVAILABLE", function() {
+        client.assert(response.status === 422, "esperado 422, recebido " + response.status);
+        client.assert(response.body.code === "MENU_ITEM_UNAVAILABLE", "code " + response.body.code);
+    });
+%}
+
+
+### 32. O pedido continua na fila do salao
+GET {{host}}/api/restaurant/table-order-requests
+Authorization: Bearer {{waiterToken}}
+
+> {%
+    client.test("pedido do suco continua aguardando", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        const request = response.body.find(r => r.id === client.global.get("soldOutRequestId"));
+        client.assert(request !== undefined && request.status === "PENDING", "deveria seguir PENDING");
+    });
+%}
+
+
+### 33. Garcom avisa o cliente e recusa
+POST {{host}}/api/restaurant/table-order-requests/{{soldOutRequestId}}/reject
+Authorization: Bearer {{waiterToken}}
+
+> {%
+    client.test("recusado depois do esgotado", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+    });
+%}
+
+
+### 34. Pedir item esgotado no celular -> 422 MENU_ITEM_UNAVAILABLE
+POST {{host}}/public/tables/{{orderingToken}}/order-requests
+Content-Type: application/json
+
+{
+  "lines": [{"menuItemId": "{{juiceId}}", "quantity": 1}]
+}
+
+> {%
+    client.test("item esgotado no envio: 422 MENU_ITEM_UNAVAILABLE", function() {
+        client.assert(response.status === 422, "esperado 422, recebido " + response.status);
+        client.assert(response.body.code === "MENU_ITEM_UNAVAILABLE", "code " + response.body.code);
+    });
+%}
+
+
+### 35. Pedir item vendido por peso -> 422 INVALID_TABLE_ORDER_REQUEST
+POST {{host}}/public/tables/{{orderingToken}}/order-requests
+Content-Type: application/json
+
+{
+  "lines": [{"menuItemId": "{{buffetId}}"}]
+}
+
+> {%
+    client.test("vendido por peso: 422 INVALID_TABLE_ORDER_REQUEST", function() {
+        client.assert(response.status === 422, "esperado 422, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_TABLE_ORDER_REQUEST", "code " + response.body.code);
+    });
+%}
+
+
+### 36. Pedido sem linhas -> 422 INVALID_TABLE_ORDER_REQUEST
+POST {{host}}/public/tables/{{orderingToken}}/order-requests
+Content-Type: application/json
+
+{
+  "lines": []
+}
+
+> {%
+    client.test("sem linhas: 422 INVALID_TABLE_ORDER_REQUEST", function() {
+        client.assert(response.status === 422, "esperado 422, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_TABLE_ORDER_REQUEST", "code " + response.body.code);
+    });
+%}
+
+
+### 37. Pedido com 21 linhas -> 422 INVALID_TABLE_ORDER_REQUEST
+< {%
+    const line = {menuItemId: client.global.get("pizzaId"), quantity: 1};
+    request.variables.set("tooManyLines", JSON.stringify(Array(21).fill(line)));
+%}
+POST {{host}}/public/tables/{{orderingToken}}/order-requests
+Content-Type: application/json
+
+{
+  "lines": {{tooManyLines}}
+}
+
+> {%
+    client.test("21 linhas: 422 INVALID_TABLE_ORDER_REQUEST", function() {
+        client.assert(response.status === 422, "esperado 422, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_TABLE_ORDER_REQUEST", "code " + response.body.code);
+    });
+%}
+
+
+### 38. Codigo de QR desconhecido -> 404 DINING_TABLE_NOT_FOUND
+GET {{host}}/public/tables/00000000-0000-4000-8000-000000000000
+
+> {%
+    client.test("QR desconhecido: 404 DINING_TABLE_NOT_FOUND", function() {
+        client.assert(response.status === 404, "esperado 404, recebido " + response.status);
+        client.assert(response.body.code === "DINING_TABLE_NOT_FOUND", "code " + response.body.code);
+    });
+%}
+
+
+### 39. Pedido de outra mesa pelo QR desta -> 404 TABLE_ORDER_REQUEST_NOT_FOUND
+GET {{host}}/public/tables/{{otherOrderingToken}}/order-requests/{{requestId}}
+
+> {%
+    client.test("pedido de outra mesa: 404 TABLE_ORDER_REQUEST_NOT_FOUND", function() {
+        client.assert(response.status === 404, "esperado 404, recebido " + response.status);
+        client.assert(response.body.code === "TABLE_ORDER_REQUEST_NOT_FOUND", "code " + response.body.code);
+    });
+%}
+
+
+### 40. Recepcao nao lanca na comanda -> 403 ACCESS_DENIED
+POST {{host}}/api/restaurant/tabs/{{tabId}}/items
+Authorization: Bearer {{frontDeskToken}}
+Content-Type: application/json
+
+{
+  "menuItemId": "{{pizzaId}}",
+  "quantity": 1
+}
+
+> {%
+    client.test("recepcao so le: 403 ACCESS_DENIED", function() {
+        client.assert(response.status === 403, "esperado 403, recebido " + response.status);
+        client.assert(response.body.code === "ACCESS_DENIED", "code " + response.body.code);
+    });
+%}
+
+
+### 41. Recepcao nao ve a fila de pedidos do QR -> 403 ACCESS_DENIED
+GET {{host}}/api/restaurant/table-order-requests
+Authorization: Bearer {{frontDeskToken}}
+
+> {%
+    client.test("fila do QR so para salao: 403 ACCESS_DENIED", function() {
+        client.assert(response.status === 403, "esperado 403, recebido " + response.status);
+        client.assert(response.body.code === "ACCESS_DENIED", "code " + response.body.code);
+    });
+%}
+
+
+### 42. Garcom inicia o fechamento da comanda da mesa (pre-conta)
+POST {{host}}/api/restaurant/tabs/{{tabId}}/closing
+Authorization: Bearer {{waiterToken}}
+
+> {%
+    client.test("comanda em CLOSING", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        client.assert(response.body.status === "CLOSING", "status " + response.body.status);
+    });
+%}
+
+
+### 43. O QR avisa que a conta esta sendo fechada
+GET {{host}}/public/tables/{{orderingToken}}
+
+> {%
+    client.test("acceptsOrders falso com a comanda em CLOSING", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        client.assert(response.body.acceptsOrders === false, "nao deveria aceitar pedido");
+    });
+%}
+
+
+### 44. Pedir com a comanda em CLOSING -> 409 TAB_CLOSING_REFUSES_ORDER_REQUEST
+POST {{host}}/public/tables/{{orderingToken}}/order-requests
+Content-Type: application/json
+
+{
+  "lines": [{"menuItemId": "{{pizzaId}}", "quantity": 1}]
+}
+
+> {%
+    client.test("CLOSING: 409 TAB_CLOSING_REFUSES_ORDER_REQUEST", function() {
+        client.assert(response.status === 409, "esperado 409, recebido " + response.status);
+        client.assert(response.body.code === "TAB_CLOSING_REFUSES_ORDER_REQUEST", "code " + response.body.code);
+    });
+%}
+
+
+### 45. Admin gera um QR novo para a mesa
+POST {{host}}/api/restaurant/dining-tables/{{tableId}}/ordering-token
+Authorization: Bearer {{adminToken}}
+
+> {%
+    client.test("codigo novo, diferente do impresso", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        client.assert(response.body.orderingToken !== client.global.get("orderingToken"), "deveria trocar");
+    });
+    client.global.set("newOrderingToken", response.body.orderingToken);
+%}
+
+
+### 46. QR antigo -> 404 DINING_TABLE_NOT_FOUND
+GET {{host}}/public/tables/{{orderingToken}}
+
+> {%
+    client.test("QR regenerado: 404 DINING_TABLE_NOT_FOUND", function() {
+        client.assert(response.status === 404, "esperado 404, recebido " + response.status);
+        client.assert(response.body.code === "DINING_TABLE_NOT_FOUND", "code " + response.body.code);
+    });
+%}
+
+
+### 47. QR novo responde
+GET {{host}}/public/tables/{{newOrderingToken}}
+
+> {%
+    client.test("QR novo: 200", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+    });
+%}
+
+
+### 48. Garcom nao gera QR -> 403 ACCESS_DENIED
+POST {{host}}/api/restaurant/dining-tables/{{tableId}}/ordering-token
+Authorization: Bearer {{waiterToken}}
+
+> {%
+    client.test("so admin gera QR: 403 ACCESS_DENIED", function() {
+        client.assert(response.status === 403, "esperado 403, recebido " + response.status);
+        client.assert(response.body.code === "ACCESS_DENIED", "code " + response.body.code);
+    });
+%}

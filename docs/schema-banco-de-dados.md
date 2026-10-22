@@ -139,8 +139,10 @@ cash_drawer_session 1──N payment
 | V9 | `V9__tab_closing.sql` | 3.2 | altera `tab` (`folio_id`, `tab_charge_id`, fechamento, destino, taxa de serviço, `guest_count`) e `tab_item` (`split_group`, `service_charge_waived`) |
 | V10 | `V10__kitchen_queue_ready.sql` | 3.5 | recria `idx_kds_queue` incluindo `READY`; `CHECK`s de instante em `tab_item`; semeia em `setting` os limites de atraso do KDS |
 | V11 | `V11__tab_item_transfer.sql` | 3.6 | `tab_item_transfer` |
-| V12 | `V12__hotel_inventory.sql` | 1.1 | `room_type`, `room`, `rate_plan` |
-| V13 | `V13__reservation.sql` | 2.1 | `guest`, `daily_inventory`, `reservation`, `reservation_child`, `room_night` |
+| V12 | `V12__finance_expense.sql` | F1 | `expense` + altera o `CHECK` de `cash_movement` |
+| V13 | `V13__table_order_request.sql` | qr-table-ordering | `table_order_request`, `table_order_request_line`, `table_order_request_line_modifier`; altera `dining_table` (`ordering_token`) |
+| V14 | `V14__hotel_inventory.sql` | 1.1 | `room_type`, `room`, `rate_plan` |
+| V15 | `V15__reservation.sql` | 2.1 | `guest`, `daily_inventory`, `reservation`, `reservation_child`, `room_night` |
 
 Renumerada em 2026-09-24 (decisão #5 da task 1.2): o restaurante é construído
 antes do hotel, e a versão segue a ordem de execução. Com o hotel no meio, o
@@ -544,7 +546,7 @@ nulável: pagamento por QR code não tem operador, e a constraint
 
 ---
 
-## 8. V12 — inventário do hotel
+## 8. V14 — inventário do hotel
 
 ```sql
 CREATE TABLE room_type (
@@ -634,7 +636,7 @@ CREATE TABLE dining_table (
 
 ---
 
-## 10. V13 — reservas
+## 10. V15 — reservas
 
 ```sql
 CREATE TABLE guest (

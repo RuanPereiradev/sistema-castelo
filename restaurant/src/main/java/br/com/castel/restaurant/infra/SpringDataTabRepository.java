@@ -3,6 +3,7 @@ package br.com.castel.restaurant.infra;
 import br.com.castel.restaurant.domain.DiningTableId;
 import br.com.castel.restaurant.domain.Tab;
 import br.com.castel.restaurant.domain.TabId;
+import br.com.castel.restaurant.domain.TabStatus;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
@@ -44,6 +45,16 @@ interface SpringDataTabRepository extends JpaRepository<Tab, TabId> {
             @Param("propertyId") UUID propertyId,
             @Param("diningTableId") UUID diningTableId,
             @Param("cardNumber") Integer cardNumber);
+
+    @Query("select t.id from Tab t where t.diningTableId = :diningTableId "
+            + "and t.status in (br.com.castel.restaurant.domain.TabStatus.OPEN, "
+            + "br.com.castel.restaurant.domain.TabStatus.CLOSING)")
+    Optional<TabId> findActiveIdOnDiningTable(@Param("diningTableId") DiningTableId diningTableId);
+
+    @Query("select t.status from Tab t where t.diningTableId = :diningTableId "
+            + "and t.status in (br.com.castel.restaurant.domain.TabStatus.OPEN, "
+            + "br.com.castel.restaurant.domain.TabStatus.CLOSING)")
+    Optional<TabStatus> findActiveStatusOnDiningTable(@Param("diningTableId") DiningTableId diningTableId);
 
     @Query("select count(t) > 0 from Tab t where t.diningTableId = :diningTableId "
             + "and t.status in (br.com.castel.restaurant.domain.TabStatus.OPEN, "

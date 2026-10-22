@@ -1,6 +1,7 @@
 package br.com.castel.restaurant.domain;
 
 import br.com.castel.sharedkernel.AuditedEntity;
+import br.com.castel.sharedkernel.EntityId;
 import jakarta.persistence.AttributeOverride;
 import jakarta.persistence.Column;
 import jakarta.persistence.EmbeddedId;
@@ -23,6 +24,10 @@ import java.util.UUID;
  *
  * <p>Label uniqueness in the property is a rule about the set of tables, so it is checked by the use
  * case and held by {@code uk_dining_table_label}, not by this aggregate.
+ *
+ * <p>The {@code orderingToken} is the code printed on the QR of the table, where the customer orders
+ * from (task qr-table-ordering, decision #18). Random and distinct from the {@code publicToken} of a
+ * tab, which is born with each tab. Regenerating it invalidates the printed QR (decision #15).
  */
 @Entity
 @Table(name = "dining_table")
@@ -77,6 +82,9 @@ public class DiningTable extends AuditedEntity {
     @Column(name = "is_active", nullable = false)
     private boolean active;
 
+    @Column(name = "ordering_token", nullable = false)
+    private UUID orderingToken;
+
     protected DiningTable() {
         // for JPA
     }
@@ -85,6 +93,7 @@ public class DiningTable extends AuditedEntity {
         this.id = id;
         this.propertyId = propertyId;
         this.active = true;
+        this.orderingToken = EntityId.newPublicToken();
         apply(description);
     }
 
@@ -124,6 +133,14 @@ public class DiningTable extends AuditedEntity {
         this.active = true;
     }
 
+    /**
+     * A new code for the QR of the table; the printed one stops answering at once (decision #15).
+     * Accepted on an inactive table too, whose code answers nothing anyway (decision #24).
+     */
+    public void regenerateOrderingToken() {
+        this.orderingToken = EntityId.newPublicToken();
+    }
+
     /** The order in which the list of tables is shown (decision #8). */
     public static Comparator<DiningTable> listingOrder() {
         return LISTING_ORDER;
@@ -157,6 +174,10 @@ public class DiningTable extends AuditedEntity {
 
     public boolean isActive() {
         return active;
+    }
+
+    public UUID orderingToken() {
+        return orderingToken;
     }
 
     /**

@@ -30,7 +30,9 @@ import org.springframework.web.bind.annotation.RestController;
 
 /**
  * The tabs of the restaurant (decision #3): {@code ADMIN} and {@code WAITER} on every route;
- * {@code KITCHEN} and {@code FRONT_DESK} are refused.
+ * {@code KITCHEN} is refused. {@code FRONT_DESK} reads the list and one tab, and nothing else
+ * (decision #26 of task qr-table-ordering): the reading routes widen the class-level rule with their
+ * own annotation, which takes precedence.
  *
  * <p>Cancelling is {@code POST .../cancel} with a reason, never {@code DELETE}: nothing is removed
  * (decision #13). Every {@code @PathVariable} names its variable explicitly, as in
@@ -66,6 +68,7 @@ public class TabController {
 
     /** Only {@code OPEN} and {@code CLOSING} tabs, by the moment they opened. */
     @GetMapping
+    @PreAuthorize("hasAnyRole('ADMIN', 'WAITER', 'FRONT_DESK')")
     public List<TabSummaryResponse> listActiveTabs(
             @RequestParam(name = "diningTableId", required = false) String diningTableId,
             @RequestParam(name = "cardNumber", required = false) Integer cardNumber) {
@@ -81,6 +84,7 @@ public class TabController {
     }
 
     @GetMapping("/{tabId}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'WAITER', 'FRONT_DESK')")
     public TabResponse getTab(@PathVariable("tabId") String tabId) {
         Percentage currentRate = closing.currentServiceChargeRate();
         return respond(tabs.find(TabId.of(tabId)), currentRate);
