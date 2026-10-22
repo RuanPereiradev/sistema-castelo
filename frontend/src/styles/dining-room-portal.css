@@ -1216,3 +1216,71 @@
   font-size: 13px;
   color: var(--color-text-muted);
 }
+
+/* ---- Pix confirmed from the phone, in the table sheet */
+
+.dr-paid-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.dr-paid-state {
+  margin: 0;
+  font-size: 13.5px;
+  color: var(--color-text-muted);
+}
+
+.dr-paid {
+  border: 1px solid var(--color-divider-strong);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.dr-paid.is-refunded {
+  border-style: dashed;
+  opacity: 0.8;
+}
+
+.dr-paid-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.dr-paid-amount {
+  font-family: var(--font-heading);
+  font-size: 22px;
+  font-variant-numeric: tabular-nums;
+}
+
+.dr-paid-meta {
+  font-size: 13px;
+  color: var(--color-text-muted);
+}
+
+.dr-paid-refunded {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.dr-paid-tag {
+  align-self: flex-start;
+  padding: 2px 8px;
+  border: 1px solid var(--color-danger);
+  color: var(--color-danger);
+  font-family: var(--font-heading);
+  font-weight: 600;
+  font-size: 12px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.dr-paid-refund {
+  min-height: 44px;
+  font-size: 15px;
+}

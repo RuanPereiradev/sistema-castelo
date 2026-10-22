@@ -80,6 +80,7 @@ export const DINING_ROOM = {
     requestRejected: (label: string) => `Pedido da mesa ${label} recusado`,
     pixConfirmed: (label: string) => `Pix da mesa ${label} confirmado`,
     pixRejected: (label: string) => `Pix da mesa ${label} recusado`,
+    pixRefunded: (customer: string) => `Pix de ${customer} estornado`,
   },
   orderRequests: {
     open: 'Pedidos do celular',
@@ -138,6 +139,25 @@ export const DINING_ROOM = {
       `O Pix de ${customer} na mesa ${label} é recusado e os itens voltam para a conta. Use quando o comprovante não confere.`,
     rejectPixConfirm: 'Recusar Pix',
   },
+  paidByPhone: {
+    title: 'Pagos pelo celular',
+    loading: 'Carregando os Pix confirmados…',
+    unavailable: 'Indisponível por enquanto: o servidor ainda não lista os Pix confirmados.',
+    failed: 'Não deu para carregar os Pix confirmados.',
+    empty: 'Nenhum Pix confirmado nesta comanda.',
+    confirmedAt: (time: string) => `Confirmado às ${time}`,
+    refunded: 'Estornado',
+    refundedAt: (time: string) => `Estornado às ${time}`,
+    refundReason: (reason: string) => `Motivo: ${reason}`,
+    refund: 'Estornar',
+    refunding: 'Estornando…',
+    refundTitle: 'Estornar o Pix?',
+    refundMessage: (customer: string, amount: string) =>
+      `O Pix de ${customer} (${amount}) é estornado e os itens voltam a ficar em aberto na conta. Não há desfazer: devolva o dinheiro ao cliente por fora.`,
+    refundReasonLabel: 'Motivo do estorno',
+    refundReasonPlaceholder: 'Ex.: cliente pagou duas vezes',
+    refundConfirm: 'Estornar Pix',
+  },
 } as const;
 
 /** Error code → what the waiter reads. Says what to do, not what broke. */
@@ -186,10 +206,25 @@ const ERROR_MESSAGES: Readonly<Record<string, string>> = {
   TABLE_PAYMENT_REQUEST_NOT_FOUND: 'Este Pix não existe mais. A lista vai se atualizar.',
   TABLE_PAYMENT_REQUEST_NOT_REFUNDABLE: 'Só um Pix confirmado e ainda não estornado pode ser estornado.',
   PAYMENT_EXCEEDS_BALANCE: 'A conta já recebeu mais do que falta: este Pix passaria do saldo. Recuse e acerte no caixa.',
-  INVALID_PAYMENT_REFUND_REASON: 'Escreva o motivo do estorno.',
+  INVALID_PAYMENT_REFUND_REASON: 'Escreva o motivo do estorno, com até 500 letras.',
+  PAYMENT_ALREADY_REFUNDED: 'Este pagamento já foi estornado. A tela vai se atualizar.',
 };
 
 /** Confirming a Pix, the tab's own state matters more than in other places. */
+const REFUND_PIX_MESSAGES: Readonly<Record<string, string>> = {
+  TAB_NOT_OPEN: 'A comanda desta mesa já foi fechada: o estorno agora é pelo caixa.',
+};
+
+export function describeRefundPixError(error: unknown): string {
+  if (error instanceof ApiError && error.code) {
+    const specific = REFUND_PIX_MESSAGES[error.code];
+    if (specific) {
+      return specific;
+    }
+  }
+  return describeError(error);
+}
+
 const CONFIRM_PIX_MESSAGES: Readonly<Record<string, string>> = {
   TAB_NOT_OPEN: 'A comanda desta mesa já foi fechada ou cancelada. Recuse o Pix e acerte no caixa.',
 };

@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuthorizedRequest } from '../../lib/useAuthorizedRequest';
+import { ApiError } from '../../lib/problemDetail';
 import { DINING_TABLES_KEY } from './useDiningTables';
 import { ACTIVE_TABS_KEY } from './useActiveTabs';
 
@@ -62,6 +63,8 @@ function useInvalidateAfterPayment() {
     void queryClient.invalidateQueries({ queryKey: ACTIVE_TABS_KEY });
     void queryClient.invalidateQueries({ queryKey: DINING_TABLES_KEY });
     void queryClient.invalidateQueries({ queryKey: ['tab'] });
+    // The cashier's folio list carries the same balance.
+    void queryClient.invalidateQueries({ queryKey: ['open-folios'] });
   };
 }
 
@@ -82,4 +85,43 @@ export function useConfirmTablePaymentRequest() {
 
 export function useRejectTablePaymentRequest() {
   return usePaymentAction('reject');
+}
+
+/**
+ * The confirmed Pix of one tab, refunded ones included (decision #38):
+ * `GET /api/restaurant/table-payment-requests?status=CONFIRMED&tabId=`.
+ */
+export function useConfirmedTablePayments(tabId: string | null) {
+  const apiCall = useAuthorizedRequest();
+
+  return useQuery({
+    queryKey: [...TABLE_PAYMENT_REQUESTS_KEY, 'confirmed', tabId ?? ''],
+    queryFn: () =>
+      apiCall<readonly TablePaymentRequest[]>(
+        `/restaurant/table-payment-requests?status=CONFIRMED&tabId=${encodeURIComponent(tabId ?? '')}`,
+      ),
+    enabled: tabId !== null,
+    refetchInterval: 5000,
+    staleTime: 2000,
+    retry: false,
+  });
+}
+
+/** An older backend without the confirmed list: the screen shows "indisponível", not a failure. */
+export function isRouteNotAvailable(error: unknown): boolean {
+  return error instanceof ApiError && (error.status === 404 || error.status === 405) && error.code !== 'TAB_NOT_FOUND';
+}
+
+export function useRefundTablePaymentRequest() {
+  const apiCall = useAuthorizedRequest();
+  const invalidate = useInvalidateAfterPayment();
+
+  return useMutation({
+    mutationFn: ({ requestId, reason }: { readonly requestId: string; readonly reason: string }) =>
+      apiCall<TablePaymentRequest>(`/restaurant/table-payment-requests/${requestId}/refund`, {
+        method: 'POST',
+        body: { reason },
+      }),
+    onSettled: invalidate,
+  });
 }

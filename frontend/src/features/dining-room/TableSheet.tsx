@@ -14,6 +14,7 @@ import { ConfirmDialog } from './ConfirmDialog';
 import { TransferItemsDialog } from './TransferItemsDialog';
 import { MergeTabDialog } from './MergeTabDialog';
 import { MoveTableDialog } from './MoveTableDialog';
+import { PaidByPhoneSection } from './PaidByPhoneSection';
 
 interface Props {
   readonly table: DiningTable;
@@ -349,6 +350,8 @@ export function TableSheet({
                   </div>
                 </div>
               )}
+
+              <PaidByPhoneSection tabId={tab.id} onNotice={onNotice} />
 
               {status === 'billRequested' && (
                 <p className="dr-sheet-note">{DINING_ROOM.billWithCashier}</p>

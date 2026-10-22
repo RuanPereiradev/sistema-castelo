@@ -13,6 +13,10 @@ interface Props {
   readonly confirmLabel?: string;
   readonly cancelLabel?: string;
   readonly isDanger?: boolean;
+  /** Defaults keep the cancellation wording the dialog was born with. */
+  readonly reasonLabel?: string;
+  readonly reasonPlaceholder?: string;
+  readonly reasonMaxLength?: number;
 }
 
 /**
@@ -32,6 +36,9 @@ export function ConfirmDialog({
   confirmLabel = 'Confirmar',
   cancelLabel = 'Cancelar',
   isDanger = false,
+  reasonLabel = 'Motivo',
+  reasonPlaceholder = 'Explique o motivo do cancelamento...',
+  reasonMaxLength,
 }: Props) {
   if (!isOpen) {
     return null;
@@ -52,14 +59,15 @@ export function ConfirmDialog({
 
           {requiresReason && (
             <div className="dialog-field">
-              <label className="dialog-label">Motivo</label>
+              <label className="dialog-label">{reasonLabel}</label>
               <textarea
                 className="dialog-textarea"
                 value={reason}
                 onChange={(e) => onReasonChange?.(e.target.value)}
-                placeholder="Explique o motivo do cancelamento..."
+                placeholder={reasonPlaceholder}
                 disabled={isLoading}
                 rows={3}
+                {...(reasonMaxLength === undefined ? {} : { maxLength: reasonMaxLength })}
               />
             </div>
           )}
