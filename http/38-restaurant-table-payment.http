@@ -370,6 +370,56 @@ GET {{host}}/public/tables/{{orderingToken}}/tab
 %}
 
 
+### 16c. Simula 2 dos 3 sucos com a taxa: 18,00 + 1,80, sem reservar
+POST {{host}}/public/tables/{{orderingToken}}/payment-requests/quote
+Content-Type: application/json
+
+{
+  "includeServiceCharge": true,
+  "items": [{"tabItemId": "{{juiceItemId}}", "quantity": 2}]
+}
+
+> {%
+    client.test("simulacao: 19,80", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        client.assert(response.body.subtotal === "18.00", "subtotal " + response.body.subtotal);
+        client.assert(response.body.serviceCharge === "1.80", "taxa " + response.body.serviceCharge);
+        client.assert(response.body.amount === "19.80", "valor " + response.body.amount);
+        client.assert(response.body.items[0].quantity === 2, "unidades " + response.body.items[0].quantity);
+        client.assert(response.body.pixPayload === undefined, "simulacao nao gera Pix");
+    });
+%}
+
+
+### 16d. A simulacao nao reservou nada
+GET {{host}}/public/tables/{{orderingToken}}/tab
+
+> {%
+    client.test("sucos sem unidade reservada", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        const juice = response.body.items.find(i => i.id === client.global.get("juiceItemId"));
+        client.assert(juice.reservedQuantity === 0, "reservadas " + juice.reservedQuantity);
+    });
+%}
+
+
+### 16e. Simular 4 de 3 sucos -> 422 INVALID_TABLE_PAYMENT_REQUEST
+POST {{host}}/public/tables/{{orderingToken}}/payment-requests/quote
+Content-Type: application/json
+
+{
+  "includeServiceCharge": false,
+  "items": [{"tabItemId": "{{juiceItemId}}", "quantity": 4}]
+}
+
+> {%
+    client.test("simulacao fora da linha: 422 INVALID_TABLE_PAYMENT_REQUEST", function() {
+        client.assert(response.status === 422, "esperado 422, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_TABLE_PAYMENT_REQUEST", "code " + response.body.code);
+    });
+%}
+
+
 ### 17. Cliente paga a pizza A com a taxa: 40,00 + 4,00
 POST {{host}}/public/tables/{{orderingToken}}/payment-requests
 Content-Type: application/json
@@ -521,6 +571,23 @@ Content-Type: application/json
 
 > {%
     client.test("item pago: 409 TAB_ITEM_ALREADY_PAID", function() {
+        client.assert(response.status === 409, "esperado 409, recebido " + response.status);
+        client.assert(response.body.code === "TAB_ITEM_ALREADY_PAID", "code " + response.body.code);
+    });
+%}
+
+
+### 24b. Simular a pizza ja paga -> 409 TAB_ITEM_ALREADY_PAID
+POST {{host}}/public/tables/{{orderingToken}}/payment-requests/quote
+Content-Type: application/json
+
+{
+  "includeServiceCharge": true,
+  "items": [{"tabItemId": "{{pizzaAItemId}}", "quantity": 1}]
+}
+
+> {%
+    client.test("simulacao de item pago: 409 TAB_ITEM_ALREADY_PAID", function() {
         client.assert(response.status === 409, "esperado 409, recebido " + response.status);
         client.assert(response.body.code === "TAB_ITEM_ALREADY_PAID", "code " + response.body.code);
     });
@@ -908,6 +975,23 @@ GET {{host}}/public/tables/{{orderingToken}}/tab
 
 > {%
     client.test("comanda fechada: 404 TAB_NOT_FOUND", function() {
+        client.assert(response.status === 404, "esperado 404, recebido " + response.status);
+        client.assert(response.body.code === "TAB_NOT_FOUND", "code " + response.body.code);
+    });
+%}
+
+
+### 41b. Simular sem comanda ativa -> 404 TAB_NOT_FOUND
+POST {{host}}/public/tables/{{orderingToken}}/payment-requests/quote
+Content-Type: application/json
+
+{
+  "includeServiceCharge": true,
+  "items": [{"tabItemId": "{{pizzaBItemId}}", "quantity": 1}]
+}
+
+> {%
+    client.test("simulacao sem comanda: 404 TAB_NOT_FOUND", function() {
         client.assert(response.status === 404, "esperado 404, recebido " + response.status);
         client.assert(response.body.code === "TAB_NOT_FOUND", "code " + response.body.code);
     });

@@ -624,6 +624,74 @@ class TabPaymentPartTest {
         }
     }
 
+    // ------------------------------------------------------------------ the quote (#55, #57)
+
+    @Nested
+    class Quote {
+
+        private final TabItem trio = order(tab, dish("3.35"), units(3));
+
+        private List<Tab.PartChoice> twoOfTrioWithSmall() {
+            return List.of(choice(trio, 2), whole(small));
+        }
+
+        private static List<String> linesOf(List<TablePaymentRequestItem> items) {
+            return items.stream().map(item -> item.tabItemId() + " " + item.quantity() + " " + item.lineTotal()
+                    + " " + item.serviceCharge()).toList();
+        }
+
+        @Test
+        void shouldPriceTheUnitsExactlyAsTheRequestCreatedRightAfterReservesThem() {
+            Tab.PaymentPart priced = tab.priceForPayment(twoOfTrioWithSmall(), true, TEN_PERCENT);
+
+            TablePaymentRequest request = requestUnits(tab, true, choice(trio, 2), whole(small));
+
+            assertThat(linesOf(priced.items())).containsExactlyElementsOf(linesOf(request.items()));
+            assertThat(priced.serviceChargeRate()).isEqualTo(request.serviceChargeRate());
+        }
+
+        @Test
+        void shouldReserveNothingWhenPricing() {
+            tab.priceForPayment(twoOfTrioWithSmall(), true, TEN_PERCENT);
+
+            assertThat(trio.reservedQuantity()).isZero();
+            assertThat(small.isReservedForPayment()).isFalse();
+        }
+
+        @Test
+        void shouldGiveZeroSharesWhenThePriceLeavesTheServiceOut() {
+            Tab.PaymentPart priced = tab.priceForPayment(twoOfTrioWithSmall(), false, TEN_PERCENT);
+
+            assertThat(priced.items()).extracting(TablePaymentRequestItem::serviceCharge).containsOnly(Money.ZERO);
+        }
+
+        @Test
+        void shouldRefuseAQuoteWithoutAPixReceiverBeforeLookingAtTheItems() {
+            assertRejectedWith(() -> TablePaymentRequest.quote(tab, List.of(choice(trio, 4)), true, TEN_PERCENT,
+                    Optional.empty()), PIX_RECEIVER_NOT_CONFIGURED);
+        }
+
+        @Test
+        void shouldRefuseAQuoteOfUnitsAlreadyPaid() {
+            paySmall();
+
+            assertRejectedWith(() -> TablePaymentRequest.quote(tab, List.of(whole(small)), true, TEN_PERCENT,
+                    Optional.of(TablePaymentFixtures.RECEIVER)), TAB_ITEM_ALREADY_PAID);
+        }
+
+        @Test
+        void shouldWriteNothingWhenQuoting() {
+            Tab.PaymentPart quoted = TablePaymentRequest.quote(tab, twoOfTrioWithSmall(), true, TEN_PERCENT,
+                    Optional.of(TablePaymentFixtures.RECEIVER));
+
+            assertThat(quoted.items()).hasSize(2);
+            assertThat(trio.reservedQuantity()).isZero();
+            assertThat(small.isReservedForPayment()).isFalse();
+            assertThat(billing.postings).isEmpty();
+            assertThat(billing.openedFolios).isEmpty();
+        }
+    }
+
     private static Money shareOf(TablePaymentRequest request, TabItem item) {
         return request.items().stream()
                 .filter(requestItem -> requestItem.tabItemId().equals(item.id()))

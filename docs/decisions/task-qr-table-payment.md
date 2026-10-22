@@ -13,10 +13,10 @@
 | | |
 |---|---|
 | Branch | `task/qr-table-payment` (worktree `../castel-qr-ordering`), a partir de `task/qr-table-ordering` (PR #38) |
-| Rodada atual | 3 — achados da review (#48–#54) |
-| Build | 2026-10-22, rodada 3: `./mvnw clean verify` passa no reator inteiro, ArchUnit incluído |
-| Testes | 2104 no total, 0 falhas (agente de testes: `TabPaymentPartTest`, `TablePaymentRequestTest`, `PixReceiverTest`, `TableOrderRequestTest`, `TablePaymentRequestHttpIntegrationTest`, `TableOrderRequestHttpIntegrationTest`). #50 sem teste de concorrência |
-| `.http` | `37` (51 requisições) e `38` (60) verdes contra um Postgres descartável (2026-10-22), com chave aleatória normalizada, chave fora do DICT recusada e grupos somando o total. Conferidos à mão no mesmo banco: estorno pelo restaurante depois do estorno no balcão (#49) e expiração pela tarefa, uma transação por pedido (#50) |
+| Rodada atual | 4 — simular valor (#55–#58) |
+| Build | Rodada 4 (2026-10-22), numa cópia fora do worktree: `./mvnw clean verify` passa inteiro, ArchUnit incluído — 2104 testes, 0 falhas |
+| Testes | nenhum teste novo nesta rodada (o implementador não escreve teste); falta cobrir `Tab.priceForPayment` / `TablePaymentRequest.quote` e a rota `quote` |
+| `.http` | `37` (51 requisições) e `38` (65, com simulação, simulação que não reserva, quantidade fora da linha, item pago e mesa sem comanda) verdes contra um Postgres descartável (2026-10-22) |
 
 Continua a `qr-table-ordering`. Ordem: backend primeiro, testar as rotas, depois o front (Ruan, 2026-10-22).
 
@@ -95,6 +95,11 @@ Levantamento de 2026-10-22 no código:
 | 52 | 3 | DEV (review, sugestão): o envio e o fechamento da comanda expiram na hora os pagamentos vencidos dessa comanda, liberando as unidades, travando os pedidos antes da comanda; só um Pix ainda dentro da janela segura o fechamento (#28) | implementado |
 | 53 | 3 | DEV (review): a chave do Pix é guardada na forma do DICT: CPF (dígitos, verificadores conferidos pelo `Cpf`) e CNPJ (14 dígitos, só o tamanho) sem pontuação, telefone como `+55` e 10 ou 11 dígitos (o `+` é o que distingue de um CPF), e-mail e chave aleatória (UUID) em minúsculas; outra forma, ou caractere fora do ASCII, `INVALID_PIX_RECEIVER`. Nome e cidade que ficariam vazios no padrão são recusados ao gravar, não no celular. Revê a #33 | implementado |
 | 54 | 3 | DEV (review, sugestão): a pré-conta e a comanda pública mostram `unpaidServiceChargeBase`; vezes a taxa, mais as fatias congeladas, dá a taxa mostrada | implementado |
+| 55 | 4 | Rota de **simular valor**: o celular manda as unidades escolhidas e `includeServiceCharge` e recebe o valor da parte (itens, taxa, total) calculado pelo backend, **sem reservar nada nem gerar Pix**. Serve para a Conta mostrar o valor enquanto o cliente marca, sem o navegador calcular dinheiro (Ruan, 2026-10-22) | implementado |
+| 56 | 4 | DEV (#55): rota `POST /public/tables/{orderingToken}/payment-requests/quote`, corpo `{includeServiceCharge, items: [{tabItemId, quantity}]}` → `200 {subtotal, serviceCharge, amount, items: [{tabItemId, quantity, lineTotal, serviceCharge}]}`. `customerName` e `customerDeviceId` não são pedidos nem validados: a simulação não grava nada que precise de autor; se vierem, são ignorados | implementado |
+| 57 | 4 | DEV (#55): a simulação usa a mesma conta do pedido — `Tab.priceForPayment` valida as escolhas e calcula valores e fatias; `reserveForPayment` é ela mais a reserva das unidades —, então o arredondamento é um só. Mesmas recusas e na mesma ordem do pedido, inclusive `PIX_RECEIVER_NOT_CONFIGURED` primeiro, para a tela saber cedo que não há Pix; não reserva, não grava, não gera Pix | implementado |
+| 58 | 4 | DEV (#55): transação só de leitura, sem trava da comanda. O valor simulado pode diferir do pedido real se alguém pagar, reservar ou lançar entre os dois; o pedido real é a autoridade. A simulação também não expira pedido vencido (não grava): unidades de um pedido vencido que a tarefa ainda não gravou aparecem reservadas por até um minuto, embora o envio real as libere antes. Comanda fechada ou juntada entre a leitura do id e a da comanda responde `404 TAB_NOT_FOUND`, como no envio (#51) | implementado |
+| 59 | 5 | O garçom estorna o Pix confirmado pelo salão (confirma a #9). Pede uma leitura dos pagamentos do celular já confirmados da comanda, para o salão ter de onde estornar (Ruan, 2026-10-22) | pendente |
 
 Valores de status: `pendente` · `implementado` · `revertida pela #n`
 
@@ -108,6 +113,7 @@ Rodada 1 entregou o backend; nenhum item saiu da lista. "Front pendente" marca o
 - [ ] Cliente escolhe itens e recebe o Pix copia e cola com o valor (#4, #7, #20) — backend feito (`pixPayload`); front pendente
 - [x] Taxa de serviço opcional no pagamento pelo celular (#38)
 - [x] Pagar parte da quantidade de um item, unidade a unidade (#39, #42–#45)
+- [x] Simular o valor da parte sem reservar nem gerar Pix (#55–#58)
 - [ ] Nome do cliente e código do aparelho no pedido, no pagamento e no item; "Só os meus" pelo aparelho (#40, #46) — backend feito; front pendente
 - [x] Pagamento aguardando reserva os itens; garçom confirma ou recusa; expira em 30 min (#8, #11, #13)
 - [x] Pagamento com a comanda `OPEN` e `CLOSING` (#6, #17, #25); fechamento abate o pago (#14, #19)
@@ -129,6 +135,7 @@ Rodada 1 entregou o backend; nenhum item saiu da lista. "Front pendente" marca o
 | `GET /public/tables/{orderingToken}/tab` — header opcional `X-Customer-Device` (#46) | `{diningTableLabel, status, items: [{id, itemName, variantName, modifiers: [{name, quantity}], quantity, weightGrams, lineTotal, status, paid, paidQuantity, reservedQuantity, customerName, mine}], subtotal, serviceChargeRate, serviceCharge, total, paidAmount, amountDue, acceptsPayment}` — só itens ativos (#31); `paid` = todas as unidades pagas; `mine` verdadeiro só para item do aparelho do header; nenhum código de aparelho volta; `acceptsPayment` falso sem Pix cadastrado; `404 TAB_NOT_FOUND` sem comanda ativa |
 | `POST /public/tables/{orderingToken}/payment-requests` | corpo `{customerName, customerDeviceId, includeServiceCharge, items: [{tabItemId, quantity}]}` (#38, #39, #44, #46) → `201` `{id, status, refunded, subtotal, serviceCharge, amount, includeServiceCharge, pixPayload, items: [{tabItemId, quantity, lineTotal, serviceCharge}], requestedAt, expiresAt}` |
 | `POST /public/tables/{orderingToken}/order-requests` (da `qr-table-ordering`) | corpo ganha `customerName` e `customerDeviceId`, obrigatórios (#46); a fila interna do pedido mostra `customerName`, e o item da comanda criado na confirmação guarda os dois |
+| `POST /public/tables/{orderingToken}/payment-requests/quote` | simular valor (#55–#58): corpo `{includeServiceCharge, items: [{tabItemId, quantity}]}` → `200` `{subtotal, serviceCharge, amount, items: [{tabItemId, quantity, lineTotal, serviceCharge}]}`; não reserva, não grava, não gera Pix; mesmas recusas do pedido, `PIX_RECEIVER_NOT_CONFIGURED` primeiro |
 | `GET /public/tables/{orderingToken}/payment-requests/{id}` | o mesmo formato, com o estado atual |
 
 **Interno**

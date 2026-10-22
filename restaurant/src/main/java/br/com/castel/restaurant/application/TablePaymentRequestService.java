@@ -133,6 +133,25 @@ public class TablePaymentRequestService {
     }
 
     /**
+     * What a payment of these units would cost, computed as {@link #submit} would, reserving and
+     * writing nothing (decisions #55–#58). A read: the value may change before the real request,
+     * which is the authority.
+     *
+     * @throws DiningTableNotFoundException if the code is unknown, regenerated or of a deactivated table
+     * @throws TabNotFoundException if the table has no {@code OPEN} or {@code CLOSING} tab
+     * @see TablePaymentRequest#quote for the refusals
+     */
+    @Transactional(readOnly = true)
+    public Tab.PaymentPart quote(UUID orderingToken, List<Tab.PartChoice> choices, boolean includeServiceCharge) {
+        DiningTable diningTable = loadTable(orderingToken);
+        Tab tab = tabs.findById(activeTabIdOf(diningTable))
+                .filter(found -> found.status().acceptsTablePayment())
+                .orElseThrow(() -> noActiveTab());
+        return TablePaymentRequest.quote(tab, choices, includeServiceCharge, closing.currentServiceChargeRate(),
+                pixReceivers.find());
+    }
+
+    /**
      * The request as the phone that sent it reads it.
      *
      * @throws DiningTableNotFoundException if the code is unknown, regenerated or of a deactivated table

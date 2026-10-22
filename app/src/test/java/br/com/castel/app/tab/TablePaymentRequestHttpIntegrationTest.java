@@ -370,7 +370,59 @@ class TablePaymentRequestHttpIntegrationTest extends AbstractIntegrationTest {
                 String.class, UUID.fromString(requestId))).isEqualTo("EXPIRED");
     }
 
+    /** Decisions #55–#58: the same amount as the real request, no Pix, nothing reserved, no customer. */
+    @Test
+    void shouldQuoteTheAmountOfTheRealRequestWithoutReservingAnythingOrAskingTheCustomer() {
+        configurePix();
+        String trioId = order(createItem("Pastel " + suffix, "3.35"), 3);
+        String units = unitsOf(trioId, 2) + "," + unitsOf(smallId, 1);
+
+        JsonNode quote = send(publicPost("/payment-requests/quote", quoteBody("true", units)), 200);
+
+        assertThat(quote.get("amount").asString()).isEqualTo("44.06");
+        assertThat(quote.has("pixPayload")).isFalse();
+        JsonNode tab = send(publicGet("/tab"), 200);
+        assertThat(itemOf(tab, trioId).get("reservedQuantity").asInt()).isZero();
+        assertThat(itemOf(tab, smallId).get("reservedQuantity").asInt()).isZero();
+        JsonNode request = send(publicPost("/payment-requests", paymentBody(CUSTOMER_NAME, "true",
+                unitsOf(trioId, 2), unitsOf(smallId, 1))), 201);
+        assertThat(request.get("amount").asString()).isEqualTo(quote.get("amount").asString());
+        assertThat(request.get("serviceCharge").asString()).isEqualTo(quote.get("serviceCharge").asString());
+    }
+
+    @Test
+    void shouldRefuseAQuoteOfMoreUnitsThanTheLineHas() {
+        configurePix();
+
+        assertCode(publicPost("/payment-requests/quote", quoteBody("true", unitsOf(smallId, 2))), 422,
+                "INVALID_TABLE_PAYMENT_REQUEST");
+    }
+
+    @Test
+    void shouldRefuseAQuoteOfAnItemAlreadyPaid() {
+        configurePix();
+        confirm(send(publicPost("/payment-requests", itemsBody(smallId)), 201));
+
+        assertCode(publicPost("/payment-requests/quote", quoteBody("true", unitsOf(smallId, 1))), 409,
+                "TAB_ITEM_ALREADY_PAID");
+    }
+
+    @Test
+    void shouldAnswerTabNotFoundToAQuoteFromATableWithoutATab() {
+        configurePix();
+        String emptyTableToken = send(post("/api/restaurant/dining-tables", adminToken,
+                "{\"label\":\"Pix vazia %s\"}".formatted(suffix)), 201).get("orderingToken").asString();
+
+        assertCode(anonymous("/public/tables/" + emptyTableToken + "/payment-requests/quote")
+                .POST(HttpRequest.BodyPublishers.ofString(quoteBody("true", unitsOf(smallId, 1)))), 404,
+                "TAB_NOT_FOUND");
+    }
+
     // ------------------------------------------------------------- fixtures
+
+    private static String quoteBody(String includeServiceCharge, String items) {
+        return "{\"includeServiceCharge\":%s,\"items\":[%s]}".formatted(includeServiceCharge, items);
+    }
 
     /** Ages a pending request past its window, as the clock would, leaving it stored PENDING. */
     private void ageThirtyOneMinutes(String requestId) {
