@@ -277,6 +277,34 @@ class FolioHttpIntegrationTest extends AbstractIntegrationTest {
         assertThat(folio.get("totalCharges").asString()).isEqualTo("9999999999.99");
     }
 
+    @Test
+    void shouldListTheOpenFoliosOfStayAndTabButNotAClosedOne() {
+        String frontDeskToken = accessTokenFor(createUser(Role.FRONT_DESK));
+        String waiterToken = accessTokenFor(createUser(Role.WAITER));
+        FolioId stay = folioFacade.openStayFolio(
+                FolioOwner.reservation(UUID.randomUUID()), new FolioReference(uniqueCode(), "Room 12"));
+        folioFacade.post(stay, new ChargeRequest(
+                Money.of("200.00"), "Room night", ChargeSource.roomNight(UUID.randomUUID())));
+        FolioId tab = folioFacade.openTabFolio(FolioOwner.tab(UUID.randomUUID()));
+        FolioId closed = folioFacade.openTabFolio(FolioOwner.tab(UUID.randomUUID()));
+        folioFacade.close(closed);
+
+        JsonNode open = send(get(FOLIOS + "?status=OPEN", frontDeskToken), 200);
+
+        assertThat(open.valueStream().map(folio -> folio.get("id").asString()))
+                .contains(stay.value().toString(), tab.value().toString())
+                .doesNotContain(closed.value().toString());
+        JsonNode listedStay = open.valueStream()
+                .filter(folio -> folio.get("id").asString().equals(stay.value().toString()))
+                .findFirst().orElseThrow();
+        assertThat(listedStay.get("balance").asString()).isEqualTo("200.00");
+        assertThat(listedStay.get("charges")).hasSize(1);
+        assertThat(send(get(FOLIOS + "?status=CLOSED", frontDeskToken), 400).get("code").asString())
+                .isEqualTo("VALIDATION_FAILED");
+        send(get(FOLIOS + "?status=", frontDeskToken), 400);
+        send(get(FOLIOS + "?status=OPEN", waiterToken), 403);
+    }
+
     // ------------------------------------------------------------- fixtures
 
     private static JsonNode chargeWithId(JsonNode folio, String chargeId) {
