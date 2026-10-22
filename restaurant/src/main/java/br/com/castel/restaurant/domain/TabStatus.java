@@ -107,4 +107,20 @@ public enum TabStatus {
     public boolean acceptsMerge() {
         return this == OPEN;
     }
+
+    // ------------------------------------------------------------------ payment from the phone (task qr-table-payment)
+
+    /**
+     * The phone pays part of the tab while it is {@code OPEN}, with the table still ordering
+     * (decision #6), and while it is {@code CLOSING}, where confirming swaps the charge of the closing
+     * for what is still due (decision #25): a request is created, confirmed and refunded only then.
+     */
+    public boolean acceptsTablePayment() {
+        return this == OPEN || this == CLOSING;
+    }
+
+    /** Only a {@code CLOSING} tab has the charge of its closing in force on the folio. */
+    public boolean holdsClosingCharge() {
+        return this == CLOSING;
+    }
 }

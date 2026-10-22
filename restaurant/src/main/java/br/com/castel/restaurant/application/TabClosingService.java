@@ -8,12 +8,19 @@ import br.com.castel.restaurant.domain.TabId;
 import br.com.castel.restaurant.domain.TabItemId;
 import br.com.castel.restaurant.domain.TabNotFoundException;
 import br.com.castel.restaurant.domain.TabRepository;
+import br.com.castel.restaurant.domain.TablePaymentRequest;
+import br.com.castel.restaurant.domain.TablePaymentRequestRepository;
+import br.com.castel.restaurant.domain.TablePaymentRequestStatusChanged;
 import br.com.castel.sharedkernel.AuditorAware;
 import br.com.castel.sharedkernel.Money;
 import br.com.castel.sharedkernel.Percentage;
 import br.com.castel.sharedkernel.Settings;
 import java.time.Clock;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
+import java.util.List;
 import java.util.Map;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -44,14 +51,24 @@ public class TabClosingService {
     private final Settings settings;
     private final AuditorAware auditorAware;
     private final Clock clock;
+    private final TablePaymentRequestRepository paymentRequests;
+    private final ApplicationEventPublisher events;
 
     public TabClosingService(
-            TabRepository tabs, TabBilling billing, Settings settings, AuditorAware auditorAware, Clock clock) {
+            TabRepository tabs,
+            TabBilling billing,
+            Settings settings,
+            AuditorAware auditorAware,
+            Clock clock,
+            TablePaymentRequestRepository paymentRequests,
+            ApplicationEventPublisher events) {
         this.tabs = tabs;
         this.billing = billing;
         this.settings = settings;
         this.auditorAware = auditorAware;
         this.clock = clock;
+        this.paymentRequests = paymentRequests;
+        this.events = events;
     }
 
     /** @throws TabNotFoundException if the tab does not exist */
@@ -136,11 +153,24 @@ public class TabClosingService {
         return tabs.save(tab);
     }
 
-    /** @throws TabNotFoundException if the tab does not exist */
+    /**
+     * Closes the tab. The payments from the phone already past their window are expired first, freeing
+     * their units, so only a Pix still inside its window holds the closing (decisions #28 and #52 of
+     * task qr-table-payment). They are locked before the tab, the order every path takes.
+     *
+     * @throws TabNotFoundException if the tab does not exist
+     */
     @Transactional
     public Tab close(TabId tabId) {
+        Instant now = clock.instant().truncatedTo(ChronoUnit.MICROS);
+        List<TablePaymentRequest> overdue = paymentRequests.findOverdueOnTabForUpdate(tabId, now);
         Tab tab = loadExclusive(tabId);
-        tab.close(billing, auditorAware.currentAuditorId(), clock.instant());
+        overdue.forEach(request -> {
+            request.expire(tab, now);
+            TablePaymentRequest saved = paymentRequests.save(request);
+            events.publishEvent(TablePaymentRequestStatusChanged.of(saved, now));
+        });
+        tab.close(billing, auditorAware.currentAuditorId(), now);
         return tabs.save(tab);
     }
 

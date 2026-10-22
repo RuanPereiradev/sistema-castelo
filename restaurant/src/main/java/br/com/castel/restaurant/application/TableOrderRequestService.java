@@ -103,13 +103,14 @@ public class TableOrderRequestService {
      * @see TableOrderRequest#submit for the refusals of the request itself
      */
     @Transactional
-    public TableOrderRequest submit(UUID orderingToken, List<TableOrderRequestLine> lines) {
+    public TableOrderRequest submit(UUID orderingToken, String customerName, String customerDeviceId,
+            List<TableOrderRequestLine> lines) {
         DiningTable diningTable = loadTable(orderingToken);
         Instant now = now();
         requests.findOverdueOnDiningTableForUpdate(diningTable.id(), now)
                 .ifPresent(overdue -> expire(overdue, now));
-        TableOrderRequest request = TableOrderRequest.submit(currentProperty.id(), diningTable,
-                activeTabOn(diningTable.id()), lines, menuItems, now, currentProperty.timeZone());
+        TableOrderRequest request = TableOrderRequest.submit(currentProperty.id(), diningTable, customerName,
+                customerDeviceId, activeTabOn(diningTable.id()), lines, menuItems, now, currentProperty.timeZone());
         TableOrderRequest saved = requests.add(request);
         events.publishEvent(TableOrderRequestStatusChanged.of(saved, now));
         return saved;
@@ -151,7 +152,7 @@ public class TableOrderRequestService {
         request.requireAnswerableAt(now);
         TabId tabId = tabRepository.findActiveIdOnDiningTable(request.diningTableId())
                 .orElseGet(() -> tabs.open(TabOrigin.TABLE_SERVICE, request.diningTableId(), null).id());
-        request.lines().forEach(line -> tabs.addItem(tabId, commandFrom(line)));
+        request.lines().forEach(line -> tabs.addItem(tabId, commandFrom(line, request)));
         request.confirm(auditorAware.currentAuditorId(), now, tabId);
         TableOrderRequest saved = requests.save(request);
         events.publishEvent(TableOrderRequestStatusChanged.of(saved, now));
@@ -214,8 +215,11 @@ public class TableOrderRequestService {
         return tabRepository.findActive(currentProperty.id(), diningTableId, null).stream().findFirst();
     }
 
-    /** The line as the waiter would have ordered it; a customer never sends a weight (decision #20). */
-    private static AddTabItemCommand commandFrom(TableOrderRequestLine line) {
+    /**
+     * The line as the waiter would have ordered it, with the customer who asked for it (decision #40 of
+     * task qr-table-payment); a customer never sends a weight (decision #20).
+     */
+    private static AddTabItemCommand commandFrom(TableOrderRequestLine line, TableOrderRequest request) {
         return new AddTabItemCommand(
                 line.menuItemId(),
                 line.variantId().orElse(null),
@@ -224,7 +228,9 @@ public class TableOrderRequestService {
                 line.modifiers().stream()
                         .map(chosen -> new AddTabItemCommand.ChosenModifier(chosen.modifierId(), chosen.quantity()))
                         .toList(),
-                line.specialInstructions().orElse(null));
+                line.specialInstructions().orElse(null),
+                request.customerName().orElse(null),
+                request.customerDeviceId().orElse(null));
     }
 
     private static TableOrderRequestNotFoundException notFound(TableOrderRequestId requestId) {

@@ -120,8 +120,8 @@ public class TabService {
                                         "No modifier " + chosen.modifierId().value())),
                         chosen.quantity()))
                 .toList();
-        TabItemOrder order = new TabItemOrder(
-                command.variantId(), command.quantity(), command.weightGrams(), choices, command.specialInstructions());
+        TabItemOrder order = new TabItemOrder(command.variantId(), command.quantity(), command.weightGrams(), choices,
+                command.specialInstructions(), command.customerName(), command.customerDeviceId());
         TabItem item = tab.addItem(menuItem, order, auditorAware.currentAuditorId(), clock.instant(), currentProperty.timeZone());
         Tab saved = tabs.save(tab);
         events.publishEvent(TabItemOrdered.of(saved.id(), item));

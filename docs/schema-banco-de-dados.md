@@ -141,8 +141,9 @@ cash_drawer_session 1──N payment
 | V11 | `V11__tab_item_transfer.sql` | 3.6 | `tab_item_transfer` |
 | V12 | `V12__finance_expense.sql` | F1 | `expense` + altera o `CHECK` de `cash_movement` |
 | V13 | `V13__table_order_request.sql` | qr-table-ordering | `table_order_request`, `table_order_request_line`, `table_order_request_line_modifier`; altera `dining_table` (`ordering_token`) |
-| V14 | `V14__hotel_inventory.sql` | 1.1 | `room_type`, `room`, `rate_plan` |
-| V15 | `V15__reservation.sql` | 2.1 | `guest`, `daily_inventory`, `reservation`, `reservation_child`, `room_night` |
+| V14 | `V14__table_payment_request.sql` | qr-table-payment | `table_payment_request`, `table_payment_request_item`; altera `tab_item` (reserva e pagamento) e `tab` (`ck_tab_closing`) |
+| V15 | `V15__hotel_inventory.sql` | 1.1 | `room_type`, `room`, `rate_plan` |
+| V16 | `V16__reservation.sql` | 2.1 | `guest`, `daily_inventory`, `reservation`, `reservation_child`, `room_night` |
 
 Renumerada em 2026-09-24 (decisão #5 da task 1.2): o restaurante é construído
 antes do hotel, e a versão segue a ordem de execução. Com o hotel no meio, o
@@ -155,6 +156,10 @@ versão segue a ordem de execução.
 Renumerada uma terceira vez em 2026-10-02 (task 3.6, decisão T11b): o rastro da
 transferência de itens virou tabela própria e a 3.6 ganhou a V11; o hotel desce
 para V12/V13. Mesma razão de sempre.
+
+Renumerada de novo em 2026-10-22 (tasks qr-table-ordering e qr-table-payment, decisões #27 e
+#24, aprovadas pelo Ruan): o pedido e o pagamento pelo celular da mesa ganham a V13
+e a V14; o hotel desce para V15/V16.
 
 ---
 
@@ -546,7 +551,7 @@ nulável: pagamento por QR code não tem operador, e a constraint
 
 ---
 
-## 8. V14 — inventário do hotel
+## 8. V15 — inventário do hotel
 
 ```sql
 CREATE TABLE room_type (
@@ -636,7 +641,7 @@ CREATE TABLE dining_table (
 
 ---
 
-## 10. V15 — reservas
+## 10. V16 — reservas
 
 ```sql
 CREATE TABLE guest (

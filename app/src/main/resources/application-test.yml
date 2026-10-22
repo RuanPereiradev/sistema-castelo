@@ -20,6 +20,7 @@ castel:
     # A tarefa que expira os pedidos do QR da mesa fica desligada nos testes de integracao: uma
     # rodada dela no meio de um teste o tornaria instavel. A expiracao e chamada direto no teste.
     table-order-request-expiry-enabled: false
+    table-payment-request-expiry-enabled: false
 
 app:
   security:

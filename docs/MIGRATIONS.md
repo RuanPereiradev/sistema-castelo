@@ -36,8 +36,9 @@ Cada task já tem seu número atribuído em `docs/schema-banco-de-dados.md`
 | V11 | `V11__tab_item_transfer.sql` | 3.6 | `tab_item_transfer` |
 | V12 | `V12__finance_expense.sql` | F1 | `expense` + altera o `CHECK` de `cash_movement` |
 | V13 | `V13__table_order_request.sql` | qr-table-ordering | altera `dining_table` (`ordering_token`); `table_order_request`, `table_order_request_line`, `table_order_request_line_modifier` |
-| V14 | `V14__hotel_inventory.sql` | 1.1 | `room_type`, `room`, `rate_plan` |
-| V15 | `V15__reservation.sql` | 2.1 | `guest`, `daily_inventory`, `reservation`, `reservation_child`, `room_night` |
+| V14 | `V14__table_payment_request.sql` | qr-table-payment | altera `tab` (`ck_tab_closing`) e `tab_item` (reserva e pagamento); `table_payment_request`, `table_payment_request_item` |
+| V15 | `V15__hotel_inventory.sql` | 1.1 | `room_type`, `room`, `rate_plan` |
+| V16 | `V16__reservation.sql` | 2.1 | `guest`, `daily_inventory`, `reservation`, `reservation_child`, `room_night` |
 
 Renumerada em 2026-09-24 (decisão #5 da task 1.2): o restaurante é construído
 antes do hotel, e a versão segue a ordem de execução. Com o hotel no meio, o
@@ -62,6 +63,10 @@ desce para V13/V14.
 Renumerada uma quinta vez em 2026-10-21 (task qr-table-ordering, decisão #27, aprovada
 pelo Ruan): o pedido do cliente pelo QR da mesa ganhou a V13. O hotel desce
 para V14/V15. Mesma regra de merge: a V13 entra na `main` antes de qualquer task de hotel.
+
+Renumerada uma sexta vez em 2026-10-22 (task qr-table-payment, decisão #24, aprovada
+pelo Ruan): o pagamento pelo celular da mesa ganhou a V14. O hotel desce para
+V15/V16. Mesma regra de merge: a V14 entra na `main` antes de qualquer task de hotel.
 
 **Ordem de merge da F1:** mesma regra da 3.6 — a V12 entra na `main` antes de qualquer
 task de hotel.

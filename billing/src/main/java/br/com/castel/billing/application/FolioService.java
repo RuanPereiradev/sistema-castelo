@@ -168,6 +168,19 @@ public class FolioService implements FolioFacade {
                 payment.id(), payment.method(), payment.amount(), payment.paidAt(), received.balance());
     }
 
+    /** The refund of another module takes the path of the counter, as {@link #receivePayment} does. */
+    @Override
+    @Transactional
+    public void refund(FolioId folioId, PaymentId paymentId, String reason) {
+        refundPayment(folioId, paymentId, reason);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public boolean isPaymentRefunded(FolioId folioId, PaymentId paymentId) {
+        return load(folioId).payment(paymentId).isRefunded();
+    }
+
     // ------------------------------------------------------------------ front desk
 
     /** @throws FolioNotFoundException if the folio does not exist */

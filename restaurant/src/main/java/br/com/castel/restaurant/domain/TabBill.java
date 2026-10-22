@@ -7,6 +7,8 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
+import java.util.function.Function;
+import java.util.function.Predicate;
 
 /**
  * The pre-bill of a tab: what it costs, what the service charge adds, and how the bill splits.
@@ -15,15 +17,25 @@ import java.util.Objects;
  * the sum of what counts for it, never item by item, and each split group takes its share of that one
  * amount by the largest remainder (decision F4), so the groups always add up to the tab.
  *
+ * @param unpaidServiceChargeBase what of the base the phone did not pay yet: the base the rate in force
+ *     applies to, so {@code unpaidServiceChargeBase × rate} plus the frozen shares is the service
+ *     charge (decision #48 of task qr-table-payment)
  * @param serviceChargeRate the rate in force: frozen once closing started, the current one before
+ * @param paidAmount what the phone of the table already paid, items and their frozen share of the
+ *     charge (task qr-table-payment); zero when nobody paid
+ * @param amountDue the total less what the phone paid; what the closing posts (decision #19 of task
+ *     qr-table-payment)
  * @param groups one per split group holding an active item, by group number
  */
 public record TabBill(
         Money subtotal,
         Money serviceChargeBase,
+        Money unpaidServiceChargeBase,
         Percentage serviceChargeRate,
         Money serviceCharge,
         Money total,
+        Money paidAmount,
+        Money amountDue,
         List<SplitGroup> groups) {
 
     public static final int MINIMUM_SPLIT_PARTS = 1;
@@ -32,9 +44,12 @@ public record TabBill(
     public TabBill {
         Objects.requireNonNull(subtotal, "subtotal");
         Objects.requireNonNull(serviceChargeBase, "serviceChargeBase");
+        Objects.requireNonNull(unpaidServiceChargeBase, "unpaidServiceChargeBase");
         Objects.requireNonNull(serviceChargeRate, "serviceChargeRate");
         Objects.requireNonNull(serviceCharge, "serviceCharge");
         Objects.requireNonNull(total, "total");
+        Objects.requireNonNull(paidAmount, "paidAmount");
+        Objects.requireNonNull(amountDue, "amountDue");
         groups = List.copyOf(groups);
     }
 
@@ -43,25 +58,48 @@ public record TabBill(
      * Receives values the {@link Tab} already worked out.
      */
     static TabBill of(List<TabItem> items, boolean serviceChargeApplied, Money subtotal, Money serviceChargeBase,
-            Percentage rate, Money serviceCharge) {
+            Money unpaidServiceChargeBase, Percentage rate, Money serviceCharge, Money paidAmount) {
         List<TabItem> active = items.stream().filter(TabItem::isActive).toList();
         List<Integer> groupNumbers = active.stream().map(TabItem::splitGroup).distinct().sorted().toList();
         List<Money> bases = groupNumbers.stream()
-                .map(group -> active.stream()
-                        .filter(item -> item.splitGroup() == group && serviceChargeApplied && item.countsForServiceCharge())
-                        .map(TabItem::lineTotal)
-                        .reduce(Money.ZERO, Money::plus))
+                .map(group -> sumOf(active, group, item -> serviceChargeApplied && item.countsForServiceCharge(),
+                        TabItem::lineTotal))
                 .toList();
-        List<Money> shares = shareByLargestRemainder(serviceCharge, bases);
+        /*
+         * Each group takes the frozen shares its paid units carry, and its part of the charge on the
+         * units not paid, by the largest remainder over its unpaid base (decision #48 of task
+         * qr-table-payment). The groups add up to the service charge of the bill, frozen shares
+         * included (F4); with nothing paid this is the split of task 3.2.
+         */
+        List<Money> paidShares = groupNumbers.stream()
+                .map(group -> sumOf(active, group, item -> true, TabItem::paidServiceCharge))
+                .toList();
+        Money unpaidServiceCharge = serviceCharge.minus(paidShares.stream().reduce(Money.ZERO, Money::plus));
+        List<Money> unpaidBases = groupNumbers.stream()
+                .map(group -> sumOf(active, group, item -> serviceChargeApplied && item.countsForServiceCharge(),
+                        TabItem::unpaidValue))
+                .toList();
+        List<Money> unpaidShares = shareByLargestRemainder(unpaidServiceCharge, unpaidBases);
         List<SplitGroup> groups = new ArrayList<>();
         for (int index = 0; index < groupNumbers.size(); index++) {
             int group = groupNumbers.get(index);
             List<TabItem> ofGroup = active.stream().filter(item -> item.splitGroup() == group).toList();
             Money groupSubtotal = ofGroup.stream().map(TabItem::lineTotal).reduce(Money.ZERO, Money::plus);
-            groups.add(new SplitGroup(group, groupSubtotal, bases.get(index), shares.get(index),
-                    groupSubtotal.plus(shares.get(index)), ofGroup.stream().map(TabItem::id).toList()));
+            Money groupServiceCharge = paidShares.get(index).plus(unpaidShares.get(index));
+            groups.add(new SplitGroup(group, groupSubtotal, bases.get(index), groupServiceCharge,
+                    groupSubtotal.plus(groupServiceCharge), ofGroup.stream().map(TabItem::id).toList()));
         }
-        return new TabBill(subtotal, serviceChargeBase, rate, serviceCharge, subtotal.plus(serviceCharge), groups);
+        Money total = subtotal.plus(serviceCharge);
+        return new TabBill(subtotal, serviceChargeBase, unpaidServiceChargeBase, rate, serviceCharge, total,
+                paidAmount, total.minus(paidAmount), groups);
+    }
+
+    private static Money sumOf(List<TabItem> active, int group, Predicate<TabItem> counts,
+            Function<TabItem, Money> amount) {
+        return active.stream()
+                .filter(item -> item.splitGroup() == group && counts.test(item))
+                .map(amount)
+                .reduce(Money.ZERO, Money::plus);
     }
 
     /** The total in {@code parts} shares of whole cents; the first shares take the extra cent. */
@@ -116,7 +154,7 @@ public record TabBill(
      * in cents, and the cents left over go one by one to the largest remainders, the earlier weight
      * first on a tie. When every weight is zero, every share is zero.
      */
-    private static List<Money> shareByLargestRemainder(Money amount, List<Money> weights) {
+    static List<Money> shareByLargestRemainder(Money amount, List<Money> weights) {
         BigInteger total = cents(amount);
         BigInteger weightSum = weights.stream().map(TabBill::cents).reduce(BigInteger.ZERO, BigInteger::add);
         List<Money> shares = new ArrayList<>();

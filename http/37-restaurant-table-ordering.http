@@ -249,6 +249,8 @@ POST {{host}}/public/tables/{{orderingToken}}/order-requests
 Content-Type: application/json
 
 {
+  "customerName": "Ana",
+  "customerDeviceId": "device-{{suffix}}-ana",
   "lines": [
     {
       "menuItemId": "{{pizzaId}}",
@@ -311,6 +313,7 @@ Authorization: Bearer {{waiterToken}}
         client.assert(request.lines[0].menuItemName === "Pizza QR " + client.global.get("suffix"), "item " + request.lines[0].menuItemName);
         client.assert(request.lines[0].modifiers[0].modifierName === "Borda QR " + client.global.get("suffix"), "adicional");
         client.assert(request.lines[0].specialInstructions === "sem cebola", "observacao");
+        client.assert(request.customerName === "Ana", "nome " + request.customerName);
     });
 %}
 
@@ -339,6 +342,7 @@ Authorization: Bearer {{waiterToken}}
         client.assert(response.body.status === "OPEN", "status " + response.body.status);
         client.assert(response.body.items.length === 2, "itens " + response.body.items.length);
         client.assert(response.body.subtotal === "106.00", "subtotal " + response.body.subtotal);
+        client.assert(response.body.items[0].customerName === "Ana", "item com o nome de quem pediu");
     });
 %}
 
@@ -397,6 +401,8 @@ POST {{host}}/public/tables/{{orderingToken}}/order-requests
 Content-Type: application/json
 
 {
+  "customerName": "Ana",
+  "customerDeviceId": "device-{{suffix}}-ana",
   "lines": [{"menuItemId": "{{pizzaId}}", "quantity": 1}]
 }
 
@@ -425,6 +431,8 @@ POST {{host}}/public/tables/{{orderingToken}}/order-requests
 Content-Type: application/json
 
 {
+  "customerName": "Ana",
+  "customerDeviceId": "device-{{suffix}}-ana",
   "lines": [{"menuItemId": "{{juiceId}}", "quantity": 12}]
 }
 
@@ -482,6 +490,8 @@ POST {{host}}/public/tables/{{orderingToken}}/order-requests
 Content-Type: application/json
 
 {
+  "customerName": "Ana",
+  "customerDeviceId": "device-{{suffix}}-ana",
   "lines": [{"menuItemId": "{{juiceId}}", "quantity": 1}]
 }
 
@@ -498,6 +508,8 @@ POST {{host}}/public/tables/{{orderingToken}}/order-requests
 Content-Type: application/json
 
 {
+  "customerName": "Ana",
+  "customerDeviceId": "device-{{suffix}}-ana",
   "lines": [{"menuItemId": "{{pizzaId}}", "quantity": 1}]
 }
 
@@ -561,6 +573,8 @@ POST {{host}}/public/tables/{{orderingToken}}/order-requests
 Content-Type: application/json
 
 {
+  "customerName": "Ana",
+  "customerDeviceId": "device-{{suffix}}-ana",
   "lines": [{"menuItemId": "{{juiceId}}", "quantity": 1}]
 }
 
@@ -577,6 +591,8 @@ POST {{host}}/public/tables/{{orderingToken}}/order-requests
 Content-Type: application/json
 
 {
+  "customerName": "Ana",
+  "customerDeviceId": "device-{{suffix}}-ana",
   "lines": [{"menuItemId": "{{buffetId}}"}]
 }
 
@@ -593,6 +609,8 @@ POST {{host}}/public/tables/{{orderingToken}}/order-requests
 Content-Type: application/json
 
 {
+  "customerName": "Ana",
+  "customerDeviceId": "device-{{suffix}}-ana",
   "lines": []
 }
 
@@ -613,6 +631,8 @@ POST {{host}}/public/tables/{{orderingToken}}/order-requests
 Content-Type: application/json
 
 {
+  "customerName": "Ana",
+  "customerDeviceId": "device-{{suffix}}-ana",
   "lines": {{tooManyLines}}
 }
 
@@ -620,6 +640,42 @@ Content-Type: application/json
     client.test("21 linhas: 422 INVALID_TABLE_ORDER_REQUEST", function() {
         client.assert(response.status === 422, "esperado 422, recebido " + response.status);
         client.assert(response.body.code === "INVALID_TABLE_ORDER_REQUEST", "code " + response.body.code);
+    });
+%}
+
+
+### 37b. Pedido sem nome -> 422 INVALID_CUSTOMER_NAME
+POST {{host}}/public/tables/{{orderingToken}}/order-requests
+Content-Type: application/json
+
+{
+  "customerName": "   ",
+  "customerDeviceId": "device-{{suffix}}-ana",
+  "lines": [{"menuItemId": "{{pizzaId}}", "quantity": 1}]
+}
+
+> {%
+    client.test("sem nome: 422 INVALID_CUSTOMER_NAME", function() {
+        client.assert(response.status === 422, "esperado 422, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_CUSTOMER_NAME", "code " + response.body.code);
+    });
+%}
+
+
+### 37c. Codigo do aparelho invalido -> 422 INVALID_CUSTOMER_DEVICE_ID
+POST {{host}}/public/tables/{{orderingToken}}/order-requests
+Content-Type: application/json
+
+{
+  "customerName": "Ana",
+  "customerDeviceId": "abc",
+  "lines": [{"menuItemId": "{{pizzaId}}", "quantity": 1}]
+}
+
+> {%
+    client.test("aparelho invalido: 422 INVALID_CUSTOMER_DEVICE_ID", function() {
+        client.assert(response.status === 422, "esperado 422, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_CUSTOMER_DEVICE_ID", "code " + response.body.code);
     });
 %}
 
@@ -704,6 +760,8 @@ POST {{host}}/public/tables/{{orderingToken}}/order-requests
 Content-Type: application/json
 
 {
+  "customerName": "Ana",
+  "customerDeviceId": "device-{{suffix}}-ana",
   "lines": [{"menuItemId": "{{pizzaId}}", "quantity": 1}]
 }
 

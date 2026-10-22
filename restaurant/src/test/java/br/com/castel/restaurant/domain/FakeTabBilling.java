@@ -30,11 +30,16 @@ final class FakeTabBilling implements TabBilling {
     record Reversal(FolioId folioId, ChargeId chargeId, String reason) {
     }
 
+    record Refund(FolioId folioId, PaymentId paymentId, String reason) {
+    }
+
     final List<FolioId> openedFolios = new ArrayList<>();
     final List<Posting> postings = new ArrayList<>();
     final List<Reversal> reversals = new ArrayList<>();
     final List<ReceivedPaymentView> payments = new ArrayList<>();
     final Set<FolioId> closedFolios = new HashSet<>();
+    final List<Refund> refunds = new ArrayList<>();
+    final List<String> idempotencyKeys = new ArrayList<>();
 
     private final Map<FolioId, Money> balances = new HashMap<>();
     private final Map<ChargeId, Money> chargeAmounts = new HashMap<>();
@@ -65,11 +70,38 @@ final class FakeTabBilling implements TabBilling {
     @Override
     public ReceivedPaymentView receivePayment(FolioId folioId, PaymentMethod method, Money amount,
             String idempotencyKey) {
+        idempotencyKeys.add(idempotencyKey);
         Money balance = balances.merge(folioId, amount, Money::minus);
         ReceivedPaymentView payment = new ReceivedPaymentView(
                 PaymentId.newId(), method, amount, Instant.parse("2026-09-16T16:00:00Z"), balance);
         payments.add(payment);
         return payment;
+    }
+
+    /** Gives the whole payment back: the folio owes its amount again (decision #21 of qr-table-payment). */
+    @Override
+    public void refundPayment(FolioId folioId, PaymentId paymentId, String reason) {
+        ReceivedPaymentView payment = payments.stream()
+                .filter(candidate -> candidate.paymentId().equals(paymentId))
+                .findFirst()
+                .orElseThrow(() -> new IllegalArgumentException("No payment " + paymentId));
+        refunds.add(new Refund(folioId, paymentId, reason));
+        balances.merge(folioId, payment.amount(), Money::plus);
+    }
+
+    /** Whether {@link #refundPayment} already gave this payment back (decision #49 of qr-table-payment). */
+    @Override
+    public boolean isPaymentRefunded(FolioId folioId, PaymentId paymentId) {
+        return refunds.stream().anyMatch(refund -> refund.paymentId().equals(paymentId));
+    }
+
+    /** Money still standing on the folio's charges: postings minus reversals. */
+    Money liveChargesOn(FolioId folioId) {
+        Money posted = postings.stream().filter(posting -> posting.folioId().equals(folioId))
+                .map(Posting::amount).reduce(Money.ZERO, Money::plus);
+        Money reversed = reversals.stream().filter(reversal -> reversal.folioId().equals(folioId))
+                .map(reversal -> chargeAmounts.get(reversal.chargeId())).reduce(Money.ZERO, Money::plus);
+        return posted.minus(reversed);
     }
 
     @Override
@@ -79,7 +111,10 @@ final class FakeTabBilling implements TabBilling {
 
     @Override
     public Money paidOn(FolioId folioId) {
-        return payments.stream().map(ReceivedPaymentView::amount).reduce(Money.ZERO, Money::plus);
+        Set<PaymentId> refunded = new HashSet<>();
+        refunds.forEach(refund -> refunded.add(refund.paymentId()));
+        return payments.stream().filter(payment -> !refunded.contains(payment.paymentId()))
+                .map(ReceivedPaymentView::amount).reduce(Money.ZERO, Money::plus);
     }
 
     @Override
