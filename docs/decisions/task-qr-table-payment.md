@@ -13,10 +13,10 @@
 | | |
 |---|---|
 | Branch | `task/qr-table-payment` (worktree `../castel-qr-ordering`), a partir de `task/qr-table-ordering` (PR #38) |
-| Rodada atual | 4 — simular valor (#55–#58) |
-| Build | Rodada 4 (2026-10-22), numa cópia fora do worktree: `./mvnw clean verify` passa inteiro, ArchUnit incluído — 2104 testes, 0 falhas |
-| Testes | nenhum teste novo nesta rodada (o implementador não escreve teste); falta cobrir `Tab.priceForPayment` / `TablePaymentRequest.quote` e a rota `quote` |
-| `.http` | `37` (51 requisições) e `38` (65, com simulação, simulação que não reserva, quantidade fora da linha, item pago e mesa sem comanda) verdes contra um Postgres descartável (2026-10-22) |
+| Rodada atual | 5 — confirmados da comanda para o estorno pelo salão (#59–#61) |
+| Build | Rodada 5 (2026-10-22), numa cópia fora do worktree: `./mvnw clean verify` passa inteiro, ArchUnit incluído — 2114 testes, 0 falhas |
+| Testes | nenhum teste novo nesta rodada (o implementador não escreve teste); falta cobrir a lista de confirmados |
+| `.http` | `38` (70 requisições, com a lista de confirmados: estornado com `refunded: true`, status inválido e sem `tabId` 400, comanda desconhecida vazia, recepção 403) verde contra um Postgres descartável (2026-10-22) |
 
 Continua a `qr-table-ordering`. Ordem: backend primeiro, testar as rotas, depois o front (Ruan, 2026-10-22).
 
@@ -99,7 +99,9 @@ Levantamento de 2026-10-22 no código:
 | 56 | 4 | DEV (#55): rota `POST /public/tables/{orderingToken}/payment-requests/quote`, corpo `{includeServiceCharge, items: [{tabItemId, quantity}]}` → `200 {subtotal, serviceCharge, amount, items: [{tabItemId, quantity, lineTotal, serviceCharge}]}`. `customerName` e `customerDeviceId` não são pedidos nem validados: a simulação não grava nada que precise de autor; se vierem, são ignorados | implementado |
 | 57 | 4 | DEV (#55): a simulação usa a mesma conta do pedido — `Tab.priceForPayment` valida as escolhas e calcula valores e fatias; `reserveForPayment` é ela mais a reserva das unidades —, então o arredondamento é um só. Mesmas recusas e na mesma ordem do pedido, inclusive `PIX_RECEIVER_NOT_CONFIGURED` primeiro, para a tela saber cedo que não há Pix; não reserva, não grava, não gera Pix | implementado |
 | 58 | 4 | DEV (#55): transação só de leitura, sem trava da comanda. O valor simulado pode diferir do pedido real se alguém pagar, reservar ou lançar entre os dois; o pedido real é a autoridade. A simulação também não expira pedido vencido (não grava): unidades de um pedido vencido que a tarefa ainda não gravou aparecem reservadas por até um minuto, embora o envio real as libere antes. Comanda fechada ou juntada entre a leitura do id e a da comanda responde `404 TAB_NOT_FOUND`, como no envio (#51) | implementado |
-| 59 | 5 | O garçom estorna o Pix confirmado pelo salão (confirma a #9). Pede uma leitura dos pagamentos do celular já confirmados da comanda, para o salão ter de onde estornar (Ruan, 2026-10-22) | pendente |
+| 59 | 5 | O garçom estorna o Pix confirmado pelo salão (confirma a #9). Pede uma leitura dos pagamentos do celular já confirmados da comanda, para o salão ter de onde estornar (Ruan, 2026-10-22) | implementado |
+| 60 | 5 | DEV (#59): `GET /api/restaurant/table-payment-requests?status=CONFIRMED&tabId={tabId}` (`ADMIN`, `WAITER`), ao lado da fila (o `GET` sem parâmetro continua sendo os pendentes). Responde a mesma lista de `TablePaymentRequestResponse`, estornados incluídos (`refunded`, `refundedAt`, `refundReason`), mais antigo primeiro pela hora da confirmação. `status` só aceita `CONFIRMED` e exige `tabId`; outro valor ou `tabId` ausente: `400 VALIDATION_FAILED` | implementado |
+| 61 | 5 | DEV (#59): comanda desconhecida responde lista vazia, não 404: é um filtro de leitura, como os outros filtros de lista do restaurante, e não precisa ler a comanda | implementado |
 
 Valores de status: `pendente` · `implementado` · `revertida pela #n`
 
@@ -114,6 +116,7 @@ Rodada 1 entregou o backend; nenhum item saiu da lista. "Front pendente" marca o
 - [x] Taxa de serviço opcional no pagamento pelo celular (#38)
 - [x] Pagar parte da quantidade de um item, unidade a unidade (#39, #42–#45)
 - [x] Simular o valor da parte sem reservar nem gerar Pix (#55–#58)
+- [x] Leitura dos pagamentos confirmados da comanda, para o salão estornar (#59–#61)
 - [ ] Nome do cliente e código do aparelho no pedido, no pagamento e no item; "Só os meus" pelo aparelho (#40, #46) — backend feito; front pendente
 - [x] Pagamento aguardando reserva os itens; garçom confirma ou recusa; expira em 30 min (#8, #11, #13)
 - [x] Pagamento com a comanda `OPEN` e `CLOSING` (#6, #17, #25); fechamento abate o pago (#14, #19)
@@ -143,6 +146,7 @@ Rodada 1 entregou o backend; nenhum item saiu da lista. "Front pendente" marca o
 | Rota | Perfis |
 |---|---|
 | `GET /api/restaurant/table-payment-requests` | `ADMIN`, `WAITER` — pendentes, com mesa, itens e valor |
+| `GET /api/restaurant/table-payment-requests?status=CONFIRMED&tabId={tabId}` | `ADMIN`, `WAITER` — os confirmados da comanda, estornados incluídos, pela hora da confirmação (#59–#61); mesmo `TablePaymentRequestResponse`; `status` diferente de `CONFIRMED` ou sem `tabId`: `400 VALIDATION_FAILED`; comanda desconhecida: `200 []` |
 | `POST /api/restaurant/table-payment-requests/{id}/confirm` | `ADMIN`, `WAITER` |
 | `POST /api/restaurant/table-payment-requests/{id}/reject` | `ADMIN`, `WAITER` |
 | `POST /api/restaurant/table-payment-requests/{id}/refund` | `ADMIN`, `WAITER` — corpo `{reason}` (#30); estorna um confirmado e libera os itens (#21) |

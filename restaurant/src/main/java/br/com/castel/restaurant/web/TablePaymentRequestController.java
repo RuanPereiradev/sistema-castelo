@@ -5,8 +5,11 @@ import br.com.castel.restaurant.application.TablePaymentRequestService;
 import br.com.castel.restaurant.application.TabService;
 import br.com.castel.restaurant.domain.DiningTable;
 import br.com.castel.restaurant.domain.DiningTableId;
+import br.com.castel.restaurant.domain.TabId;
 import br.com.castel.restaurant.domain.TablePaymentRequest;
 import br.com.castel.restaurant.domain.TablePaymentRequestId;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
 import java.time.Clock;
 import java.util.List;
 import java.util.Map;
@@ -17,6 +20,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
@@ -28,6 +32,9 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/restaurant/table-payment-requests")
 @PreAuthorize("hasAnyRole('ADMIN', 'WAITER')")
 public class TablePaymentRequestController {
+
+    /** The only status the list filters by (decision #60). */
+    private static final String CONFIRMED_STATUS = "CONFIRMED";
 
     private final TablePaymentRequestService payments;
     private final TabService tabs;
@@ -48,6 +55,22 @@ public class TablePaymentRequestController {
         Map<DiningTableId, String> labels = diningTables.list(true).stream()
                 .collect(Collectors.toMap(DiningTable::id, DiningTable::label, (first, second) -> first));
         return payments.listPending().stream().map(request -> respond(request, labels)).toList();
+    }
+
+    /**
+     * The payments confirmed on one tab, refunded ones included, by the moment they were confirmed:
+     * where the floor refunds from (decisions #59–#61). Only {@code status=CONFIRMED} is a filter of
+     * this list, and it needs {@code tabId}; anything else answers 400. An unknown tab answers empty.
+     */
+    @GetMapping(params = "status")
+    public List<TablePaymentRequestResponse> listConfirmedRequests(
+            @RequestParam(name = "status") @Pattern(regexp = CONFIRMED_STATUS) String status,
+            @RequestParam(name = "tabId", required = false) @NotNull String tabId) {
+        Map<DiningTableId, String> labels = diningTables.list(true).stream()
+                .collect(Collectors.toMap(DiningTable::id, DiningTable::label, (first, second) -> first));
+        return payments.listConfirmedOnTab(TabId.of(tabId)).stream()
+                .map(request -> respond(request, labels))
+                .toList();
     }
 
     @PostMapping("/{requestId}/confirm")

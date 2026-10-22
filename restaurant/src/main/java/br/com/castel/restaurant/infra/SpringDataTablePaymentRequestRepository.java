@@ -1,6 +1,7 @@
 package br.com.castel.restaurant.infra;
 
 import br.com.castel.restaurant.domain.DiningTableId;
+import br.com.castel.restaurant.domain.TabId;
 import br.com.castel.restaurant.domain.TablePaymentRequest;
 import br.com.castel.restaurant.domain.TablePaymentRequestId;
 import java.time.Instant;
@@ -32,6 +33,11 @@ interface SpringDataTablePaymentRequestRepository extends JpaRepository<TablePay
     @Query("select r from TablePaymentRequest r where r.id = :id and r.diningTableId = :diningTableId")
     Optional<TablePaymentRequest> findByIdOnDiningTable(
             @Param("id") TablePaymentRequestId id, @Param("diningTableId") DiningTableId diningTableId);
+
+    @Query("select r from TablePaymentRequest r where r.tabId = :tabId "
+            + "and r.status = br.com.castel.restaurant.domain.TablePaymentRequestStatus.CONFIRMED "
+            + "order by r.resolvedAt, r.id")
+    List<TablePaymentRequest> findConfirmedOnTab(@Param("tabId") TabId tabId);
 
     @Query("select r from TablePaymentRequest r where r.propertyId = :propertyId "
             + "and r.status = br.com.castel.restaurant.domain.TablePaymentRequestStatus.PENDING "

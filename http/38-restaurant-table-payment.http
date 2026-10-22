@@ -920,6 +920,72 @@ Content-Type: application/json
 %}
 
 
+### 37b. Garcom le os pagamentos confirmados da comanda: o da pizza aparece estornado
+GET {{host}}/api/restaurant/table-payment-requests?status=CONFIRMED&tabId={{tabId}}
+Authorization: Bearer {{waiterToken}}
+
+> {%
+    client.test("confirmados da comanda, mais antigo primeiro", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        client.assert(response.body.length === 3, "confirmados " + response.body.length);
+        client.assert(response.body[0].id === client.global.get("pizzaARequestId"), "o da pizza primeiro");
+        client.assert(response.body[0].refunded === true, "pizza estornada");
+        client.assert(response.body[0].refundReason === "Cliente pagou em dinheiro", "motivo " + response.body[0].refundReason);
+        client.assert(response.body[0].refundedAt !== null, "quando estornou");
+        client.assert(response.body[1].refunded === false, "sucos nao estornados");
+        client.assert(response.body.every(r => r.status === "CONFIRMED"), "so confirmados");
+    });
+%}
+
+
+### 37c. Filtro por outro status -> 400 VALIDATION_FAILED
+GET {{host}}/api/restaurant/table-payment-requests?status=PENDING&tabId={{tabId}}
+Authorization: Bearer {{waiterToken}}
+
+> {%
+    client.test("so CONFIRMED: 400 VALIDATION_FAILED", function() {
+        client.assert(response.status === 400, "esperado 400, recebido " + response.status);
+        client.assert(response.body.code === "VALIDATION_FAILED", "code " + response.body.code);
+    });
+%}
+
+
+### 37d. Confirmados sem a comanda -> 400 VALIDATION_FAILED
+GET {{host}}/api/restaurant/table-payment-requests?status=CONFIRMED
+Authorization: Bearer {{waiterToken}}
+
+> {%
+    client.test("tabId obrigatorio: 400 VALIDATION_FAILED", function() {
+        client.assert(response.status === 400, "esperado 400, recebido " + response.status);
+        client.assert(response.body.code === "VALIDATION_FAILED", "code " + response.body.code);
+    });
+%}
+
+
+### 37e. Comanda desconhecida -> lista vazia
+GET {{host}}/api/restaurant/table-payment-requests?status=CONFIRMED&tabId=00000000-0000-7000-8000-000000000000
+Authorization: Bearer {{adminToken}}
+
+> {%
+    client.test("comanda desconhecida: 200 e vazio", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        client.assert(response.body.length === 0, "deveria vir vazio");
+    });
+%}
+
+
+### 37f. Recepcao nao le os confirmados -> 403 ACCESS_DENIED
+GET {{host}}/api/restaurant/table-payment-requests?status=CONFIRMED&tabId={{tabId}}
+Authorization: Bearer {{frontDeskToken}}
+
+> {%
+    client.test("so salao: 403 ACCESS_DENIED", function() {
+        client.assert(response.status === 403, "esperado 403, recebido " + response.status);
+        client.assert(response.body.code === "ACCESS_DENIED", "code " + response.body.code);
+    });
+%}
+
+
 ### 38. Pre-conta: falta 88,00 (as duas pizzas com taxa)
 GET {{host}}/api/restaurant/tabs/{{tabId}}/bill
 Authorization: Bearer {{waiterToken}}

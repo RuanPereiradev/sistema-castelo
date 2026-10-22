@@ -40,6 +40,11 @@ class JpaTablePaymentRequestRepository implements TablePaymentRequestRepository 
     }
 
     @Override
+    public List<TablePaymentRequest> findConfirmedOnTab(TabId tabId) {
+        return springData.findConfirmedOnTab(tabId);
+    }
+
+    @Override
     public List<TablePaymentRequest> findOpen(UUID propertyId, Instant now) {
         return springData.findOpen(propertyId, now);
     }

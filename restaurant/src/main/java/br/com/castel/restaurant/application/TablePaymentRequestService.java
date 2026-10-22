@@ -172,6 +172,15 @@ public class TablePaymentRequestService {
     }
 
     /**
+     * The payments from the phone confirmed on the tab, refunded ones included, by the moment they
+     * were confirmed: what the floor refunds from (decisions #59–#61). Empty for an unknown tab.
+     */
+    @Transactional(readOnly = true)
+    public List<TablePaymentRequest> listConfirmedOnTab(TabId tabId) {
+        return requests.findConfirmedOnTab(tabId);
+    }
+
+    /**
      * @throws TablePaymentRequestNotFoundException if the id is unknown
      * @see TablePaymentRequest#confirm for the refusals
      */
