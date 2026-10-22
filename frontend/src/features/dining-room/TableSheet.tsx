@@ -23,6 +23,8 @@ interface Props {
   readonly now: number;
   /** Requests sent from this table's QR, waiting for a waiter. */
   readonly pendingRequestCount: number;
+  /** Pix sent from this table's QR, waiting for a waiter to check the receipt. */
+  readonly pendingPixCount: number;
   readonly onShowRequests: () => void;
   readonly onClose: () => void;
   readonly onNotice: (message: string) => void;
@@ -73,6 +75,7 @@ export function TableSheet({
   summary,
   now,
   pendingRequestCount,
+  pendingPixCount,
   onShowRequests,
   onClose,
   onNotice,
@@ -181,9 +184,9 @@ export function TableSheet({
 
           <Ornament />
 
-          {pendingRequestCount > 0 && (
+          {pendingRequestCount + pendingPixCount > 0 && (
             <div className="dr-sheet-note dr-sheet-request-note">
-              <p>{DINING_ROOM.orderRequests.inSheet(pendingRequestCount)}</p>
+              <p>{DINING_ROOM.orderRequests.inSheet(pendingRequestCount, pendingPixCount)}</p>
               <button type="button" className="dr-action-btn dr-action-primary" onClick={onShowRequests}>
                 {DINING_ROOM.orderRequests.seeRequests}
               </button>

@@ -1,13 +1,25 @@
 import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
-import { usePublicMenu, usePublicTable, useSubmitOrderRequest, type PublicMenuItem } from './customerApi';
+import {
+  paymentRequestKey,
+  usePaymentRequest,
+  usePublicMenu,
+  usePublicTable,
+  usePublicTableTab,
+  useSubmitOrderRequest,
+  useSubmitPaymentRequest,
+  type PublicMenuItem,
+  type PublicTablePaymentRequest,
+} from './customerApi';
 import {
   customerDeviceId,
   storeCustomerName,
   storeLastOrderRequestId,
+  storeLastPaymentRequestId,
   storedCustomerName,
   storedLastOrderRequestId,
+  storedLastPaymentRequestId,
 } from './customerIdentity';
 import { cartReducer, toOrderLines } from './cart';
 import { CUSTOMER, describeCustomerError, hasErrorCode } from './customerMessages';
@@ -17,12 +29,28 @@ import { MenuScreen } from './MenuScreen';
 import { ItemSheet } from './ItemSheet';
 import { CartScreen, type SendBlock } from './CartScreen';
 import { OrdersScreen } from './OrdersScreen';
+import { BillScreen, type PaymentChoice } from './BillScreen';
+import { PixScreen, ReceiptScreen } from './PixScreens';
 import '../../styles/customer-table.css';
 
 const NOTICE_MS = 2600;
 
 /** The codes after which the table itself must be read again: its state moved. */
 const TABLE_MOVED_CODES = ['TABLE_ORDER_REQUEST_ALREADY_PENDING', 'TAB_CLOSING_REFUSES_ORDER_REQUEST', 'DINING_TABLE_NOT_FOUND'];
+
+/** Wraps a payment screen with the tab it names its lines from. */
+function WithTabItems({
+  orderingToken,
+  customerDeviceId,
+  children,
+}: {
+  readonly orderingToken: string;
+  readonly customerDeviceId: string;
+  readonly children: (tabItems: NonNullable<ReturnType<typeof usePublicTableTab>['data']>['items']) => JSX.Element;
+}) {
+  const tab = usePublicTableTab(orderingToken, customerDeviceId);
+  return children(tab.data?.items ?? []);
+}
 
 /**
  * The customer's phone at the table, opened by the table's QR (decision #3):
@@ -35,10 +63,18 @@ export function CustomerTablePage() {
   const table = usePublicTable(orderingToken);
   const menu = usePublicMenu();
   const submit = useSubmitOrderRequest(orderingToken);
+  const submitPayment = useSubmitPaymentRequest(orderingToken);
 
   const [deviceId] = useState(customerDeviceId);
   const [customerName, setCustomerName] = useState(storedCustomerName);
-  const [screen, setScreen] = useState<CustomerScreen>(() => (storedCustomerName() ? 'menu' : 'welcome'));
+  const [lastPaymentId, setLastPaymentId] = useState(() => storedLastPaymentRequestId(orderingToken));
+  // A reload with a Pix on record goes back to its receipt (decision #26).
+  const [screen, setScreen] = useState<CustomerScreen>(() =>
+    !storedCustomerName() ? 'welcome' : storedLastPaymentRequestId(orderingToken) ? 'receipt' : 'menu',
+  );
+  const payment = usePaymentRequest(orderingToken, lastPaymentId);
+  const [generateError, setGenerateError] = useState<string | null>(null);
+  const generating = useRef(false);
   const [cart, dispatch] = useReducer(cartReducer, []);
   const [choosing, setChoosing] = useState<PublicMenuItem | null>(null);
   const [lastRequestId, setLastRequestId] = useState(() => storedLastOrderRequestId(orderingToken));
@@ -63,6 +99,23 @@ export function CustomerTablePage() {
   }, [notice]);
 
   const go = useCallback((next: CustomerScreen) => setScreen(next), []);
+
+  const paymentStatus = payment.data?.status;
+  useEffect(() => {
+    // Once the waiter answers, the bill's units change: read the tab again.
+    if (paymentStatus && paymentStatus !== 'PENDING') {
+      void queryClient.invalidateQueries({ queryKey: ['public-table-tab', orderingToken] });
+    }
+  }, [paymentStatus, orderingToken, queryClient]);
+
+  const paymentUnknown = hasErrorCode(payment.error, 'TABLE_PAYMENT_REQUEST_NOT_FOUND');
+  useEffect(() => {
+    if (paymentUnknown) {
+      storeLastPaymentRequestId(orderingToken, null);
+      setLastPaymentId(null);
+      setScreen((current) => (current === 'pix' || current === 'receipt' ? 'bill' : current));
+    }
+  }, [paymentUnknown, orderingToken]);
 
   const forgetRequest = useCallback(() => {
     storeLastOrderRequestId(orderingToken, null);
@@ -157,18 +210,59 @@ export function CustomerTablePage() {
     );
   }
 
+  function handleGeneratePix(choice: PaymentChoice) {
+    if (generating.current) {
+      return;
+    }
+    generating.current = true;
+    setGenerateError(null);
+    submitPayment.mutate(
+      { customerName: name, customerDeviceId: deviceId, ...choice },
+      {
+        onSuccess: (request: PublicTablePaymentRequest) => {
+          queryClient.setQueryData(paymentRequestKey(orderingToken, request.id), request);
+          storeLastPaymentRequestId(orderingToken, request.id);
+          setLastPaymentId(request.id);
+          go('pix');
+        },
+        onError: (error) => setGenerateError(describeCustomerError(error)),
+        onSettled: () => {
+          generating.current = false;
+          void queryClient.invalidateQueries({ queryKey: ['public-table-tab', orderingToken] });
+        },
+      },
+    );
+  }
+
+  function backToBill() {
+    // A resolved Pix is done: the next reload opens the menu, not this receipt.
+    if (payment.data && payment.data.status !== 'PENDING') {
+      storeLastPaymentRequestId(orderingToken, null);
+      setLastPaymentId(null);
+    }
+    go('bill');
+  }
+
   const titles: Record<Exclude<CustomerScreen, 'welcome'>, string> = {
     menu: CUSTOMER.titles.menu,
     cart: CUSTOMER.titles.cart,
     orders: CUSTOMER.titles.orders,
+    bill: CUSTOMER.titles.bill,
+    pix: CUSTOMER.titles.pix,
+    receipt: CUSTOMER.titles.receipt,
   };
+  const backTo: Partial<Record<CustomerScreen, () => void>> = {
+    cart: () => go('menu'),
+    pix: () => go('bill'),
+  };
+  const onBack = backTo[screen];
 
   return (
     <div className="customer-table">
       <CustomerHeader
         title={titles[screen]}
         tableLabel={tableLabel}
-        {...(screen === 'cart' ? { onBack: () => go('menu') } : {})}
+        {...(onBack ? { onBack } : {})}
       />
 
       {screen === 'menu' && (
@@ -204,7 +298,49 @@ export function CustomerTablePage() {
         />
       )}
 
-      {screen !== 'cart' && <CustomerNav current={screen} onGo={go} />}
+      {screen === 'bill' && (
+        <BillScreen
+          orderingToken={orderingToken}
+          customerDeviceId={deviceId}
+          onGeneratePix={handleGeneratePix}
+          isGenerating={submitPayment.isPending}
+          generateError={generateError}
+          hasPendingPix={payment.data?.status === 'PENDING'}
+          onSeePendingPix={() => go('pix')}
+        />
+      )}
+      {screen === 'pix' && (
+        <WithTabItems orderingToken={orderingToken} customerDeviceId={deviceId}>
+          {(tabItems) => (
+            <PixScreen
+              request={payment.data}
+              isLoading={payment.isPending}
+              error={payment.error}
+              onRetry={() => void payment.refetch()}
+              tabItems={tabItems}
+              onPaid={() => go('receipt')}
+              onNotice={setNotice}
+            />
+          )}
+        </WithTabItems>
+      )}
+      {screen === 'receipt' && (
+        <WithTabItems orderingToken={orderingToken} customerDeviceId={deviceId}>
+          {(tabItems) => (
+            <ReceiptScreen
+              request={payment.data}
+              isLoading={payment.isPending && lastPaymentId !== null}
+              error={payment.error}
+              onRetry={() => void payment.refetch()}
+              tabItems={tabItems}
+              onSeePix={() => go('pix')}
+              onBackToBill={backToBill}
+            />
+          )}
+        </WithTabItems>
+      )}
+
+      {(screen === 'menu' || screen === 'orders' || screen === 'bill') && <CustomerNav current={screen} onGo={go} />}
 
       {choosing && (
         <ItemSheet

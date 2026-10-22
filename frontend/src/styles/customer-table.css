@@ -1125,3 +1125,408 @@ body:has(.customer-table) {
     }
   }
 }
+
+/* ---- conta */
+
+.ct-muted {
+  font-size: 13px;
+  color: rgba(244, 236, 227, 0.68);
+}
+
+.ct-bill {
+  padding: 14px 16px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.ct-bill-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  border: 1px solid var(--color-divider-strong);
+  outline: 1px solid rgba(232, 149, 127, 0.2);
+  outline-offset: 3px;
+}
+
+.ct-bill-stat {
+  padding: 10px 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  text-align: center;
+}
+
+.ct-bill-stat + .ct-bill-stat {
+  border-left: 1px solid var(--color-divider);
+}
+
+.ct-bill-stat-label {
+  font-family: var(--font-heading);
+  font-weight: 600;
+  font-size: 10.5px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--color-accent);
+}
+
+.ct-bill-stat-value {
+  font-family: var(--font-heading);
+  font-size: 19px;
+  font-variant-numeric: tabular-nums;
+}
+
+.ct-bill-intro {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ct-quick {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.ct-quick-btn {
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid rgba(232, 149, 127, 0.45);
+  background: transparent;
+  color: var(--color-text);
+  border-radius: 2px;
+  font-family: var(--font-body);
+  font-size: 13.5px;
+  cursor: pointer;
+}
+
+.ct-bill-group {
+  display: flex;
+  flex-direction: column;
+}
+
+.ct-unit {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 50px;
+  padding: 6px 2px;
+  border: 0;
+  border-bottom: 1px solid var(--color-divider-faint);
+  background: transparent;
+  color: var(--color-text);
+  text-align: left;
+  font-family: var(--font-body);
+  font-size: 15px;
+  width: 100%;
+  cursor: pointer;
+}
+
+.ct-unit.is-locked {
+  color: rgba(244, 236, 227, 0.55);
+  cursor: default;
+}
+
+.ct-check {
+  width: 22px;
+  height: 22px;
+  flex: none;
+  border: 1.5px solid var(--color-accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-bg);
+}
+
+.ct-unit.is-on .ct-check,
+.ct-service.is-on .ct-check {
+  background: var(--color-accent);
+}
+
+.ct-unit.is-locked .ct-check {
+  border: 1px solid rgba(232, 149, 127, 0.25);
+}
+
+.ct-unit-name {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.ct-unit-detail {
+  font-size: 12.5px;
+  color: var(--color-text-muted);
+}
+
+.ct-unit-tag {
+  flex: none;
+  font-size: 11.5px;
+  padding: 2px 7px;
+  border: 1px solid rgba(232, 149, 127, 0.4);
+  color: rgba(244, 236, 227, 0.7);
+}
+
+.ct-unit-tag.is-reserved {
+  border-color: var(--color-accent);
+  color: var(--color-accent-soft);
+}
+
+.ct-unit-price {
+  flex: none;
+  font-size: 13.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.ct-service {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 50px;
+  padding: 10px 12px;
+  border: 1px dashed rgba(232, 149, 127, 0.5);
+  background: transparent;
+  color: var(--color-text);
+  text-align: left;
+  font-family: var(--font-body);
+  font-size: 15px;
+  cursor: pointer;
+}
+
+.ct-service-label {
+  flex: 1;
+}
+
+.ct-notice-action {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.ct-notice-action .btn {
+  min-height: 44px;
+  flex: none;
+}
+
+.ct-pay-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 13.5px;
+  color: rgba(244, 236, 227, 0.85);
+}
+
+.ct-pay-summary-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.ct-pay-amount {
+  font-family: var(--font-heading);
+  font-size: 26px;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text);
+}
+
+/* ---- pix */
+
+.ct-pix {
+  padding: 18px 18px 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  text-align: center;
+}
+
+.ct-pix-amount {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.ct-pix-amount .ct-eyebrow {
+  font-size: 12.5px;
+  letter-spacing: 0.22em;
+}
+
+.ct-pix-value {
+  font-family: var(--font-heading);
+  font-size: 50px;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.ct-qr-arch {
+  padding: 7px;
+  border: 1px solid var(--color-accent);
+  border-radius: 50% 50% 2px 2px / 44px 44px 2px 2px;
+}
+
+.ct-qr-arch-inner {
+  padding: 30px 16px 16px;
+  border: 1px solid rgba(232, 149, 127, 0.45);
+  border-radius: 50% 50% 2px 2px / 40px 40px 2px 2px;
+  min-width: 248px;
+  display: flex;
+  justify-content: center;
+}
+
+.ct-qr {
+  display: block;
+  width: 216px;
+  height: 216px;
+}
+
+.ct-copy {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  text-align: left;
+}
+
+.ct-copy .ct-eyebrow {
+  font-size: 13px;
+  letter-spacing: 0.18em;
+}
+
+.ct-copy-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid rgba(232, 149, 127, 0.5);
+  padding: 4px 4px 4px 12px;
+}
+
+.ct-copy-code {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  color: rgba(244, 236, 227, 0.8);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.customer-table .ct-copy-btn {
+  flex: none;
+  min-height: 44px;
+  padding: 0 14px;
+  font-size: 14px;
+}
+
+.customer-table .ct-copy-fallback {
+  font-size: 13px;
+  color: var(--color-text);
+  word-break: break-all;
+}
+
+.ct-steps {
+  margin: 0;
+  padding: 12px 14px 12px 34px;
+  width: 100%;
+  text-align: left;
+  background: var(--color-surface);
+  border: 1px solid rgba(232, 149, 127, 0.35);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.ct-pay-items {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  text-align: left;
+}
+
+.ct-pay-item {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  padding: 7px 0;
+  border-bottom: 1px solid var(--color-divider-faint);
+  font-size: 14.5px;
+}
+
+.ct-pay-item-service {
+  color: rgba(244, 236, 227, 0.8);
+}
+
+.ct-pay-item-price {
+  flex: none;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- comprovante */
+
+.ct-receipt {
+  padding: 16px 14px 24px;
+}
+
+.ct-receipt-arch {
+  border-radius: 50% 50% 2px 2px / 90px 90px 2px 2px;
+}
+
+.ct-receipt-inner {
+  border-radius: 50% 50% 2px 2px / 84px 84px 2px 2px;
+  padding: 38px 18px 18px;
+  gap: 14px;
+}
+
+.ct-receipt-head {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  text-align: center;
+}
+
+.ct-receipt-mark {
+  width: 48px;
+  height: 48px;
+  border: 1.5px solid var(--color-accent);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-accent);
+  font-size: 22px;
+}
+
+.ct-receipt-mark.is-confirmed {
+  background: var(--color-accent);
+  color: var(--color-bg);
+}
+
+.ct-receipt-state {
+  font-family: var(--font-heading);
+  font-size: 26px;
+  line-height: 1.1;
+}
+
+.ct-receipt-callout {
+  padding: 12px 14px;
+  background: var(--color-text);
+  color: #2A1A1C;
+  border: 1px solid var(--color-accent-soft);
+  font-size: 14.5px;
+  line-height: 1.5;
+  text-align: center;
+  text-wrap: pretty;
+}
+
+.customer-table .ct-cta-secondary {
+  min-height: 52px;
+  font-size: 16px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  border-color: var(--color-divider-strong);
+  margin-top: 0;
+}

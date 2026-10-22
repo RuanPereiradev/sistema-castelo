@@ -13,7 +13,7 @@
 | | |
 |---|---|
 | Branch | `task/fe-customer-table` (worktree `../castel-fe-customer`), a partir de `task/qr-table-payment` (PR #39) |
-| Rodada atual | 2 — o garçom recebe, confirma e recusa o pedido do celular |
+| Rodada atual | 3 — Conta, Pix e comprovante; o garçom confirma o Pix |
 | Build | `npm run build` e `npx tsc -b` passam com a rodada 1 (2026-10-22) |
 | Testes | nenhum no front (ferramenta ainda não decidida, `frontend/CLAUDE.md`) |
 
@@ -61,6 +61,19 @@ Consome o backend das tasks `qr-table-ordering` (PR #38) e `qr-table-payment` (P
 | 23 | 2 | DEV: a lista mostra só `PENDING` (um pedido que o backend já lê como `EXPIRED` sai, mesmo antes da tarefa gravar). Confirmação recusada mostra o motivo no próprio card e o pedido fica (#21 da `qr-table-ordering`); depois de confirmar ou recusar relê pedidos, comandas, mesas e comanda aberta | implementado |
 | 24 | 2 | DEV: o som toca quando aparece um id que a leitura anterior não tinha; a primeira leitura não toca (é o que já esperava). O áudio destrava no primeiro toque ou tecla da página; sem isso, ou com falha, fica em silêncio | implementado |
 | 25 | 2 | DEV: as cores Portal de `dining-room-portal.css` passam a valer também em `.dining-room-portal`: o `classical.css` é importado depois e o `:root` dele deixava o salão no tema claro (defeito anterior a esta task, visto no teste). Mudança de uma linha fora do pedido original; reverter se não for desejada | implementado |
+| 26 | 3 | Rodada 3: Conta, Pix e comprovante no celular, como no design — itens por pessoa unidade a unidade, atalhos "Só os meus", "Tudo que falta", "Limpar", taxa de 10% opcional, QR do Pix e copia e cola, "Já paguei", itens "Aguardando garçom" até a confirmação (Ruan: "agora faz a conta e o pix do cliente", 2026-10-22) | implementado |
+| 27 | 3 | DEV: o garçom confirma, recusa e estorna o Pix na mesma lista "Pedidos do celular" do salão, sem isso o fluxo da Conta não fecha. Recusar e estornar pedem confirmação; o estorno pede o motivo (o billing exige) | implementado em parte: confirmar e recusar; o estorno ficou de fora (ver ponto em aberto 3) |
+| 28 | 3 | DEV: o valor do Pix, a taxa e o falta pagar vêm do backend (`POST /payment-requests` e `GET /tab`); a tela não soma nada. Ao marcar unidades, a tela mostra só a contagem até o cliente gerar o Pix, que traz o valor calculado | **revertida pela #30** |
+| 29 | 3 | DEV: o QR do Pix é desenhado no navegador a partir do `pixPayload` do backend, com uma biblioteca de QR (o texto é o mesmo do copia e cola; nenhum valor é calculado no front) | implementado |
+| 30 | 3 | A Conta mostra o valor enquanto o cliente marca, lido da rota de simular valor do backend (#55 da `qr-table-payment`); o navegador continua sem calcular. Substitui a #28 (Ruan, 2026-10-22) | implementado no front (`usePaymentQuote`); a rota ainda não está no 8080 (responde 405) e a tela cai na contagem |
+| 31 | 3 | DEV: a Conta lista unidade a unidade, agrupada por "Seus itens" (`mine`), depois por `customerName`, depois "Pelo garçom". Das `quantity` unidades de uma linha, as primeiras são livres (`quantity − paidQuantity − reservedQuantity`), depois "Aguardando garçom" (reservadas) e "Pago", travadas. O `lineTotal` do backend aparece uma vez por linha ("R$ 66,00 · 3 un."): o front não divide dinheiro para dar preço por unidade | implementado |
+| 32 | 3 | DEV: a taxa de serviço vem marcada, como no design, e o rótulo usa o `serviceChargeRate` do backend ("Incluir 10% de serviço") | implementado |
+| 33 | 3 | DEV: `usePaymentQuote` pede o valor 350 ms depois que a seleção para de mudar e mostra "calculando…" enquanto espera; se a rota falhar ou não existir (404/405), mostra só a contagem e "O valor aparece no Pix". Contrato provisório: `POST /public/tables/{token}/payment-requests/quote` `{includeServiceCharge, items}` → `{subtotal, serviceCharge, amount, items}`; ajustar quando a rota sair | implementado |
+| 34 | 3 | DEV: o id do último Pix fica no `localStorage` por mesa (`castel.customer.lastPaymentRequest.{token}`). Ao recarregar, a página abre no Comprovante; "Voltar à conta da mesa" esquece o id quando o Pix já foi resolvido, e `TABLE_PAYMENT_REQUEST_NOT_FOUND` também o esquece. O Comprovante relê o estado a cada 10 s enquanto `PENDING` | implementado |
+| 35 | 3 | DEV: a tela do Pix não tem o "Mudar os itens" do design: um Pix gerado reserva as unidades até o garçom responder ou passar 30 min, e o cliente não pode cancelá-lo (não há rota). Ela volta pela seta do cabeçalho, e a Conta mostra "Você tem um Pix aguardando o garçom" com o atalho "Ver o Pix" | implementado |
+| 36 | 3 | DEV: o QR usa `qrcode@1.5.4` (canvas, cores do design); o copia e cola usa `navigator.clipboard` e, fora de HTTPS, `execCommand('copy')`; se os dois falharem, mostra o código num campo para copiar à mão | implementado |
+| 37 | 3 | DEV: no salão, o Pix pendente entra na mesma folha "Pedidos do celular", em "Pix para conferir" acima dos pedidos, com valor, serviço, unidades ("2 de 3"), prazo e "Confira o comprovante…". A etiqueta da mesa vira "Pix aguardando", "N Pix aguardando" ou "Pedido e Pix"; o botão do cabeçalho conta pedidos e Pix juntos, e o som toca para os dois | implementado |
+| 38 | 4 | O garçom estorna o Pix confirmado pelo salão, com motivo; depende da leitura dos Pix confirmados da comanda no backend (Ruan, 2026-10-22). Fecha a parte pendente da #27 | pendente |
 
 Valores de status: `pendente` · `implementado` · `revertida pela #n`
 
@@ -75,6 +88,9 @@ Valores de status: `pendente` · `implementado` · `revertida pela #n`
 - [x] Estados de carregando, erro e vazio em cada tela
 - [x] Textos em arquivo de mensagens; códigos de erro traduzidos
 - [ ] Garçom: aviso "pedido aguardando" na mesa do mapa, lista dos pedidos do celular com nome, itens e tempo restante, confirmar e recusar, som em pedido novo (#18–#20)
+- [ ] Conta: unidades por pessoa, atalhos, taxa opcional, total/já pago/falta pagar do backend
+- [ ] Pix: QR e copia e cola do `pixPayload`, "Já paguei", comprovante, estado aguardando/confirmado/recusado/expirado
+- [ ] Garçom: confirmar, recusar e estornar o Pix na lista do salão
 - [x] Testar no navegador contra o backend — Chrome headless a 390×844 contra o backend da `castel-qr-run` (banco `castel_qr`): boas-vindas, nome vazio, cardápio, item por peso, carrinho com observação, envio (três toques, um pedido só), Pedidos com etapas e filtro, envio bloqueado com pedido pendente, QR inválido. **Não testado ao vivo:** folha de variação e adicionais (o cardápio de dev não tem nenhum) e os códigos de recusa no envio (a tela bloqueia antes)
 
 ---
@@ -86,6 +102,16 @@ Valores de status: `pendente` · `implementado` · `revertida pela #n`
 - [x] Lista "Pedidos do celular" (mapa e folha da mesa): mesa, nome, linhas, observação, prazo
 - [x] Confirmar e recusar (recusa com confirmação), erros traduzidos no card
 - [x] Testar no navegador — Chrome headless contra o backend como `garcom`: mapa com etiqueta em Mesa 2 (pedido do Ruan, **não tocado**) e Mesa 3; confirmar um pedido de teste da Mesa 3 (lançado, abriu comanda); recusar outro pela folha da Mesa 3 com o diálogo. **Não testado ao vivo:** confirmação recusada pelo backend (precisaria esgotar um item) e o som (headless não toca áudio)
+
+### Rodada 3 — Conta e Pix
+
+- [x] Conta unidade a unidade, atalhos, taxa opcional, total/pago/falta do backend, aviso sem Pix ativo
+- [x] Gerar Pix sem envio duplo; tela do Pix com QR, copia e cola, validade, "Já paguei"
+- [x] Comprovante com estado relido a cada 10 s e retomado ao recarregar
+- [x] Valor durante a seleção pela rota de simular (#30), com queda para a contagem
+- [x] Garçom: Pix pendente na lista, "Confirmar Pix", "Recusar" com diálogo, etiqueta e som
+- [ ] Estorno pelo salão — falta uma rota que liste Pix confirmados (ponto em aberto 3)
+- [x] Testar no navegador, só na Mesa 4: pedido de teste confirmado pela API como `garcom`; no celular, 2 de 3 Caipirinhas com serviço → Pix de R$ 48,40 (um Pix só, mesmo com dois toques), QR e Comprovante "Aguardando garçom"; no salão, etiqueta "Pix aguardando" e "Confirmar Pix"; ao recarregar, o celular volta no Comprovante "Pagamento confirmado" e a Conta mostra as duas unidades "Pago", Já pago R$ 48,40 e Falta R$ 31,90. Um segundo Pix (Refrigerante, sem serviço) foi recusado pelo diálogo; o celular mostrou "Recusado pelo garçom" e a unidade voltou a ficar livre. **Não testado ao vivo:** a rota de simular (responde 405 hoje; a queda para a contagem foi vista), a etiqueta "Aguardando garçom" na Conta e o som
 
 ---
 
@@ -107,6 +133,9 @@ Consumido, não criado aqui: `docs/decisions/task-qr-table-ordering.md` e
 | O salão lê a fila a cada 5 s, não por STOMP (#19) | O cliente STOMP do salão está na `feat/cancel-deliver-items` | Assinar `/topic/restaurant/table-order-requests` quando as branches se juntarem |
 | O som só toca depois de um toque na página e com a aba aberta | Regra do navegador para áudio; leitura parada em segundo plano | Notificação do sistema, se pedirem |
 | O ConfirmDialog compartilhado tem estilo próprio (botão vermelho, cinza), fora do Portal | Componente existente, reusado como pedido (#20) | Portal no `confirm-dialog.css` numa task de estilo |
+| O Pix gerado não se cancela pelo celular (#35) | Não há rota de cancelar; o garçom recusa ou o prazo de 30 min libera | Rota de cancelar pelo aparelho que gerou |
+| Sem estorno pelo salão (#27) | A API só lista Pix pendentes; estornar pede o id de um confirmado | Listar Pix confirmados da comanda, ou o estorno entrar na folha da mesa |
+| O valor ao marcar depende da rota de simular, que ainda não existe no 8080 (#30, #33) | O front já chama e cai na contagem | Ajustar caminho e formato quando a rota sair |
 | Sem teste automatizado | Ferramenta de teste do front ainda não decidida (`frontend/CLAUDE.md`) | Task 4.1 |
 
 ---
@@ -117,3 +146,4 @@ Consumido, não criado aqui: `docs/decisions/task-qr-table-ordering.md` e
 |---|---|---|
 | 1 | O rótulo da mesa vem livre (`diningTableLabel`); a tela escreve "Mesa {rótulo}", como o salão já faz. Com os rótulos do banco de dev ("Mesa 1") sai "Mesa Mesa 1". O rótulo cadastrado é só o número, ou a tela deve mostrá-lo cru? | 1 |
 | 2 | Item vendido por peso só aparece com "Servido no buffet". Basta, ou o cliente deve ver outra instrução (chamar o garçom para pesar)? | 1 |
+| 3 | Estorno do Pix pelo salão (#27): a API lista só Pix pendentes. Onde o garçom acha um Pix confirmado para estornar — uma rota nova que liste os confirmados da comanda, ou o estorno fica no caixa? | 3 |

@@ -14,6 +14,7 @@ import {
 import { TableSheet } from './TableSheet';
 import { TableOrderRequestsSheet } from './TableOrderRequestsSheet';
 import { requestsByTable, useNewRequestChime, useTableOrderRequests } from './useTableOrderRequests';
+import { useTablePaymentRequests } from './useTablePaymentRequests';
 import '../../styles/dining-room-portal.css';
 
 type StatusFilter = TableStatus | 'all';
@@ -73,7 +74,9 @@ export function DiningRoomPage() {
   const tablesQuery = useDiningTables();
   const tabsQuery = useActiveTabs();
   const requestsQuery = useTableOrderRequests();
-  useNewRequestChime(requestsQuery.data);
+  const paymentsQuery = useTablePaymentRequests();
+  useNewRequestChime(requestsQuery.data?.map((request) => request.id));
+  useNewRequestChime(paymentsQuery.data?.map((request) => request.id));
   const now = useNow();
 
   const [selectedTableId, setSelectedTableId] = useState<string | null>(null);
@@ -95,7 +98,14 @@ export function DiningRoomPage() {
   );
   const tabByTable = useMemo(() => tabsByTable(tabsQuery.data ?? []), [tabsQuery.data]);
   const requestByTable = useMemo(() => requestsByTable(requestsQuery.data ?? []), [requestsQuery.data]);
-  const pendingRequestCount = requestsQuery.data?.length ?? 0;
+  const pixByTable = useMemo(() => {
+    const byTable = new Map<string, number>();
+    for (const request of paymentsQuery.data ?? []) {
+      byTable.set(request.diningTableId, (byTable.get(request.diningTableId) ?? 0) + 1);
+    }
+    return byTable;
+  }, [paymentsQuery.data]);
+  const pendingRequestCount = (requestsQuery.data?.length ?? 0) + (paymentsQuery.data?.length ?? 0);
   const areas = useMemo(() => areasOf(tables), [tables]);
   const currentArea = areas.find((area) => area.key === areaKey) ?? areas[0] ?? null;
 
@@ -229,11 +239,10 @@ export function DiningRoomPage() {
             {visibleTables.map((table) => {
               const tab = tabByTable.get(table.id);
               const status = statusOf(tab);
-              const waiting = requestByTable.get(table.id)?.length ?? 0;
-              const badge =
-                waiting > 1
-                  ? DINING_ROOM.orderRequests.tableBadgeCount(waiting)
-                  : DINING_ROOM.orderRequests.tableBadge;
+              const orders = requestByTable.get(table.id)?.length ?? 0;
+              const pix = pixByTable.get(table.id) ?? 0;
+              const waiting = orders + pix;
+              const badge = DINING_ROOM.orderRequests.badgeFor(orders, pix);
               return (
                 <button
                   key={table.id}
@@ -267,6 +276,7 @@ export function DiningRoomPage() {
           summary={tabByTable.get(selectedTable.id)}
           now={now}
           pendingRequestCount={requestByTable.get(selectedTable.id)?.length ?? 0}
+          pendingPixCount={pixByTable.get(selectedTable.id) ?? 0}
           onShowRequests={() => {
             setSelectedTableId(null);
             setRequestsFor(selectedTable.id);

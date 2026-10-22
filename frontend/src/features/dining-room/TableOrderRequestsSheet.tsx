@@ -8,6 +8,8 @@ import {
   type TableOrderRequest,
   type TableOrderRequestLine,
 } from './useTableOrderRequests';
+import { useTablePaymentRequests } from './useTablePaymentRequests';
+import { TablePaymentRequestsSection } from './TablePaymentRequestsSection';
 
 const TEXT = DINING_ROOM.orderRequests;
 
@@ -49,31 +51,49 @@ export function TableOrderRequestsSheet({
   readonly onNotice: (message: string) => void;
 }) {
   const requestsQuery = useTableOrderRequests();
+  const paymentsQuery = useTablePaymentRequests();
   const [rejecting, setRejecting] = useState<TableOrderRequest | null>(null);
   const reject = useRejectTableOrderRequest();
   const [rejectError, setRejectError] = useState<{ readonly id: string; readonly message: string } | null>(null);
 
-  const requests = (requestsQuery.data ?? []).filter(
-    (request) => diningTableId === null || request.diningTableId === diningTableId,
-  );
+  const ofThisView = <T extends { readonly diningTableId: string }>(list: readonly T[] | undefined) =>
+    (list ?? []).filter((request) => diningTableId === null || request.diningTableId === diningTableId);
+  const requests = ofThisView(requestsQuery.data);
+  const payments = ofThisView(paymentsQuery.data);
+  const failure = (requestsQuery.error && !requestsQuery.data) || (paymentsQuery.error && !paymentsQuery.data);
 
   let body;
-  if (requestsQuery.isPending) {
+  if (requestsQuery.isPending || paymentsQuery.isPending) {
     body = <p className="dr-state" role="status">{TEXT.loading}</p>;
-  } else if (requestsQuery.error && !requestsQuery.data) {
+  } else if (failure) {
     body = (
       <div className="dr-state" role="alert">
         <p>{TEXT.failed}</p>
-        <p className="dr-state-detail">{describeError(requestsQuery.error)}</p>
-        <button type="button" className="dr-action-btn dr-action-secondary" onClick={() => void requestsQuery.refetch()}>
+        <p className="dr-state-detail">{describeError(requestsQuery.error ?? paymentsQuery.error)}</p>
+        <button
+          type="button"
+          className="dr-action-btn dr-action-secondary"
+          onClick={() => {
+            void requestsQuery.refetch();
+            void paymentsQuery.refetch();
+          }}
+        >
           {DINING_ROOM.retry}
         </button>
       </div>
     );
-  } else if (requests.length === 0) {
+  } else if (requests.length === 0 && payments.length === 0) {
     body = <p className="dr-empty">{diningTableId === null ? TEXT.empty : TEXT.emptyForTable}</p>;
   } else {
     body = (
+      <>
+        {payments.length > 0 && (
+          <>
+            <h3 className="dr-requests-section">❧ {TEXT.pixSection}</h3>
+            <TablePaymentRequestsSection requests={payments} now={now} onNotice={onNotice} />
+          </>
+        )}
+        {requests.length > 0 && payments.length > 0 && <h3 className="dr-requests-section">❧ {TEXT.ordersSection}</h3>}
       <div className="dr-requests">
         {requests.map((request) => (
           <RequestCard
@@ -89,6 +109,7 @@ export function TableOrderRequestsSheet({
           />
         ))}
       </div>
+      </>
     );
   }
 

@@ -158,9 +158,10 @@ function chime() {
   }
 }
 
-/** Plays a short chime when a request id shows up that the previous read did not have. */
-export function useNewRequestChime(requests: readonly TableOrderRequest[] | undefined) {
+/** Plays a short chime when an id shows up that the previous read did not have (orders and Pix alike). */
+export function useNewRequestChime(ids: readonly string[] | undefined) {
   const known = useRef<ReadonlySet<string> | null>(null);
+  const signature = ids === undefined ? null : [...ids].sort().join(',');
 
   useEffect(() => {
     window.addEventListener('pointerdown', unlockAudio);
@@ -172,15 +173,15 @@ export function useNewRequestChime(requests: readonly TableOrderRequest[] | unde
   }, []);
 
   useEffect(() => {
-    if (!requests) {
+    if (signature === null) {
       return;
     }
-    const ids = new Set(requests.map((request) => request.id));
+    const current = new Set(signature === '' ? [] : signature.split(','));
     const previous = known.current;
-    known.current = ids;
+    known.current = current;
     // The first read is what was already waiting, not something that just arrived.
-    if (previous && [...ids].some((id) => !previous.has(id))) {
+    if (previous && [...current].some((id) => !previous.has(id))) {
       chime();
     }
-  }, [requests]);
+  }, [signature]);
 }

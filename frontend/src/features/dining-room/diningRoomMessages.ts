@@ -78,22 +78,38 @@ export const DINING_ROOM = {
     tableMoved: (label: string) => `Comanda movida para a mesa ${label}`,
     requestConfirmed: (label: string) => `Pedido da mesa ${label} confirmado e lançado`,
     requestRejected: (label: string) => `Pedido da mesa ${label} recusado`,
+    pixConfirmed: (label: string) => `Pix da mesa ${label} confirmado`,
+    pixRejected: (label: string) => `Pix da mesa ${label} recusado`,
   },
   orderRequests: {
     open: 'Pedidos do celular',
     openWithCount: (count: number) => `Pedidos do celular · ${count}`,
     title: 'Pedidos do celular',
     subtitle: 'Aguardando o garçom',
-    tableBadge: 'Pedido aguardando',
-    tableBadgeCount: (count: number) => `${count} pedidos aguardando`,
+    /** The map's badge: short, it sits on top of a table about 110 px wide. */
+    badgeFor: (orders: number, pix: number) =>
+      orders > 0 && pix > 0
+        ? 'Pedido e Pix'
+        : pix > 0
+          ? pix === 1
+            ? 'Pix aguardando'
+            : `${pix} Pix aguardando`
+          : orders === 1
+            ? 'Pedido aguardando'
+            : `${orders} pedidos aguardando`,
     loading: 'Carregando os pedidos do celular…',
     failed: 'Não deu para carregar os pedidos do celular.',
     empty: 'Nenhum pedido do celular aguardando.',
     emptyForTable: 'Esta mesa não tem pedido do celular aguardando.',
     showAll: 'Ver todos',
-    inSheet: (count: number) =>
-      count === 1 ? 'Há um pedido do celular aguardando nesta mesa.' : `Há ${count} pedidos do celular aguardando nesta mesa.`,
-    seeRequests: 'Ver pedido do celular',
+    inSheet: (orders: number, pix: number) => {
+      const parts = [
+        orders === 0 ? null : orders === 1 ? 'um pedido aguardando' : `${orders} pedidos aguardando`,
+        pix === 0 ? null : pix === 1 ? 'um Pix para conferir' : `${pix} Pix para conferir`,
+      ].filter(Boolean);
+      return `Do celular desta mesa: ${parts.join(' e ')}.`;
+    },
+    seeRequests: 'Ver no celular da mesa',
     anonymous: 'Cliente sem nome',
     requestedAt: (time: string) => `Pedido às ${time}`,
     expiresIn: (minutes: number) => (minutes <= 0 ? 'Expira agora' : `Expira em ${minutes} min`),
@@ -108,6 +124,19 @@ export const DINING_ROOM = {
       `O pedido de ${customer} na mesa ${label} sai da fila e nada é lançado. Avise o cliente; não há desfazer.`,
     rejectConfirm: 'Recusar pedido',
     keep: 'Voltar',
+    ordersSection: 'Pedidos',
+    pixSection: 'Pix para conferir',
+    pixAmount: 'Valor do Pix',
+    withService: (value: string) => `com serviço ${value}`,
+    withoutService: 'sem serviço',
+    units: (quantity: number, lineQuantity: number) =>
+      quantity === lineQuantity ? `${quantity}×` : `${quantity} de ${lineQuantity}`,
+    confirmPix: 'Confirmar Pix',
+    pixHint: 'Confira o comprovante no celular do cliente antes de confirmar.',
+    rejectPixTitle: 'Recusar o Pix?',
+    rejectPixMessage: (label: string, customer: string) =>
+      `O Pix de ${customer} na mesa ${label} é recusado e os itens voltam para a conta. Use quando o comprovante não confere.`,
+    rejectPixConfirm: 'Recusar Pix',
   },
 } as const;
 
@@ -152,7 +181,28 @@ const ERROR_MESSAGES: Readonly<Record<string, string>> = {
   TABLE_ORDER_REQUEST_NOT_PENDING: 'Outro garçom já resolveu este pedido. A lista vai se atualizar.',
   TABLE_ORDER_REQUEST_EXPIRED: 'Este pedido passou do prazo e expirou. Fale com o cliente e lance você mesmo, se for o caso.',
   TABLE_ORDER_REQUEST_NOT_FOUND: 'Este pedido não existe mais. A lista vai se atualizar.',
+  TABLE_PAYMENT_REQUEST_NOT_PENDING: 'Outro garçom já resolveu este Pix. A lista vai se atualizar.',
+  TABLE_PAYMENT_REQUEST_EXPIRED: 'Este Pix passou dos 30 minutos e expirou. Se o cliente pagou, lance o pagamento pelo caixa.',
+  TABLE_PAYMENT_REQUEST_NOT_FOUND: 'Este Pix não existe mais. A lista vai se atualizar.',
+  TABLE_PAYMENT_REQUEST_NOT_REFUNDABLE: 'Só um Pix confirmado e ainda não estornado pode ser estornado.',
+  PAYMENT_EXCEEDS_BALANCE: 'A conta já recebeu mais do que falta: este Pix passaria do saldo. Recuse e acerte no caixa.',
+  INVALID_PAYMENT_REFUND_REASON: 'Escreva o motivo do estorno.',
 };
+
+/** Confirming a Pix, the tab's own state matters more than in other places. */
+const CONFIRM_PIX_MESSAGES: Readonly<Record<string, string>> = {
+  TAB_NOT_OPEN: 'A comanda desta mesa já foi fechada ou cancelada. Recuse o Pix e acerte no caixa.',
+};
+
+export function describeConfirmPixError(error: unknown): string {
+  if (error instanceof ApiError && error.code) {
+    const specific = CONFIRM_PIX_MESSAGES[error.code];
+    if (specific) {
+      return specific;
+    }
+  }
+  return describeError(error);
+}
 
 /**
  * A confirmation refused by the posting keeps the request pending (#21 of

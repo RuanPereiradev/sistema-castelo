@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import { CUSTOMER } from './customerMessages';
 import { BackIcon, BillIcon, MenuIcon, MinusIcon, OrdersIcon, PlusIcon } from './customerIcons';
 
-export type CustomerScreen = 'welcome' | 'menu' | 'cart' | 'orders';
+export type CustomerScreen = 'welcome' | 'menu' | 'cart' | 'orders' | 'bill' | 'pix' | 'receipt';
 
 /** The shield with the brand's initial, the design's mark. */
 export function BrandShield({ large = false }: { readonly large?: boolean }) {
@@ -54,7 +54,7 @@ export function CustomerHeader({
   );
 }
 
-/** Cardápio, Pedidos and the place of Conta, which comes in the next round (decision #1). */
+/** Cardápio, Pedidos and Conta, as in the design. */
 export function CustomerNav({
   current,
   onGo,
@@ -62,10 +62,10 @@ export function CustomerNav({
   readonly current: CustomerScreen;
   readonly onGo: (screen: CustomerScreen) => void;
 }) {
-  const entries: readonly { screen: CustomerScreen | null; label: string; icon: ReactNode }[] = [
+  const entries: readonly { screen: CustomerScreen; label: string; icon: ReactNode }[] = [
     { screen: 'menu', label: CUSTOMER.nav.menu, icon: <MenuIcon /> },
     { screen: 'orders', label: CUSTOMER.nav.orders, icon: <OrdersIcon /> },
-    { screen: null, label: CUSTOMER.nav.bill, icon: <BillIcon /> },
+    { screen: 'bill', label: CUSTOMER.nav.bill, icon: <BillIcon /> },
   ];
   return (
     <nav className="ct-nav" aria-label={CUSTOMER.nav.label}>
@@ -77,8 +77,7 @@ export function CustomerNav({
             type="button"
             className={isCurrent ? 'ct-nav-item is-current' : 'ct-nav-item'}
             aria-current={isCurrent ? 'page' : undefined}
-            disabled={entry.screen === null}
-            onClick={() => entry.screen && onGo(entry.screen)}
+            onClick={() => onGo(entry.screen)}
           >
             <span className="ct-nav-bar" aria-hidden="true" />
             {entry.icon}

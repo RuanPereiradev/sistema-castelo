@@ -72,3 +72,14 @@ export function storedLastOrderRequestId(orderingToken: string): string | null {
 export function storeLastOrderRequestId(orderingToken: string, requestId: string | null): void {
   write(lastRequestKey(orderingToken), requestId);
 }
+
+const lastPaymentKey = (orderingToken: string) => `castel.customer.lastPaymentRequest.${orderingToken}`;
+
+/** The Pix this phone generated last at this table: a reload goes back to its receipt. */
+export function storedLastPaymentRequestId(orderingToken: string): string | null {
+  return read(lastPaymentKey(orderingToken));
+}
+
+export function storeLastPaymentRequestId(orderingToken: string, requestId: string | null): void {
+  write(lastPaymentKey(orderingToken), requestId);
+}

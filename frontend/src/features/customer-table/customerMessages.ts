@@ -35,6 +35,9 @@ export const CUSTOMER = {
     menu: 'Cardápio',
     cart: 'Seu pedido',
     orders: 'Pedidos da mesa',
+    bill: 'Conta da mesa',
+    pix: 'Pagar com Pix',
+    receipt: 'Comprovante',
   },
 
   nav: {
@@ -95,6 +98,83 @@ export const CUSTOMER = {
     fixName: 'Corrigir o nome',
   },
 
+  bill: {
+    loading: 'Carregando a conta…',
+    failed: 'Não deu para carregar a conta.',
+    empty: 'A mesa ainda não tem itens confirmados.',
+    stats: { total: 'Mesa', paid: 'Já pago', due: 'Falta' },
+    instructions: 'Marque o que você vai pagar. Pode ser só o seu ou qualquer item que ainda falte.',
+    quick: 'Atalhos de seleção',
+    onlyMine: 'Só os meus',
+    everythingDue: 'Tudo que falta',
+    clear: 'Limpar',
+    yourItems: 'Seus itens',
+    byWaiter: 'Pelo garçom',
+    paid: 'Pago',
+    reserved: 'Aguardando garçom',
+    units: (count: number) => (count === 1 ? '1 un.' : `${count} un.`),
+    lineTotal: (total: string, units: number) => (units === 1 ? total : `${total} · ${units} un.`),
+    serviceChargeRate: (rate: string) => `Incluir ${rate.replace('.', ',').replace(/,00$/, '')}% de serviço`,
+    optional: '(opcional)',
+    nothingSelected: 'Nenhum item marcado',
+    selected: (count: number, withService: boolean) =>
+      `${count === 1 ? '1 item marcado' : `${count} itens marcados`}${withService ? ' + serviço' : ''}`,
+    valueAfter: 'O valor aparece no Pix, calculado pelo restaurante.',
+    calculating: 'calculando…',
+    quoteBreakdown: (items: string, service: string) => `itens ${items} + serviço ${service}`,
+    generatePix: 'Gerar Pix',
+    generating: 'Gerando…',
+    pixDisabled: 'O restaurante ainda não ativou o Pix pela mesa. Peça a conta ao garçom.',
+    closing: 'A conta da mesa está com o caixa. Você ainda pode pagar a sua parte por aqui.',
+    pendingPix: 'Você tem um Pix aguardando o garçom.',
+    seePendingPix: 'Ver o Pix',
+  },
+
+  pix: {
+    toPay: (count: number, withService: boolean) =>
+      `${count === 1 ? '1 item' : `${count} itens`}${withService ? ' + serviço' : ''}`,
+    qrLabel: 'QR Code do Pix',
+    qrFailed: 'Não deu para desenhar o QR. Use o código abaixo.',
+    copyTitle: 'Pix copia e cola',
+    copy: 'Copiar',
+    copied: 'Código Pix copiado',
+    copyFailed: 'Não deu para copiar. Toque no código, selecione e copie.',
+    validUntil: (time: string) => `Válido até ${time}`,
+    steps: [
+      'Abra o app do seu banco e pague pelo QR Code ou pelo código.',
+      'Volte aqui e toque em Já paguei.',
+      'Mostre o comprovante do banco ao garçom.',
+    ] as readonly string[],
+    paid: 'Já paguei',
+    backToBill: 'Voltar à conta',
+    subtotal: 'Itens',
+    service: 'Serviço',
+    noService: 'Sem serviço',
+    loading: 'Carregando o Pix…',
+    failed: 'Não deu para carregar o Pix.',
+  },
+
+  receipt: {
+    states: {
+      PENDING: 'Aguardando garçom',
+      CONFIRMED: 'Pagamento confirmado',
+      REJECTED: 'Recusado pelo garçom',
+      EXPIRED: 'Expirou sem confirmação',
+    } as Readonly<Record<string, string>>,
+    refunded: 'Pagamento estornado',
+    informed: (time: string) => `Pix gerado · ${time}`,
+    showReceipt: 'Mostre o comprovante do seu banco ao garçom. Quando ele confirmar, seus itens ficam como pagos.',
+    hints: {
+      PENDING: 'Assim que o garçom conferir, esta tela muda sozinha.',
+      CONFIRMED: 'Seus itens já estão como pagos na conta da mesa.',
+      REJECTED: 'O garçom não confirmou este Pix. Fale com ele antes de pagar de novo.',
+      EXPIRED: 'Ninguém confirmou a tempo e os itens voltaram para a conta. Se você já pagou, mostre o comprovante ao garçom.',
+    } as Readonly<Record<string, string>>,
+    refundedHint: 'O restaurante estornou este pagamento; os itens voltaram para a conta.',
+    seePix: 'Ver o código Pix',
+    backToBill: 'Voltar à conta da mesa',
+  },
+
   orders: {
     all: 'Mesa toda',
     mine: 'Só os meus',
@@ -143,6 +223,14 @@ const ERROR_MESSAGES: Readonly<Record<string, string>> = {
   INVALID_CUSTOMER_DEVICE_ID: 'Não deu para identificar este celular. Recarregue a página e envie de novo.',
   TABLE_ORDER_REQUEST_NOT_FOUND: 'Não achamos o seu último pedido.',
   TAB_NOT_FOUND: 'A mesa ainda não tem itens confirmados.',
+  TAB_ITEM_ALREADY_PAID: 'Alguém acabou de pagar um desses itens. A conta foi atualizada; marque de novo.',
+  TAB_ITEM_RESERVED_FOR_PAYMENT: 'Um desses itens já está num Pix de outra pessoa. A conta foi atualizada; marque de novo.',
+  PIX_RECEIVER_NOT_CONFIGURED: 'O restaurante ainda não ativou o Pix pela mesa. Peça a conta ao garçom.',
+  INVALID_TABLE_PAYMENT_REQUEST: 'A seleção mudou enquanto você marcava. A conta foi atualizada; marque de novo.',
+  TAB_NOT_OPEN: 'A conta desta mesa já foi fechada. Fale com o garçom.',
+  TABLE_PAYMENT_REQUEST_EXPIRED: 'Este Pix expirou. Gere outro na conta da mesa.',
+  TABLE_PAYMENT_REQUEST_NOT_FOUND: 'Não achamos este Pix. Volte à conta da mesa.',
+  VALIDATION_FAILED: 'Faltou uma informação no pedido de pagamento. Tente de novo.',
 };
 
 const GENERIC_FAILURE = 'Não deu certo. Tente de novo; se continuar, chame o garçom.';
