@@ -21,6 +21,7 @@ public record TableOrderRequestResponse(
         String expiresAt,
         String resolvedAt,
         String tabId,
+        String customerName,
         List<Line> lines) {
 
     /** Where the names of the lines are read from: the menu as it is now. */
@@ -58,6 +59,7 @@ public record TableOrderRequestResponse(
                 request.expiresAt().toString(),
                 request.resolvedAt().map(Instant::toString).orElse(null),
                 request.tabId().map(id -> id.value().toString()).orElse(null),
+                request.customerName().orElse(null),
                 request.lines().stream().map(line -> lineFrom(line, names)).toList());
     }
 

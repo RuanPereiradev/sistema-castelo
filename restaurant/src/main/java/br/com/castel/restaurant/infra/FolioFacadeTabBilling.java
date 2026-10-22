@@ -8,6 +8,7 @@ import br.com.castel.billing.api.FolioFacade;
 import br.com.castel.billing.api.FolioId;
 import br.com.castel.billing.api.FolioOwner;
 import br.com.castel.billing.api.FolioView;
+import br.com.castel.billing.api.PaymentId;
 import br.com.castel.billing.api.PaymentMethod;
 import br.com.castel.billing.api.ReceivedPaymentView;
 import br.com.castel.restaurant.domain.TabBilling;
@@ -51,6 +52,16 @@ class FolioFacadeTabBilling implements TabBilling {
     public ReceivedPaymentView receivePayment(
             FolioId folioId, PaymentMethod method, Money amount, String idempotencyKey) {
         return folios.receivePayment(folioId, method, amount, idempotencyKey);
+    }
+
+    @Override
+    public void refundPayment(FolioId folioId, PaymentId paymentId, String reason) {
+        folios.refund(folioId, paymentId, reason);
+    }
+
+    @Override
+    public boolean isPaymentRefunded(FolioId folioId, PaymentId paymentId) {
+        return folios.isPaymentRefunded(folioId, paymentId);
     }
 
     @Override

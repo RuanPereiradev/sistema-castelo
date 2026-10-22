@@ -156,6 +156,10 @@ public class Payment extends AuditedEntity {
         return status == PaymentStatus.CONFIRMED;
     }
 
+    public boolean isRefunded() {
+        return status == PaymentStatus.REFUNDED;
+    }
+
     /** Whether this payment takes from the balance of the folio. */
     public boolean countsTowardsBalance() {
         return status.countsTowardsBalance();

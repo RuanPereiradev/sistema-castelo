@@ -47,6 +47,8 @@ class TableOrderRequestHttpIntegrationTest extends AbstractIntegrationTest {
     private static final String PASSWORD = "qr-test-password";
     private static final String TABS = "/api/restaurant/tabs";
     private static final String REQUESTS = "/api/restaurant/table-order-requests";
+    private static final String CUSTOMER_NAME = "Ana";
+    private static final String DEVICE_ID = "phone-of-ana-0001";
 
     @LocalServerPort
     private int port;
@@ -247,6 +249,38 @@ class TableOrderRequestHttpIntegrationTest extends AbstractIntegrationTest {
                 "TABLE_ORDER_REQUEST_NOT_FOUND");
     }
 
+    @Test
+    void shouldShowTheWaiterTheNameOfTheCustomerButNeverTheDeviceCode() {
+        JsonNode table = createDiningTable("Nome " + suffix);
+        String requestId = submit(table, orderOf(sodaId, 1));
+        assertThat(elementWithId(send(get(REQUESTS, waiterToken), 200), requestId).get("customerName").asString())
+                .isEqualTo(CUSTOMER_NAME);
+
+        String tabId = send(post(REQUESTS + "/" + requestId + "/confirm", waiterToken, ""), 200)
+                .get("tabId").asString();
+
+        HttpResponse<String> tab = exchange(get(TABS + "/" + tabId, waiterToken));
+        assertThat(jsonMapper.readTree(tab.body()).get("items").get(0).get("customerName").asString())
+                .isEqualTo(CUSTOMER_NAME);
+        assertThat(tab.body()).doesNotContain(DEVICE_ID);
+    }
+
+    @Test
+    void shouldRefuseAnOrderWithoutTheNameOfTheCustomer() {
+        JsonNode table = createDiningTable("Sem nome " + suffix);
+
+        assertCode(publicPost(table.get("orderingToken").asString(), orderBy(null, DEVICE_ID, sodaId, 1)), 422,
+                "INVALID_CUSTOMER_NAME");
+    }
+
+    @Test
+    void shouldRefuseAnOrderWithAMalformedDeviceCode() {
+        JsonNode table = createDiningTable("Sem aparelho " + suffix);
+
+        assertCode(publicPost(table.get("orderingToken").asString(), orderBy(CUSTOMER_NAME, "short", sodaId, 1)), 422,
+                "INVALID_CUSTOMER_DEVICE_ID");
+    }
+
     // ------------------------------------------------------------- fixtures
 
     private String submit(JsonNode table, String body) {
@@ -267,7 +301,18 @@ class TableOrderRequestHttpIntegrationTest extends AbstractIntegrationTest {
     }
 
     private static String orderOf(String menuItemId, int quantity) {
-        return "{\"lines\":[{\"menuItemId\":\"%s\",\"quantity\":%d,\"modifiers\":[]}]}".formatted(menuItemId, quantity);
+        return orderBy(CUSTOMER_NAME, DEVICE_ID, menuItemId, quantity);
+    }
+
+    private static String orderBy(String customerName, String customerDeviceId, String menuItemId, int quantity) {
+        return """
+                {"customerName":%s,"customerDeviceId":%s,
+                 "lines":[{"menuItemId":"%s","quantity":%d,"modifiers":[]}]}
+                """.formatted(quoted(customerName), quoted(customerDeviceId), menuItemId, quantity);
+    }
+
+    private static String quoted(String value) {
+        return value == null ? "null" : "\"" + value + "\"";
     }
 
     private static String openingBody(String diningTableId) {

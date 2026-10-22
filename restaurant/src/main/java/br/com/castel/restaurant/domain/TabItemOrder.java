@@ -15,15 +15,27 @@ import java.util.List;
  * @param weightGrams the weight of a plate sold by weight, or null
  * @param modifiers the modifiers chosen; null is read as none
  * @param specialInstructions free text for the kitchen, or null
+ * @param customerName who ordered it from the phone of the table, already validated; null when the
+ *     waiter orders (decision #40 of task qr-table-payment)
+ * @param customerDeviceId the device that ordered it from the phone, already validated; null when the
+ *     waiter orders
  */
 public record TabItemOrder(
         MenuItemVariantId variantId,
         Integer quantity,
         Integer weightGrams,
         List<ModifierChoice> modifiers,
-        String specialInstructions) {
+        String specialInstructions,
+        String customerName,
+        String customerDeviceId) {
 
     public TabItemOrder {
         modifiers = modifiers == null ? List.of() : List.copyOf(modifiers);
+    }
+
+    /** An order of the waiter, with no customer of the phone behind it. */
+    public TabItemOrder(MenuItemVariantId variantId, Integer quantity, Integer weightGrams,
+            List<ModifierChoice> modifiers, String specialInstructions) {
+        this(variantId, quantity, weightGrams, modifiers, specialInstructions, null, null);
     }
 }

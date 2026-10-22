@@ -23,6 +23,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.regex.Pattern;
 import org.hibernate.annotations.Fetch;
 import org.hibernate.annotations.FetchMode;
 
@@ -50,6 +51,12 @@ public class TableOrderRequest extends AuditedEntity {
 
     /** How many lines one request takes (decision #20). */
     public static final int MAXIMUM_LINES = 20;
+
+    /** Longest name a customer types on the phone, once trimmed (decision #46 of task qr-table-payment). */
+    public static final int MAXIMUM_CUSTOMER_NAME_LENGTH = 40;
+
+    /** What a device code is made of: 8 to 64 letters, digits, hyphens or underscores (decision #46). */
+    private static final Pattern CUSTOMER_DEVICE_ID = Pattern.compile("[A-Za-z0-9_-]{8,64}");
 
     @EmbeddedId
     @AttributeOverride(name = "value", column = @Column(name = "id"))
@@ -79,6 +86,13 @@ public class TableOrderRequest extends AuditedEntity {
 
     @AttributeOverride(name = "value", column = @Column(name = "tab_id"))
     private TabId tabId;
+
+    /* Who sent it from the phone (decision #40 of task qr-table-payment); null only on rows from before V14. */
+    @Column(name = "customer_name", updatable = false)
+    private String customerName;
+
+    @Column(name = "customer_device_id", updatable = false)
+    private String customerDeviceId;
 
     /*
      * The line owns table_order_request_id, like TabItem owns tab_id, so inserting a request writes
@@ -129,16 +143,21 @@ public class TableOrderRequest extends AuditedEntity {
      * being sold by weight, since the customer has no scale. Everything else is checked by
      * {@link Tab#addItem} at confirmation.
      *
+     * @param customerName the name the customer typed on the phone (decision #40 of task qr-table-payment)
+     * @param customerDeviceId the random code the phone keeps for its device
      * @param activeTab the {@code OPEN} or {@code CLOSING} tab of the table, if any
      * @param menuItems where the item of each line is read from
      * @param propertyZone the zone the availability windows are read in
+     * @throws InvalidCustomerNameException if the name is missing, blank or past 40 characters
+     * @throws InvalidCustomerDeviceIdException if the device code is missing or malformed
      * @throws TabClosingRefusesOrderRequestException if the tab of the table is {@code CLOSING}
      * @throws InvalidTableOrderRequestException if there is no line, more than 20, or an item sold by weight
      * @throws MenuItemNotFoundException if the item of a line does not exist
      * @throws MenuItemUnavailableException if the item of a line is inactive or ran out
      * @throws MenuItemOutsideAvailabilityWindowException if the schedule does not serve an item now
      */
-    public static TableOrderRequest submit(UUID propertyId, DiningTable diningTable, Optional<Tab> activeTab,
+    public static TableOrderRequest submit(UUID propertyId, DiningTable diningTable, String customerName,
+            String customerDeviceId, Optional<Tab> activeTab,
             List<TableOrderRequestLine> lines, MenuItemRepository menuItems, Instant requestedAt,
             ZoneId propertyZone) {
         Objects.requireNonNull(propertyId, "propertyId");
@@ -146,6 +165,8 @@ public class TableOrderRequest extends AuditedEntity {
         Objects.requireNonNull(menuItems, "menuItems");
         Objects.requireNonNull(requestedAt, "requestedAt");
         Objects.requireNonNull(propertyZone, "propertyZone");
+        String validCustomerName = requireCustomerName(customerName);
+        String validCustomerDeviceId = requireCustomerDeviceId(customerDeviceId);
         if (!acceptsOrdersWith(activeTab)) {
             throw new TabClosingRefusesOrderRequestException("The tab of this dining table is closing");
         }
@@ -158,12 +179,43 @@ public class TableOrderRequest extends AuditedEntity {
                     requestedAt, propertyZone);
         }
         TableOrderRequest request = new TableOrderRequest(propertyId, diningTable.id(), requestedAt);
+        request.customerName = validCustomerName;
+        request.customerDeviceId = validCustomerDeviceId;
         for (int position = 0; position < lines.size(); position++) {
             TableOrderRequestLine line = lines.get(position);
             line.attachTo(request.id, position);
             request.lines.add(line);
         }
         return request;
+    }
+
+    /**
+     * The name the customer typed, trimmed, 1 to 40 characters (decision #46 of task qr-table-payment).
+     *
+     * @throws InvalidCustomerNameException if it is missing, blank or too long
+     */
+    public static String requireCustomerName(String customerName) {
+        if (customerName == null || customerName.isBlank()) {
+            throw new InvalidCustomerNameException("The customer needs a name");
+        }
+        String trimmed = customerName.trim();
+        if (trimmed.length() > MAXIMUM_CUSTOMER_NAME_LENGTH) {
+            throw new InvalidCustomerNameException(
+                    "A customer name takes at most " + MAXIMUM_CUSTOMER_NAME_LENGTH + " characters");
+        }
+        return trimmed;
+    }
+
+    /**
+     * The code of the customer's device: 8 to 64 letters, digits, hyphens or underscores (decision #46).
+     *
+     * @throws InvalidCustomerDeviceIdException if it is missing or does not match
+     */
+    public static String requireCustomerDeviceId(String customerDeviceId) {
+        if (customerDeviceId == null || !CUSTOMER_DEVICE_ID.matcher(customerDeviceId).matches()) {
+            throw new InvalidCustomerDeviceIdException("The customer device code is 8 to 64 letters, digits, - or _");
+        }
+        return customerDeviceId;
     }
 
     private static void requireOrderableByCustomer(MenuItemRepository menuItems, MenuItemId menuItemId,
@@ -306,6 +358,16 @@ public class TableOrderRequest extends AuditedEntity {
     /** The tab the lines went on; set only on {@code CONFIRMED}. */
     public Optional<TabId> tabId() {
         return Optional.ofNullable(tabId);
+    }
+
+    /** Who sent it from the phone; empty only on a request stored before task qr-table-payment. */
+    public Optional<String> customerName() {
+        return Optional.ofNullable(customerName);
+    }
+
+    /** The device that sent it; never shown to another device. */
+    public Optional<String> customerDeviceId() {
+        return Optional.ofNullable(customerDeviceId);
     }
 
     public List<TableOrderRequestLine> lines() {

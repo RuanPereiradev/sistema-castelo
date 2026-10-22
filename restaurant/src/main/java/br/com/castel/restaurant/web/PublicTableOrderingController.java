@@ -2,7 +2,6 @@ package br.com.castel.restaurant.web;
 
 import br.com.castel.restaurant.api.MenuItemId;
 import br.com.castel.restaurant.application.TableOrderRequestService;
-import br.com.castel.restaurant.domain.DiningTableNotFoundException;
 import br.com.castel.restaurant.domain.MenuItemVariantId;
 import br.com.castel.restaurant.domain.ModifierId;
 import br.com.castel.restaurant.domain.TableOrderRequestId;
@@ -12,7 +11,6 @@ import jakarta.validation.Valid;
 import java.time.Clock;
 import java.util.List;
 import java.util.UUID;
-import java.util.regex.Pattern;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -38,10 +36,6 @@ public class PublicTableOrderingController {
     /** What the request sends for a modifier without a quantity: none, which the confirmation refuses. */
     private static final int NO_QUANTITY = 0;
 
-    /** The canonical form every id of the API is parsed in: 8-4-4-4-12 hex digits, either case. */
-    private static final Pattern CANONICAL_UUID =
-            Pattern.compile("[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}");
-
     private final TableOrderRequestService requests;
     private final Clock clock;
 
@@ -61,7 +55,9 @@ public class PublicTableOrderingController {
             @PathVariable("orderingToken") String orderingToken,
             @Valid @RequestBody SubmitTableOrderRequest request) {
         return TableOrderRequestStatusResponse.from(
-                requests.submit(tokenOf(orderingToken), linesFrom(request)), clock.instant());
+                requests.submit(tokenOf(orderingToken), request.getCustomerName(), request.getCustomerDeviceId(),
+                        linesFrom(request)),
+                clock.instant());
     }
 
     @GetMapping("/order-requests/{requestId}")
@@ -72,15 +68,8 @@ public class PublicTableOrderingController {
                 requests.findForTable(tokenOf(orderingToken), TableOrderRequestId.of(requestId)), clock.instant());
     }
 
-    /**
-     * A code that is not even a UUID is one more unknown code, and answers the same 404 (decision
-     * #24): a torn or badly printed QR is not a malformed request of the API.
-     */
     private static UUID tokenOf(String orderingToken) {
-        if (!CANONICAL_UUID.matcher(orderingToken).matches()) {
-            throw new DiningTableNotFoundException("No dining table answers this ordering code");
-        }
-        return UUID.fromString(orderingToken);
+        return OrderingTokenPath.parse(orderingToken);
     }
 
     /** Null lines stay null, so the domain answers its own code for a request without lines. */

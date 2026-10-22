@@ -1,0 +1,1020 @@
+### Task qr-table-payment - conta e Pix pelo celular da mesa
+### Ambiente: selecione "dev" no IntelliJ HTTP Client, com http-client.env.json
+### + http-client.private.env.json (copie o .example). Ver http/README.md.
+###
+### Pre-requisito: aplicacao rodando no perfil "dev" com o seed habilitado
+### (usuarios admin, garcom e recepcao). Rode o arquivo inteiro, em ordem: a
+### preparacao e o caminho feliz salvam os ids que os cenarios negativos usam.
+###
+### ATENCAO: o passo 4 grava o Pix do restaurante (chave de teste) nas
+### configuracoes do banco em que roda. As rotas /public nao levam token.
+###
+### Contas, com a taxa de 10% do seed:
+###   pizza A 40,00 + pizza B 40,00 (garcom) + 3 sucos a 9,00 (pedidos pela Ana no
+###   celular) = 107,00; taxa 10,70; total 117,70
+###   Pix da pizza A com taxa = 44,00; Pix de 2 sucos com taxa = 19,80;
+###   Pix de 1 suco sem taxa = 9,00 (a taxa e opcional no celular)
+###
+### Fora da bancada: a expiracao de 30 minutos e o PIX_RECEIVER_NOT_CONFIGURED
+### (nao ha rota que apague o Pix) ficam no teste de integracao.
+
+
+### ------------------------------------------------------------------
+### Preparacao: logins, Pix, cardapio, mesa e comanda
+### ------------------------------------------------------------------
+
+
+### 0. Login do admin
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{
+  "username": "{{adminUsername}}",
+  "password": "{{password}}"
+}
+
+> {%
+    client.test("login do admin retorna 200", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+    });
+    client.global.set("adminToken", response.body.accessToken);
+    client.global.set("suffix", Math.random().toString(36).substring(2, 8));
+%}
+
+
+### 1. Login do garcom
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{
+  "username": "{{waiterUsername}}",
+  "password": "{{password}}"
+}
+
+> {%
+    client.test("login do garcom retorna 200", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+    });
+    client.global.set("waiterToken", response.body.accessToken);
+%}
+
+
+### 2. Login da recepcao
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{
+  "username": "{{frontDeskUsername}}",
+  "password": "{{password}}"
+}
+
+> {%
+    client.test("login da recepcao retorna 200", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+    });
+    client.global.set("frontDeskToken", response.body.accessToken);
+%}
+
+
+### 3. Pix sem chave -> 422 INVALID_PIX_RECEIVER
+PUT {{host}}/api/admin/pix-receiver
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "key": "   ",
+  "receiverName": "Castel",
+  "city": "Fortaleza"
+}
+
+> {%
+    client.test("Pix sem chave: 422 INVALID_PIX_RECEIVER", function() {
+        client.assert(response.status === 422, "esperado 422, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_PIX_RECEIVER", "code " + response.body.code);
+    });
+%}
+
+
+### 3b. Chave que nao e CPF, CNPJ, telefone, e-mail nem aleatoria -> 422 INVALID_PIX_RECEIVER
+PUT {{host}}/api/admin/pix-receiver
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "key": "chave-qualquer",
+  "receiverName": "Castel",
+  "city": "Fortaleza"
+}
+
+> {%
+    client.test("chave fora do DICT: 422 INVALID_PIX_RECEIVER", function() {
+        client.assert(response.status === 422, "esperado 422, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_PIX_RECEIVER", "code " + response.body.code);
+    });
+%}
+
+
+### 4. Admin grava o Pix do restaurante
+PUT {{host}}/api/admin/pix-receiver
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "key": "123E4567-E12B-12D1-A456-426655440000",
+  "receiverName": "Pousada Castel Restaurante e Bar",
+  "city": "São José de Ribamar"
+}
+
+> {%
+    client.test("Pix gravado como digitado", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        client.assert(response.body.city === "São José de Ribamar", "cidade " + response.body.city);
+        client.assert(response.body.key === "123e4567-e12b-12d1-a456-426655440000", "chave aleatoria em minusculas");
+    });
+%}
+
+
+### 5. Admin le o Pix
+GET {{host}}/api/admin/pix-receiver
+Authorization: Bearer {{adminToken}}
+
+> {%
+    client.test("Pix lido", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        client.assert(response.body.key === "123e4567-e12b-12d1-a456-426655440000", "chave " + response.body.key);
+    });
+%}
+
+
+### 6. Garcom nao mexe no Pix -> 403 ACCESS_DENIED
+GET {{host}}/api/admin/pix-receiver
+Authorization: Bearer {{waiterToken}}
+
+> {%
+    client.test("so admin: 403 ACCESS_DENIED", function() {
+        client.assert(response.status === 403, "esperado 403, recebido " + response.status);
+        client.assert(response.body.code === "ACCESS_DENIED", "code " + response.body.code);
+    });
+%}
+
+
+### 7. Cria a categoria
+POST {{host}}/api/restaurant/menu-categories
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "name": "Pix {{suffix}}",
+  "displayOrder": 1
+}
+
+> {%
+    client.test("categoria criada", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+    });
+    client.global.set("categoryId", response.body.id);
+%}
+
+
+### 8. Cria a pizza a 40,00
+POST {{host}}/api/restaurant/menu-items
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "categoryId": "{{categoryId}}",
+  "name": "Pizza Pix {{suffix}}",
+  "prepStation": "PIZZA",
+  "soldByWeight": false,
+  "price": "40.00"
+}
+
+> {%
+    client.test("pizza criada", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+    });
+    client.global.set("pizzaId", response.body.id);
+%}
+
+
+### 9. Cria o suco a 9,00
+POST {{host}}/api/restaurant/menu-items
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "categoryId": "{{categoryId}}",
+  "name": "Suco Pix {{suffix}}",
+  "prepStation": "BAR",
+  "soldByWeight": false,
+  "price": "9.00"
+}
+
+> {%
+    client.test("suco criado", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+    });
+    client.global.set("juiceId", response.body.id);
+%}
+
+
+### 10. Cria a mesa
+POST {{host}}/api/restaurant/dining-tables
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "label": "Pix {{suffix}}"
+}
+
+> {%
+    client.test("mesa criada", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+    });
+    client.global.set("tableId", response.body.id);
+    client.global.set("orderingToken", response.body.orderingToken);
+%}
+
+
+### 11. Mesa sem comanda -> 404 TAB_NOT_FOUND
+GET {{host}}/public/tables/{{orderingToken}}/tab
+
+> {%
+    client.test("sem comanda ativa: 404 TAB_NOT_FOUND", function() {
+        client.assert(response.status === 404, "esperado 404, recebido " + response.status);
+        client.assert(response.body.code === "TAB_NOT_FOUND", "code " + response.body.code);
+    });
+%}
+
+
+### 12. Garcom abre a comanda da mesa
+POST {{host}}/api/restaurant/tabs
+Authorization: Bearer {{waiterToken}}
+Content-Type: application/json
+
+{
+  "origin": "TABLE_SERVICE",
+  "diningTableId": "{{tableId}}"
+}
+
+> {%
+    client.test("comanda aberta", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+    });
+    client.global.set("tabId", response.body.id);
+%}
+
+
+### 13. Lanca a pizza A
+POST {{host}}/api/restaurant/tabs/{{tabId}}/items
+Authorization: Bearer {{waiterToken}}
+Content-Type: application/json
+
+{
+  "menuItemId": "{{pizzaId}}",
+  "quantity": 1
+}
+
+> {%
+    client.test("pizza A lancada", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+    });
+    client.global.set("pizzaAItemId", response.body.items[response.body.items.length - 1].id);
+%}
+
+
+### 14. Lanca a pizza B
+POST {{host}}/api/restaurant/tabs/{{tabId}}/items
+Authorization: Bearer {{waiterToken}}
+Content-Type: application/json
+
+{
+  "menuItemId": "{{pizzaId}}",
+  "quantity": 1
+}
+
+> {%
+    client.test("pizza B lancada", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+    });
+    client.global.set("pizzaBItemId", response.body.items[response.body.items.length - 1].id);
+%}
+
+
+### 15. Ana pede 3 sucos pelo celular
+POST {{host}}/public/tables/{{orderingToken}}/order-requests
+Content-Type: application/json
+
+{
+  "customerName": "Ana",
+  "customerDeviceId": "device-{{suffix}}-ana",
+  "lines": [{"menuItemId": "{{juiceId}}", "quantity": 3}]
+}
+
+> {%
+    client.test("pedido da Ana: 201", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+    });
+    client.global.set("juiceOrderId", response.body.id);
+%}
+
+
+### 15b. Garcom confirma: os 3 sucos entram na comanda com o nome da Ana
+POST {{host}}/api/restaurant/table-order-requests/{{juiceOrderId}}/confirm
+Authorization: Bearer {{waiterToken}}
+
+> {%
+    client.test("sucos na comanda, total 117,70", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        client.assert(response.body.tabId === client.global.get("tabId"), "mesma comanda");
+    });
+%}
+
+
+### ------------------------------------------------------------------
+### Caminho feliz: pagar a parte com a comanda OPEN
+### ------------------------------------------------------------------
+
+
+### 16. Celular da Ana le a comanda da mesa: os sucos sao dela
+GET {{host}}/public/tables/{{orderingToken}}/tab
+X-Customer-Device: device-{{suffix}}-ana
+
+> {%
+    client.test("comanda no celular: 3 linhas, nada pago, aceita Pix", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        client.assert(response.body.items.length === 3, "itens " + response.body.items.length);
+        client.assert(response.body.total === "117.70", "total " + response.body.total);
+        client.assert(response.body.paidAmount === "0.00", "pago " + response.body.paidAmount);
+        client.assert(response.body.amountDue === "117.70", "falta " + response.body.amountDue);
+        client.assert(response.body.acceptsPayment === true, "deveria aceitar Pix");
+        const juice = response.body.items.find(i => i.quantity === 3);
+        client.assert(juice.customerName === "Ana" && juice.mine === true, "sucos da Ana");
+        client.assert(juice.customerDeviceId === undefined, "nao expoe o aparelho");
+        const pizza = response.body.items.find(i => i.quantity === 1);
+        client.assert(pizza.mine === false && pizza.customerName === null, "pizza do garcom");
+        client.assert(response.body.items[0].prepStation === undefined, "nao expoe setor");
+    });
+    client.global.set("juiceItemId", response.body.items.find(i => i.quantity === 3).id);
+%}
+
+
+### 16b. Sem o aparelho, nada e "meu"
+GET {{host}}/public/tables/{{orderingToken}}/tab
+
+> {%
+    client.test("sem header, mine sempre falso", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        client.assert(response.body.items.every(i => i.mine === false), "mine deveria ser falso");
+    });
+%}
+
+
+### 17. Cliente paga a pizza A com a taxa: 40,00 + 4,00
+POST {{host}}/public/tables/{{orderingToken}}/payment-requests
+Content-Type: application/json
+
+{
+  "customerName": "Bruno",
+  "customerDeviceId": "device-{{suffix}}-bruno",
+  "includeServiceCharge": true,
+  "items": [{"tabItemId": "{{pizzaAItemId}}", "quantity": 1}]
+}
+
+> {%
+    client.test("Pix gerado com o valor: 44,00", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+        client.assert(response.body.status === "PENDING", "status " + response.body.status);
+        client.assert(response.body.amount === "44.00", "valor " + response.body.amount);
+        client.assert(response.body.serviceCharge === "4.00", "taxa " + response.body.serviceCharge);
+        client.assert(response.body.pixPayload.startsWith("000201"), "payload " + response.body.pixPayload);
+        client.assert(response.body.pixPayload.indexOf("540544.00") > 0, "valor no payload");
+        client.assert(/6304[0-9A-F]{4}$/.test(response.body.pixPayload), "CRC no fim");
+    });
+    client.global.set("pizzaARequestId", response.body.id);
+%}
+
+
+### 18. Outro celular escolhe a mesma pizza -> 409 TAB_ITEM_RESERVED_FOR_PAYMENT
+POST {{host}}/public/tables/{{orderingToken}}/payment-requests
+Content-Type: application/json
+
+{
+  "customerName": "Ana",
+  "customerDeviceId": "device-{{suffix}}-ana",
+  "includeServiceCharge": true,
+  "items": [{"tabItemId": "{{pizzaAItemId}}", "quantity": 1}]
+}
+
+> {%
+    client.test("item reservado: 409 TAB_ITEM_RESERVED_FOR_PAYMENT", function() {
+        client.assert(response.status === 409, "esperado 409, recebido " + response.status);
+        client.assert(response.body.code === "TAB_ITEM_RESERVED_FOR_PAYMENT", "code " + response.body.code);
+    });
+%}
+
+
+### 18b. Pagamento sem dizer da taxa -> 400 VALIDATION_FAILED
+POST {{host}}/public/tables/{{orderingToken}}/payment-requests
+Content-Type: application/json
+
+{
+  "customerName": "Ana",
+  "customerDeviceId": "device-{{suffix}}-ana",
+  "items": [{"tabItemId": "{{pizzaBItemId}}", "quantity": 1}]
+}
+
+> {%
+    client.test("includeServiceCharge obrigatorio: 400", function() {
+        client.assert(response.status === 400, "esperado 400, recebido " + response.status);
+        client.assert(response.body.code === "VALIDATION_FAILED", "code " + response.body.code);
+    });
+%}
+
+
+### 19. Garcom tenta cancelar a pizza reservada -> 409 TAB_ITEM_RESERVED_FOR_PAYMENT
+POST {{host}}/api/restaurant/tabs/{{tabId}}/items/{{pizzaAItemId}}/cancel
+Authorization: Bearer {{waiterToken}}
+Content-Type: application/json
+
+{
+  "reason": "Cliente desistiu"
+}
+
+> {%
+    client.test("cancelar reservado: 409 TAB_ITEM_RESERVED_FOR_PAYMENT", function() {
+        client.assert(response.status === 409, "esperado 409, recebido " + response.status);
+        client.assert(response.body.code === "TAB_ITEM_RESERVED_FOR_PAYMENT", "code " + response.body.code);
+    });
+%}
+
+
+### 20. Garcom ve o pagamento aguardando, com o nome de quem paga
+GET {{host}}/api/restaurant/table-payment-requests
+Authorization: Bearer {{waiterToken}}
+
+> {%
+    client.test("pagamento na fila, com mesa, nome e item", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        const request = response.body.find(r => r.id === client.global.get("pizzaARequestId"));
+        client.assert(request !== undefined, "pagamento nao esta na fila");
+        client.assert(request.diningTableLabel === "Pix " + client.global.get("suffix"), "mesa " + request.diningTableLabel);
+        client.assert(request.customerName === "Bruno", "nome " + request.customerName);
+        client.assert(request.amount === "44.00", "valor " + request.amount);
+        client.assert(request.items[0].itemName === "Pizza Pix " + client.global.get("suffix"), "item");
+    });
+%}
+
+
+### 21. Garcom confere o comprovante e confirma
+POST {{host}}/api/restaurant/table-payment-requests/{{pizzaARequestId}}/confirm
+Authorization: Bearer {{waiterToken}}
+
+> {%
+    client.test("confirmado", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        client.assert(response.body.status === "CONFIRMED", "status " + response.body.status);
+    });
+%}
+
+
+### 22. Celular ve a pizza A paga: pago 44,00, falta 73,70
+GET {{host}}/public/tables/{{orderingToken}}/tab
+
+> {%
+    client.test("pizza A paga no celular", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        const pizzaA = response.body.items.find(i => i.id === client.global.get("pizzaAItemId"));
+        client.assert(pizzaA.paid === true, "pizza A deveria estar paga");
+        client.assert(response.body.paidAmount === "44.00", "pago " + response.body.paidAmount);
+        client.assert(response.body.amountDue === "73.70", "falta " + response.body.amountDue);
+    });
+%}
+
+
+### 23. Pre-conta: o folio ja recebeu os 44,00 da parte
+GET {{host}}/api/restaurant/tabs/{{tabId}}/bill
+Authorization: Bearer {{waiterToken}}
+
+> {%
+    client.test("pre-conta com o pago abatido", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        client.assert(response.body.total === "117.70", "total " + response.body.total);
+        client.assert(response.body.paidAmount === "44.00", "pago pelo celular " + response.body.paidAmount);
+        client.assert(response.body.amountDue === "73.70", "falta " + response.body.amountDue);
+        client.assert(response.body.paid === "44.00", "pago no folio " + response.body.paid);
+        client.assert(response.body.balance === "0.00", "saldo " + response.body.balance);
+    });
+%}
+
+
+### 24. Escolher a pizza ja paga -> 409 TAB_ITEM_ALREADY_PAID
+POST {{host}}/public/tables/{{orderingToken}}/payment-requests
+Content-Type: application/json
+
+{
+  "customerName": "Ana",
+  "customerDeviceId": "device-{{suffix}}-ana",
+  "includeServiceCharge": true,
+  "items": [{"tabItemId": "{{pizzaAItemId}}", "quantity": 1}]
+}
+
+> {%
+    client.test("item pago: 409 TAB_ITEM_ALREADY_PAID", function() {
+        client.assert(response.status === 409, "esperado 409, recebido " + response.status);
+        client.assert(response.body.code === "TAB_ITEM_ALREADY_PAID", "code " + response.body.code);
+    });
+%}
+
+
+### 25. Cancelar a pizza paga -> 409 TAB_ITEM_ALREADY_PAID
+POST {{host}}/api/restaurant/tabs/{{tabId}}/items/{{pizzaAItemId}}/cancel
+Authorization: Bearer {{waiterToken}}
+Content-Type: application/json
+
+{
+  "reason": "Errado"
+}
+
+> {%
+    client.test("cancelar pago: 409 TAB_ITEM_ALREADY_PAID", function() {
+        client.assert(response.status === 409, "esperado 409, recebido " + response.status);
+        client.assert(response.body.code === "TAB_ITEM_ALREADY_PAID", "code " + response.body.code);
+    });
+%}
+
+
+### ------------------------------------------------------------------
+### Recusa
+### ------------------------------------------------------------------
+
+
+### 26. Ana pede o Pix de 1 suco, sem a taxa: 9,00
+POST {{host}}/public/tables/{{orderingToken}}/payment-requests
+Content-Type: application/json
+
+{
+  "customerName": "Ana",
+  "customerDeviceId": "device-{{suffix}}-ana",
+  "includeServiceCharge": false,
+  "items": [{"tabItemId": "{{juiceItemId}}", "quantity": 1}]
+}
+
+> {%
+    client.test("Pix de 1 suco sem taxa: 9,00", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+        client.assert(response.body.amount === "9.00", "valor " + response.body.amount);
+        client.assert(response.body.serviceCharge === "0.00", "taxa " + response.body.serviceCharge);
+    });
+    client.global.set("rejectedRequestId", response.body.id);
+%}
+
+
+### 27. Comprovante nao confere: garcom recusa
+POST {{host}}/api/restaurant/table-payment-requests/{{rejectedRequestId}}/reject
+Authorization: Bearer {{waiterToken}}
+
+> {%
+    client.test("recusado", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        client.assert(response.body.status === "REJECTED", "status " + response.body.status);
+    });
+%}
+
+
+### 28. Celular ve recusado
+GET {{host}}/public/tables/{{orderingToken}}/payment-requests/{{rejectedRequestId}}
+
+> {%
+    client.test("recusado no celular", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        client.assert(response.body.status === "REJECTED", "status " + response.body.status);
+    });
+%}
+
+
+### 29. Confirmar o recusado -> 409 TABLE_PAYMENT_REQUEST_NOT_PENDING
+POST {{host}}/api/restaurant/table-payment-requests/{{rejectedRequestId}}/confirm
+Authorization: Bearer {{waiterToken}}
+
+> {%
+    client.test("ja respondido: 409 TABLE_PAYMENT_REQUEST_NOT_PENDING", function() {
+        client.assert(response.status === 409, "esperado 409, recebido " + response.status);
+        client.assert(response.body.code === "TABLE_PAYMENT_REQUEST_NOT_PENDING", "code " + response.body.code);
+    });
+%}
+
+
+### ------------------------------------------------------------------
+### Parte da quantidade, fechamento com Pix aguardando, confirmacao em CLOSING
+### ------------------------------------------------------------------
+
+
+### 30. Ana paga 2 dos 3 sucos, com a taxa: 18,00 + 1,80
+POST {{host}}/public/tables/{{orderingToken}}/payment-requests
+Content-Type: application/json
+
+{
+  "customerName": "Ana",
+  "customerDeviceId": "device-{{suffix}}-ana",
+  "includeServiceCharge": true,
+  "items": [{"tabItemId": "{{juiceItemId}}", "quantity": 2}]
+}
+
+> {%
+    client.test("2 sucos: 19,80", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+        client.assert(response.body.amount === "19.80", "valor " + response.body.amount);
+        client.assert(response.body.items[0].quantity === 2, "unidades " + response.body.items[0].quantity);
+    });
+    client.global.set("juiceRequestId", response.body.id);
+%}
+
+
+### 30b. Outro celular quer 2 sucos, so 1 esta livre -> 409 TAB_ITEM_RESERVED_FOR_PAYMENT
+POST {{host}}/public/tables/{{orderingToken}}/payment-requests
+Content-Type: application/json
+
+{
+  "customerName": "Bruno",
+  "customerDeviceId": "device-{{suffix}}-bruno",
+  "includeServiceCharge": true,
+  "items": [{"tabItemId": "{{juiceItemId}}", "quantity": 2}]
+}
+
+> {%
+    client.test("unidades reservadas: 409", function() {
+        client.assert(response.status === 409, "esperado 409, recebido " + response.status);
+        client.assert(response.body.code === "TAB_ITEM_RESERVED_FOR_PAYMENT", "code " + response.body.code);
+    });
+%}
+
+
+### 30c. Quantidade acima da linha -> 422 INVALID_TABLE_PAYMENT_REQUEST
+POST {{host}}/public/tables/{{orderingToken}}/payment-requests
+Content-Type: application/json
+
+{
+  "customerName": "Ana",
+  "customerDeviceId": "device-{{suffix}}-ana",
+  "includeServiceCharge": true,
+  "items": [{"tabItemId": "{{juiceItemId}}", "quantity": 4}]
+}
+
+> {%
+    client.test("4 de 3 sucos: 422 INVALID_TABLE_PAYMENT_REQUEST", function() {
+        client.assert(response.status === 422, "esperado 422, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_TABLE_PAYMENT_REQUEST", "code " + response.body.code);
+    });
+%}
+
+
+### 31. Garcom inicia o fechamento: lanca so o que falta, 73,70
+POST {{host}}/api/restaurant/tabs/{{tabId}}/closing
+Authorization: Bearer {{waiterToken}}
+
+> {%
+    client.test("CLOSING com saldo 73,70", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        client.assert(response.body.status === "CLOSING", "status " + response.body.status);
+        client.assert(response.body.balance === "73.70", "saldo " + response.body.balance);
+        client.assert(response.body.amountDue === "73.70", "falta " + response.body.amountDue);
+    });
+%}
+
+
+### 32. Fechar com Pix aguardando -> 409 TAB_ITEM_RESERVED_FOR_PAYMENT
+POST {{host}}/api/restaurant/tabs/{{tabId}}/close
+Authorization: Bearer {{waiterToken}}
+
+> {%
+    client.test("Pix aguardando segura o fechamento: 409", function() {
+        client.assert(response.status === 409, "esperado 409, recebido " + response.status);
+        client.assert(response.body.code === "TAB_ITEM_RESERVED_FOR_PAYMENT", "code " + response.body.code);
+    });
+%}
+
+
+### 33. Garcom confirma os 2 sucos com a comanda em CLOSING
+POST {{host}}/api/restaurant/table-payment-requests/{{juiceRequestId}}/confirm
+Authorization: Bearer {{waiterToken}}
+
+> {%
+    client.test("confirmado em CLOSING", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        client.assert(response.body.status === "CONFIRMED", "status " + response.body.status);
+    });
+%}
+
+
+### 33b. Garcom reabre a comanda (para o cancelamento seguinte ser possivel em OPEN)
+POST {{host}}/api/restaurant/tabs/{{tabId}}/reopen
+Authorization: Bearer {{waiterToken}}
+Content-Type: application/json
+
+{
+  "reason": "Para tentar cancelar"
+}
+
+> {%
+    client.test("reaberta", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+    });
+%}
+
+
+### 33c. Cancelar a linha dos sucos parcialmente paga -> 409 TAB_ITEM_ALREADY_PAID
+POST {{host}}/api/restaurant/tabs/{{tabId}}/items/{{juiceItemId}}/cancel
+Authorization: Bearer {{waiterToken}}
+Content-Type: application/json
+
+{
+  "reason": "Errado"
+}
+
+> {%
+    client.test("linha com unidade paga: 409 TAB_ITEM_ALREADY_PAID", function() {
+        client.assert(response.status === 409, "esperado 409, recebido " + response.status);
+        client.assert(response.body.code === "TAB_ITEM_ALREADY_PAID", "code " + response.body.code);
+    });
+%}
+
+
+### 33d. Fecha de novo: lanca o que falta, 53,90
+POST {{host}}/api/restaurant/tabs/{{tabId}}/closing
+Authorization: Bearer {{waiterToken}}
+
+> {%
+    client.test("CLOSING de novo, saldo 53,90 (pizza B + 1 suco, com taxa)", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        client.assert(response.body.balance === "53.90", "saldo " + response.body.balance);
+    });
+%}
+
+
+### 33e. Ana paga o ultimo suco sem a taxa: 9,00
+POST {{host}}/public/tables/{{orderingToken}}/payment-requests
+Content-Type: application/json
+
+{
+  "customerName": "Ana",
+  "customerDeviceId": "device-{{suffix}}-ana",
+  "includeServiceCharge": false,
+  "items": [{"tabItemId": "{{juiceItemId}}", "quantity": 1}]
+}
+
+> {%
+    client.test("ultimo suco: 9,00", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+        client.assert(response.body.amount === "9.00", "valor " + response.body.amount);
+    });
+    client.global.set("lastJuiceRequestId", response.body.id);
+%}
+
+
+### 33f. Garcom confirma em CLOSING
+POST {{host}}/api/restaurant/table-payment-requests/{{lastJuiceRequestId}}/confirm
+Authorization: Bearer {{waiterToken}}
+
+> {%
+    client.test("confirmado", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+    });
+%}
+
+
+### 34. Pre-conta: falta 44,00 (a pizza B com taxa); o suco sem taxa baixou o total
+GET {{host}}/api/restaurant/tabs/{{tabId}}/bill
+Authorization: Bearer {{waiterToken}}
+
+> {%
+    client.test("saldo 44,00, total 116,80", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        client.assert(response.body.balance === "44.00", "saldo " + response.body.balance);
+        client.assert(response.body.amountDue === "44.00", "falta " + response.body.amountDue);
+        client.assert(response.body.paidAmount === "72.80", "pago pelo celular " + response.body.paidAmount);
+        client.assert(response.body.total === "116.80", "total " + response.body.total);
+        client.assert(response.body.unpaidServiceChargeBase === "40.00", "base nao paga " + response.body.unpaidServiceChargeBase);
+        const groupsTotal = response.body.groups.reduce((sum, g) => sum + Number(g.total), 0).toFixed(2);
+        client.assert(groupsTotal === "116.80", "grupos somam o total " + groupsTotal);
+    });
+%}
+
+
+### 35. Estornar sem motivo -> 422 INVALID_PAYMENT_REFUND_REASON
+POST {{host}}/api/restaurant/table-payment-requests/{{pizzaARequestId}}/refund
+Authorization: Bearer {{waiterToken}}
+Content-Type: application/json
+
+{
+  "reason": "  "
+}
+
+> {%
+    client.test("estorno sem motivo: 422 INVALID_PAYMENT_REFUND_REASON", function() {
+        client.assert(response.status === 422, "esperado 422, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_PAYMENT_REFUND_REASON", "code " + response.body.code);
+    });
+%}
+
+
+### 36. Garcom estorna o Pix da pizza A: a pizza volta a ficar livre
+POST {{host}}/api/restaurant/table-payment-requests/{{pizzaARequestId}}/refund
+Authorization: Bearer {{waiterToken}}
+Content-Type: application/json
+
+{
+  "reason": "Cliente pagou em dinheiro"
+}
+
+> {%
+    client.test("estornado", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        client.assert(response.body.refunded === true, "deveria estar estornado");
+        client.assert(response.body.status === "CONFIRMED", "status " + response.body.status);
+    });
+%}
+
+
+### 37. Estornar de novo -> 409 TABLE_PAYMENT_REQUEST_NOT_REFUNDABLE
+POST {{host}}/api/restaurant/table-payment-requests/{{pizzaARequestId}}/refund
+Authorization: Bearer {{waiterToken}}
+Content-Type: application/json
+
+{
+  "reason": "De novo"
+}
+
+> {%
+    client.test("ja estornado: 409 TABLE_PAYMENT_REQUEST_NOT_REFUNDABLE", function() {
+        client.assert(response.status === 409, "esperado 409, recebido " + response.status);
+        client.assert(response.body.code === "TABLE_PAYMENT_REQUEST_NOT_REFUNDABLE", "code " + response.body.code);
+    });
+%}
+
+
+### 38. Pre-conta: falta 88,00 (as duas pizzas com taxa)
+GET {{host}}/api/restaurant/tabs/{{tabId}}/bill
+Authorization: Bearer {{waiterToken}}
+
+> {%
+    client.test("saldo 88,00 depois do estorno", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        client.assert(response.body.balance === "88.00", "saldo " + response.body.balance);
+        client.assert(response.body.amountDue === "88.00", "falta " + response.body.amountDue);
+        client.assert(response.body.total === "116.80", "total " + response.body.total);
+    });
+%}
+
+
+### 39. Recebe o resto em Pix pelo garcom
+POST {{host}}/api/restaurant/tabs/{{tabId}}/payments
+Authorization: Bearer {{waiterToken}}
+Idempotency-Key: pix-{{suffix}}-rest
+Content-Type: application/json
+
+{
+  "method": "PIX",
+  "amount": "88.00"
+}
+
+> {%
+    client.test("resto pago, saldo zero", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+        client.assert(response.body.bill.balance === "0.00", "saldo " + response.body.bill.balance);
+    });
+%}
+
+
+### 40. Fecha a comanda
+POST {{host}}/api/restaurant/tabs/{{tabId}}/close
+Authorization: Bearer {{waiterToken}}
+
+> {%
+    client.test("CLOSED", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        client.assert(response.body.status === "CLOSED", "status " + response.body.status);
+    });
+%}
+
+
+### ------------------------------------------------------------------
+### Cenarios negativos: um por codigo de erro
+### ------------------------------------------------------------------
+
+
+### 41. Comanda fechada: o celular nao acha comanda -> 404 TAB_NOT_FOUND
+GET {{host}}/public/tables/{{orderingToken}}/tab
+
+> {%
+    client.test("comanda fechada: 404 TAB_NOT_FOUND", function() {
+        client.assert(response.status === 404, "esperado 404, recebido " + response.status);
+        client.assert(response.body.code === "TAB_NOT_FOUND", "code " + response.body.code);
+    });
+%}
+
+
+### 42. Nova comanda na mesa, para os negativos
+POST {{host}}/api/restaurant/tabs
+Authorization: Bearer {{waiterToken}}
+Content-Type: application/json
+
+{
+  "origin": "TABLE_SERVICE",
+  "diningTableId": "{{tableId}}"
+}
+
+> {%
+    client.test("nova comanda", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+    });
+    client.global.set("secondTabId", response.body.id);
+%}
+
+
+### 43. Pagamento sem itens -> 422 INVALID_TABLE_PAYMENT_REQUEST
+POST {{host}}/public/tables/{{orderingToken}}/payment-requests
+Content-Type: application/json
+
+{
+  "customerName": "Ana",
+  "customerDeviceId": "device-{{suffix}}-ana",
+  "includeServiceCharge": true,
+  "items": []
+}
+
+> {%
+    client.test("sem itens: 422 INVALID_TABLE_PAYMENT_REQUEST", function() {
+        client.assert(response.status === 422, "esperado 422, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_TABLE_PAYMENT_REQUEST", "code " + response.body.code);
+    });
+%}
+
+
+### 44. Item de outra comanda (a pizza da comanda fechada) -> 422 INVALID_TABLE_PAYMENT_REQUEST
+POST {{host}}/public/tables/{{orderingToken}}/payment-requests
+Content-Type: application/json
+
+{
+  "customerName": "Ana",
+  "customerDeviceId": "device-{{suffix}}-ana",
+  "includeServiceCharge": true,
+  "items": [{"tabItemId": "{{pizzaBItemId}}", "quantity": 1}]
+}
+
+> {%
+    client.test("item de outra comanda: 422 INVALID_TABLE_PAYMENT_REQUEST", function() {
+        client.assert(response.status === 422, "esperado 422, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_TABLE_PAYMENT_REQUEST", "code " + response.body.code);
+    });
+%}
+
+
+### 45. Pagamento de outra mesa ou inexistente -> 404 TABLE_PAYMENT_REQUEST_NOT_FOUND
+GET {{host}}/public/tables/{{orderingToken}}/payment-requests/00000000-0000-7000-8000-000000000000
+
+> {%
+    client.test("pagamento desconhecido: 404 TABLE_PAYMENT_REQUEST_NOT_FOUND", function() {
+        client.assert(response.status === 404, "esperado 404, recebido " + response.status);
+        client.assert(response.body.code === "TABLE_PAYMENT_REQUEST_NOT_FOUND", "code " + response.body.code);
+    });
+%}
+
+
+### 46. QR desconhecido -> 404 DINING_TABLE_NOT_FOUND
+GET {{host}}/public/tables/00000000-0000-4000-8000-000000000000/tab
+
+> {%
+    client.test("QR desconhecido: 404 DINING_TABLE_NOT_FOUND", function() {
+        client.assert(response.status === 404, "esperado 404, recebido " + response.status);
+        client.assert(response.body.code === "DINING_TABLE_NOT_FOUND", "code " + response.body.code);
+    });
+%}
+
+
+### 47. Recepcao nao ve a fila de pagamentos -> 403 ACCESS_DENIED
+GET {{host}}/api/restaurant/table-payment-requests
+Authorization: Bearer {{frontDeskToken}}
+
+> {%
+    client.test("fila de pagamentos so para o salao: 403 ACCESS_DENIED", function() {
+        client.assert(response.status === 403, "esperado 403, recebido " + response.status);
+        client.assert(response.body.code === "ACCESS_DENIED", "code " + response.body.code);
+    });
+%}
+
+
+### 48. Libera a mesa: cancela a comanda vazia
+POST {{host}}/api/restaurant/tabs/{{secondTabId}}/cancel
+Authorization: Bearer {{waiterToken}}
+Content-Type: application/json
+
+{
+  "reason": "Fim da bancada"
+}
+
+> {%
+    client.test("comanda vazia cancelada", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+    });
+%}

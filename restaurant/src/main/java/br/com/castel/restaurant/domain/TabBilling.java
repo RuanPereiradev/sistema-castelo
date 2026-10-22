@@ -2,6 +2,7 @@ package br.com.castel.restaurant.domain;
 
 import br.com.castel.billing.api.ChargeId;
 import br.com.castel.billing.api.FolioId;
+import br.com.castel.billing.api.PaymentId;
 import br.com.castel.billing.api.PaymentMethod;
 import br.com.castel.billing.api.ReceivedPaymentView;
 import br.com.castel.sharedkernel.Money;
@@ -34,6 +35,18 @@ public interface TabBilling {
      * manual method, amount above zero, never above the balance, and the cash drawer of task 2.4.
      */
     ReceivedPaymentView receivePayment(FolioId folioId, PaymentMethod method, Money amount, String idempotencyKey);
+
+    /**
+     * Refunds a payment of the folio in full, with a reason, by the rules of the counter: undoing a
+     * part paid from the phone of the table (decision #21 of task qr-table-payment).
+     */
+    void refundPayment(FolioId folioId, PaymentId paymentId, String reason);
+
+    /**
+     * Whether the payment was already refunded, at the counter for instance, which the tab tolerates
+     * when it undoes a part paid from the phone (decision #49 of task qr-table-payment).
+     */
+    boolean isPaymentRefunded(FolioId folioId, PaymentId paymentId);
 
     /** What the folio still owes. */
     Money balanceOf(FolioId folioId);

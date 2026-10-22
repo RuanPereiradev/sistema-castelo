@@ -78,6 +78,24 @@ public interface FolioFacade {
     ReceivedPaymentView receivePayment(
             FolioId folioId, PaymentMethod method, Money amount, String idempotencyKey);
 
+    /**
+     * Refunds a payment of the folio in full, in the transaction of the caller, by the rules of the
+     * counter: a reason, a payment still confirmed, the cash drawer of a cash payment (task 2.4).
+     *
+     * <p>Asked by the restaurant when the waiter undoes a part of a tab paid from the phone of the
+     * table (decision #21 of task qr-table-payment).
+     */
+    void refund(FolioId folioId, PaymentId paymentId, String reason);
+
+    /**
+     * Whether the payment of the folio was refunded, by {@link #refund} or at the counter: the
+     * restaurant undoes a part paid from the phone once, whoever refunded its Pix first (decision #49
+     * of task qr-table-payment).
+     *
+     * @throws br.com.castel.billing.domain.PaymentNotFoundException if the folio has no such payment
+     */
+    boolean isPaymentRefunded(FolioId folioId, PaymentId paymentId);
+
     /** What the folio still owes: the sum of its charges minus the sum of its payments. */
     Money balanceOf(FolioId folioId);
 

@@ -98,6 +98,16 @@ aqui, **pergunte antes de nomear**.
 | Item do pedido do cliente | `TableOrderRequestLine` |
 | Adicional no item do pedido do cliente | `TableOrderRequestLineModifier` |
 | Evento do pedido do cliente | `TableOrderRequestStatusChanged` |
+| Pagamento do cliente pelo celular, aguardando o garçom | `TablePaymentRequest` (tabela `table_payment_request`) |
+| Item escolhido para pagar | `TablePaymentRequestItem` |
+| Item pago | `TabItem.isPaid()` |
+| Pix copia e cola | `pixPayload` |
+| Dados de recebimento do Pix | `PixReceiver` (`key`, `receiverName`, `city`) |
+| Unidades pagas / reservadas do item | `TabItem.paidQuantity` / `TabItem.reservedQuantity` |
+| Unidades do item no pagamento do cliente | `TablePaymentRequestItem.quantity` |
+| Evento do pagamento do cliente | `TablePaymentRequestStatusChanged` |
+| Nome do cliente no celular | `customerName` |
+| Código do aparelho do cliente | `customerDeviceId` |
 
 ### Financeiro
 
@@ -153,6 +163,7 @@ TabItemStatus      PENDING · IN_PREPARATION · READY · DELIVERED · CANCELLED
 TabDestination     DIRECT_PAYMENT · ROOM_ACCOUNT
 PrepStation        KITCHEN · PIZZA · BAR
 TableOrderRequestStatus  PENDING · CONFIRMED · REJECTED · EXPIRED
+TablePaymentRequestStatus  PENDING · CONFIRMED · REJECTED · EXPIRED
 FolioType          STAY · TAB
 FolioStatus        OPEN · CLOSED
 PaymentStatus      PENDING · CONFIRMED · FAILED · REFUNDED

@@ -46,13 +46,23 @@ class TableOrderRequestTest {
     private static final Instant WITHIN_WINDOW = wednesdayAt("12:10");
     private static final Instant AFTER_WINDOW = wednesdayAt("12:31");
     private static final UUID OTHER_WAITER = UUID.randomUUID();
+    private static final String CUSTOMER_NAME = "Ana";
+    private static final String DEVICE_ID = "phone-of-ana-0001";
+    private static final String INVALID_CUSTOMER_NAME = "INVALID_CUSTOMER_NAME";
+    private static final String INVALID_CUSTOMER_DEVICE_ID = "INVALID_CUSTOMER_DEVICE_ID";
 
     private final InMemoryMenuItems menuItems = new InMemoryMenuItems();
     private final MenuItem pizza = menuItems.add(pizza());
     private final DiningTable table = activeTable();
 
     private TableOrderRequest submit(List<TableOrderRequestLine> lines) {
-        return TableOrderRequest.submit(PROPERTY_ID, table, Optional.empty(), lines, menuItems, REQUESTED_AT, FORTALEZA);
+        return TableOrderRequest.submit(PROPERTY_ID, table, CUSTOMER_NAME, DEVICE_ID, Optional.empty(), lines,
+                menuItems, REQUESTED_AT, FORTALEZA);
+    }
+
+    private TableOrderRequest submitBy(String customerName, String customerDeviceId) {
+        return TableOrderRequest.submit(PROPERTY_ID, table, customerName, customerDeviceId, Optional.empty(),
+                List.of(lineOf(pizza)), menuItems, REQUESTED_AT, FORTALEZA);
     }
 
     private TableOrderRequest pending() {
@@ -143,8 +153,8 @@ class TableOrderRequestTest {
             Optional<Tab> closing = Optional.of(tabInStatus(TabStatus.CLOSING, new FakeTabBilling()));
 
             assertRejectedWith(
-                    () -> TableOrderRequest.submit(PROPERTY_ID, table, closing, List.of(lineOf(pizza)), menuItems,
-                            REQUESTED_AT, FORTALEZA),
+                    () -> TableOrderRequest.submit(PROPERTY_ID, table, CUSTOMER_NAME, DEVICE_ID, closing,
+                            List.of(lineOf(pizza)), menuItems, REQUESTED_AT, FORTALEZA),
                     TAB_CLOSING_REFUSES_ORDER_REQUEST);
         }
 
@@ -152,8 +162,8 @@ class TableOrderRequestTest {
         void shouldAcceptWhenTheTabOfTheTableIsOpen() {
             Optional<Tab> open = Optional.of(tabInStatus(TabStatus.OPEN, new FakeTabBilling()));
 
-            TableOrderRequest request = TableOrderRequest.submit(PROPERTY_ID, table, open, List.of(lineOf(pizza)),
-                    menuItems, REQUESTED_AT, FORTALEZA);
+            TableOrderRequest request = TableOrderRequest.submit(PROPERTY_ID, table, CUSTOMER_NAME, DEVICE_ID, open,
+                    List.of(lineOf(pizza)), menuItems, REQUESTED_AT, FORTALEZA);
 
             assertThat(request.status()).isEqualTo(TableOrderRequestStatus.PENDING);
         }
@@ -381,6 +391,70 @@ class TableOrderRequestTest {
             TableOrderRequest request = pending();
 
             assertRejectedWith(() -> request.requireAnswerableAt(AFTER_WINDOW), EXPIRED);
+        }
+    }
+
+    // ------------------------------------------------------------------ the customer (#46 of qr-table-payment)
+
+    @Nested
+    class Customer {
+
+        @Test
+        void shouldKeepTheTrimmedNameAndTheDeviceOfTheCustomer() {
+            TableOrderRequest request = submitBy("  Ana  ", DEVICE_ID);
+
+            assertThat(request.customerName()).contains("Ana");
+            assertThat(request.customerDeviceId()).contains(DEVICE_ID);
+        }
+
+        @Test
+        void shouldAcceptANameOfFortyCharacters() {
+            assertThat(TableOrderRequest.requireCustomerName("a".repeat(40))).hasSize(40);
+        }
+
+        @Test
+        void shouldRefuseANameOfFortyOneCharacters() {
+            assertRejectedWith(() -> submitBy("a".repeat(41), DEVICE_ID), INVALID_CUSTOMER_NAME);
+        }
+
+        @Test
+        void shouldRefuseABlankName() {
+            assertRejectedWith(() -> submitBy(" ", DEVICE_ID), INVALID_CUSTOMER_NAME);
+        }
+
+        @Test
+        void shouldRefuseAMissingName() {
+            assertRejectedWith(() -> submitBy(null, DEVICE_ID), INVALID_CUSTOMER_NAME);
+        }
+
+        @Test
+        void shouldAcceptADeviceCodeOfEightCharacters() {
+            assertThat(TableOrderRequest.requireCustomerDeviceId("abcd-_12")).isEqualTo("abcd-_12");
+        }
+
+        @Test
+        void shouldRefuseADeviceCodeOfSevenCharacters() {
+            assertRejectedWith(() -> submitBy(CUSTOMER_NAME, "abcd-12"), INVALID_CUSTOMER_DEVICE_ID);
+        }
+
+        @Test
+        void shouldAcceptADeviceCodeOfSixtyFourCharacters() {
+            assertThat(TableOrderRequest.requireCustomerDeviceId("Z".repeat(64))).hasSize(64);
+        }
+
+        @Test
+        void shouldRefuseADeviceCodeOfSixtyFiveCharacters() {
+            assertRejectedWith(() -> submitBy(CUSTOMER_NAME, "Z".repeat(65)), INVALID_CUSTOMER_DEVICE_ID);
+        }
+
+        @Test
+        void shouldRefuseADeviceCodeWithASpace() {
+            assertRejectedWith(() -> submitBy(CUSTOMER_NAME, "abcd efgh"), INVALID_CUSTOMER_DEVICE_ID);
+        }
+
+        @Test
+        void shouldRefuseAMissingDeviceCode() {
+            assertRejectedWith(() -> submitBy(CUSTOMER_NAME, null), INVALID_CUSTOMER_DEVICE_ID);
         }
     }
 
