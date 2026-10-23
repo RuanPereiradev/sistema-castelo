@@ -8,7 +8,7 @@ interface UseKitchenSocketOptions {
 }
 
 /**
- * Liga a fila do setor aos tópicos STOMP da cozinha.
+ * Liga a fila do setor ao tópico STOMP do setor.
  *
  * Toda mensagem e toda conexão — a primeira e cada reconexão — recarregam a fila inteira
  * pelo GET. Durante a queda podem ter se perdido mensagens, e as que chegam podem vir fora
@@ -26,8 +26,10 @@ export function useKitchenSocket({ station, enabled = true }: UseKitchenSocketOp
       void queryClient.invalidateQueries({ queryKey: ['kitchen-tickets', station] });
     };
 
+    // Só o tópico do setor: toda mudança de item do setor chega por ele (K8). O de itens prontos
+    // é do garçom (K10); a inscrição da cozinha nele é recusada com ACCESS_DENIED, e a recusa
+    // derruba a conexão inteira.
     const unsubscribeStation = stompClient.subscribe(`/topic/kitchen/${station}`, reloadQueue);
-    const unsubscribeReady = stompClient.subscribe('/topic/restaurant/ready-items', reloadQueue);
     const stopListening = stompClient.onConnectionChange((connected) => {
       setIsConnected(connected);
       if (connected) {
@@ -38,7 +40,6 @@ export function useKitchenSocket({ station, enabled = true }: UseKitchenSocketOp
     return () => {
       stopListening();
       unsubscribeStation();
-      unsubscribeReady();
     };
   }, [enabled, station, queryClient]);
 

@@ -33,6 +33,7 @@
 | 8 | 0 | Ações no próprio card, sem painel de detalhe: `PENDING` → Iniciar e Pronto (K2 permite o pulo), `IN_PREPARATION` → Pronto e Desfazer, `READY` → Desfazer (K3) | implementado |
 | 9 | 0 | Tempo de espera conta de `orderedAt` (contrato da 3.5). O "agora" é o `serverTime` da última leitura mais o tempo decorrido desde ela; o relógio do aparelho nunca entra como hora absoluta. O card é redesenhado a cada 30s sem tocar o servidor | implementado |
 | 10 | 0 | Coluna pelo status do item: Pendentes, Em preparo, Prontos. `READY` fica até `DELIVERED` (K5) | implementado |
+| 11 | 1 | DEV, correção (2026-10-23): a tela da cozinha se inscrevia também em `/topic/restaurant/ready-items`, que o backend reserva a `WAITER`/`ADMIN` (K10). A recusa (`ACCESS_DENIED`) derrubava a conexão inteira e a tela ficava em "Desconectado" para sempre. A cozinha passa a ouvir só o tópico do setor, por onde chega toda mudança de item (K8). Achado no teste às cegas da skill `teste-cliente-garcom`; conferido em Chrome headless: "Conectado" nas três abas e item novo aparecendo sem recarregar | implementado |
 
 Valores de status: `pendente` · `implementado` · `revertida pela #n`
 
