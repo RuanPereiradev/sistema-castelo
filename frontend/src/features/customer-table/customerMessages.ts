@@ -92,9 +92,10 @@ export const CUSTOMER = {
     sending: 'Enviando…',
     sent: 'Pedido enviado. Agora é só aguardar o garçom confirmar.',
     closing: 'A conta da mesa está sendo fechada: não dá para pedir mais nada por aqui.',
-    pendingMine: 'Seu pedido anterior ainda aguarda o garçom. Assim que ele confirmar, você pode pedir de novo.',
-    pendingOther:
-      'Alguém da mesa enviou um pedido que ainda aguarda o garçom. Assim que ele confirmar, você pode enviar o seu.',
+    pendingMine: 'Você já tem um pedido aguardando o garçom. Assim que ele confirmar, você pode pedir de novo.',
+    limitReached: 'A mesa já tem muitos pedidos esperando o garçom; aguarde um instante.',
+    tablePending: (count: number) =>
+      count === 1 ? '1 pedido da mesa aguardando o garçom.' : `${count} pedidos da mesa aguardando o garçom.`,
     fixName: 'Corrigir o nome',
   },
 
@@ -213,7 +214,8 @@ export const CUSTOMER = {
 const ERROR_MESSAGES: Readonly<Record<string, string>> = {
   DINING_TABLE_NOT_FOUND: 'Este QR não vale mais. Chame o garçom.',
   TABLE_ORDER_REQUEST_ALREADY_PENDING:
-    'Alguém da mesa já tem um pedido aguardando o garçom. Espere ele confirmar e envie de novo.',
+    'Você já tem um pedido aguardando o garçom. Espere ele confirmar e envie de novo.',
+  TABLE_ORDER_REQUEST_LIMIT_REACHED: 'A mesa já tem muitos pedidos esperando o garçom; aguarde um instante e envie de novo.',
   TAB_CLOSING_REFUSES_ORDER_REQUEST: 'A conta da mesa está sendo fechada: não dá para pedir mais nada por aqui.',
   MENU_ITEM_UNAVAILABLE: 'Um dos itens acabou de esgotar. Tire-o do pedido e envie de novo.',
   MENU_ITEM_OUTSIDE_AVAILABILITY_WINDOW: 'Um dos itens não é servido neste horário. Tire-o do pedido e envie de novo.',

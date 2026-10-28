@@ -9,6 +9,7 @@ import {
   usePublicTableTab,
   useSubmitOrderRequest,
   useSubmitPaymentRequest,
+  MAXIMUM_PENDING_REQUESTS_PER_TABLE,
   type PublicMenuItem,
   type PublicTablePaymentRequest,
 } from './customerApi';
@@ -36,7 +37,12 @@ import '../../styles/customer-table.css';
 const NOTICE_MS = 2600;
 
 /** The codes after which the table itself must be read again: its state moved. */
-const TABLE_MOVED_CODES = ['TABLE_ORDER_REQUEST_ALREADY_PENDING', 'TAB_CLOSING_REFUSES_ORDER_REQUEST', 'DINING_TABLE_NOT_FOUND'];
+const TABLE_MOVED_CODES = [
+  'TABLE_ORDER_REQUEST_ALREADY_PENDING',
+  'TABLE_ORDER_REQUEST_LIMIT_REACHED',
+  'TAB_CLOSING_REFUSES_ORDER_REQUEST',
+  'DINING_TABLE_NOT_FOUND',
+];
 
 /** Wraps a payment screen with the tab it names its lines from. */
 function WithTabItems({
@@ -60,12 +66,12 @@ function WithTabItems({
 export function CustomerTablePage() {
   const { orderingToken = '' } = useParams();
   const queryClient = useQueryClient();
-  const table = usePublicTable(orderingToken);
+  const [deviceId] = useState(customerDeviceId);
+  const table = usePublicTable(orderingToken, deviceId);
   const menu = usePublicMenu();
   const submit = useSubmitOrderRequest(orderingToken);
   const submitPayment = useSubmitPaymentRequest(orderingToken);
 
-  const [deviceId] = useState(customerDeviceId);
   const [customerName, setCustomerName] = useState(storedCustomerName);
   const [lastPaymentId, setLastPaymentId] = useState(() => storedLastPaymentRequestId(orderingToken));
   // A reload with a Pix on record goes back to its receipt (decision #26).
@@ -116,6 +122,15 @@ export function CustomerTablePage() {
       setScreen((current) => (current === 'pix' || current === 'receipt' ? 'bill' : current));
     }
   }, [paymentUnknown, orderingToken]);
+
+  // The table knows this phone's waiting request even when storage lost it: Pedidos follows it.
+  const devicePendingId = table.data?.pendingRequestId ?? null;
+  useEffect(() => {
+    if (devicePendingId !== null && devicePendingId !== lastRequestId) {
+      storeLastOrderRequestId(orderingToken, devicePendingId);
+      setLastRequestId(devicePendingId);
+    }
+  }, [devicePendingId, lastRequestId, orderingToken]);
 
   const forgetRequest = useCallback(() => {
     storeLastOrderRequestId(orderingToken, null);
@@ -169,14 +184,15 @@ export function CustomerTablePage() {
   }
 
   const name = customerName;
-  const pendingRequestId = table.data.pendingRequestId;
-  const sendBlock: SendBlock = !table.data.acceptsOrders
-    ? 'closing'
-    : pendingRequestId === null
-      ? null
-      : pendingRequestId === lastRequestId
-        ? 'pending-mine'
-        : 'pending-other';
+  // Only this phone's waiting request blocks it (#62 of qr-table-payment); the backend still decides.
+  const sendBlock: SendBlock =
+    table.data.pendingRequestId !== null
+      ? 'pending-mine'
+      : table.data.acceptsOrders
+        ? null
+        : table.data.pendingRequestCount >= MAXIMUM_PENDING_REQUESTS_PER_TABLE
+          ? 'limit-reached'
+          : 'closing';
 
   function handleSend() {
     if (sending.current || cart.length === 0) {
@@ -285,6 +301,7 @@ export function CustomerTablePage() {
           onSend={handleSend}
           isSending={submit.isPending}
           sendBlock={sendBlock}
+          tablePendingCount={table.data.pendingRequestCount}
           sendError={sendError}
           onFixName={() => go('welcome')}
         />

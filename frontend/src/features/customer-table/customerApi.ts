@@ -6,9 +6,16 @@ import { publicRequest } from '../../lib/publicHttpClient';
 /** Field names follow the `Public*` records and `TableOrderRequestStatusResponse` of the backend. */
 export interface PublicTable {
   readonly diningTableLabel: string;
+  /** False while the tab is closing, or with the table at its cap of requests waiting. */
   readonly acceptsOrders: boolean;
+  /** This phone's request waiting for the waiter (read with `X-Customer-Device`); null otherwise. */
   readonly pendingRequestId: string | null;
+  /** Requests of the whole table waiting for the waiter. */
+  readonly pendingRequestCount: number;
 }
+
+/** The backend's cap of requests waiting per table (#63 of qr-table-payment); only tells the two "no" apart. */
+export const MAXIMUM_PENDING_REQUESTS_PER_TABLE = 10;
 
 export interface PublicMenuVariant {
   readonly id: string;
@@ -141,10 +148,13 @@ function retryOnlyServerFailures(failureCount: number, error: unknown): boolean 
 
 const tablePath = (orderingToken: string) => `/tables/${encodeURIComponent(orderingToken)}`;
 
-export function usePublicTable(orderingToken: string) {
+export function usePublicTable(orderingToken: string, customerDeviceId: string) {
   return useQuery({
-    queryKey: ['public-table', orderingToken],
-    queryFn: () => publicRequest<PublicTable>(tablePath(orderingToken)),
+    queryKey: ['public-table', orderingToken, customerDeviceId],
+    queryFn: () =>
+      publicRequest<PublicTable>(tablePath(orderingToken), {
+        headers: { 'X-Customer-Device': customerDeviceId },
+      }),
     refetchInterval: POLL_INTERVAL_MS,
     refetchIntervalInBackground: false,
     retry: retryOnlyServerFailures,

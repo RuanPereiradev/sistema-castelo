@@ -6,7 +6,7 @@ import { QuantityStepper } from './CustomerChrome';
 import { CloseIcon } from './customerIcons';
 
 /** Why the table cannot send now, read from `GET /public/tables/{token}`. */
-export type SendBlock = 'closing' | 'pending-mine' | 'pending-other' | null;
+export type SendBlock = 'closing' | 'pending-mine' | 'limit-reached' | null;
 
 export function CartScreen({
   cart,
@@ -17,6 +17,7 @@ export function CartScreen({
   sendBlock,
   sendError,
   onFixName,
+  tablePendingCount,
 }: {
   readonly cart: readonly CartLine[];
   readonly dispatch: Dispatch<CartAction>;
@@ -26,14 +27,16 @@ export function CartScreen({
   readonly sendBlock: SendBlock;
   readonly sendError: { readonly message: string; readonly fixName: boolean } | null;
   readonly onFixName: () => void;
+  /** Requests of the whole table waiting for the waiter, for information only. */
+  readonly tablePendingCount: number;
 }) {
   const blockMessage =
     sendBlock === 'closing'
       ? CUSTOMER.cart.closing
       : sendBlock === 'pending-mine'
         ? CUSTOMER.cart.pendingMine
-        : sendBlock === 'pending-other'
-          ? CUSTOMER.cart.pendingOther
+        : sendBlock === 'limit-reached'
+          ? CUSTOMER.cart.limitReached
           : null;
 
   return (
@@ -56,6 +59,9 @@ export function CartScreen({
         </div>
       </div>
       <div className="ct-footer ct-footer-stack">
+        {sendBlock === null && tablePendingCount > 0 && (
+          <p className="ct-hint">{CUSTOMER.cart.tablePending(tablePendingCount)}</p>
+        )}
         {blockMessage && (
           <p className="ct-notice-inline" role="status">
             {blockMessage}

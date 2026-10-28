@@ -46,7 +46,7 @@ Consome o backend das tasks `qr-table-ordering` (PR #38) e `qr-table-payment` (P
 | 8 | 1 | DEV: o carrinho é estado local (não existe no servidor) e mostra preço unitário e quantidade de cada linha, **sem total**: o front não calcula dinheiro (`frontend/CLAUDE.md`). O total da mesa aparece na Conta, calculado pelo backend. Diverge do design, que soma no carrinho | implementado |
 | 9 | 1 | DEV: as telas (boas-vindas, cardápio, carrinho, pedidos) são estado local da página `/mesa/:orderingToken`, como no design, sem sub-rota. Nome já salvo pula a boas-vindas | implementado |
 | 10 | 1 | DEV: o carrinho fica em memória; recarregar a página o perde. Linhas com o mesmo item, variação e adicionais se somam | implementado |
-| 11 | 1 | DEV: o "Enviar pedido" fica desligado, com aviso, quando a mesa diz `acceptsOrders` falso ou `pendingRequestId` presente (diferenciando "seu pedido anterior" de "alguém da mesa"). A mesa é relida a cada 10 s; o backend continua sendo quem recusa (`TABLE_ORDER_REQUEST_ALREADY_PENDING`, `TAB_CLOSING_REFUSES_ORDER_REQUEST`) | implementado |
+| 11 | 1 | DEV: o "Enviar pedido" fica desligado, com aviso, quando a mesa diz `acceptsOrders` falso ou `pendingRequestId` presente (diferenciando "seu pedido anterior" de "alguém da mesa"). A mesa é relida a cada 10 s; o backend continua sendo quem recusa (`TABLE_ORDER_REQUEST_ALREADY_PENDING`, `TAB_CLOSING_REFUSES_ORDER_REQUEST`) | revertida pela #43 |
 | 12 | 1 | DEV: o id do último pedido fica no `localStorage` por mesa (`castel.customer.lastOrderRequest.{token}`); `TABLE_ORDER_REQUEST_NOT_FOUND` o esquece. O estado do pedido só é relido enquanto `PENDING` | implementado |
 | 13 | 1 | DEV: o código do aparelho usa `crypto.randomUUID()` e, fora de HTTPS/localhost (celular abrindo o Vite pelo IP da rede), cai em `crypto.getRandomValues` (32 hex). Código salvo fora de 8–64 `[A-Za-z0-9_-]` é trocado por um novo | implementado |
 | 14 | 1 | DEV: Pedidos mostra um card por item da comanda (a API devolve itens, não pedidos), com quem pediu ("Você" se `mine`, o `customerName`, ou "Pelo garçom" quando nulo) e o `lineTotal` do backend. Mais novo primeiro, servidos no fim. O card "Seu último pedido" fica acima | implementado |
@@ -78,6 +78,10 @@ Consome o backend das tasks `qr-table-ordering` (PR #38) e `qr-table-payment` (P
 | 40 | 4 | DEV: "Estornar" abre o `ConfirmDialog` com motivo obrigatório (1–500 caracteres, aparado), texto de ação sem volta e botão "Estornar Pix". O `ConfirmDialog` ganhou `reasonLabel`, `reasonPlaceholder` e `reasonMaxLength` opcionais; sem eles, segue igual ao de antes. Depois do estorno relê Pix, comandas, mesas, comanda aberta e a lista de folios do caixa | implementado |
 | 41 | 4 | DEV: a rota que não existe ainda (404/405) vira o estado neutro "Indisponível por enquanto", sem erro. Uma resposta com algum Pix que não seja `CONFIRMED` daquela comanda é lida como backend sem o filtro, e também vira "indisponível" | revertida pela #42 |
 | 42 | 4 | DEV: com a rota no ar (`?status=CONFIRMED&tabId=`, só confirmados, `200 []` para comanda desconhecida), a checagem de "resposta errada" sai; fica só o 404/405 → "indisponível", para backend antigo | implementado |
+| 43 | 5 | DEV: a leitura da mesa (`GET /public/tables/{token}`) manda `X-Customer-Device`; o "Enviar pedido" só trava pelo pedido aguardando **deste celular** (`pendingRequestId`, #62 da `qr-table-payment`) — pedido de outra pessoa da mesa não bloqueia mais. Revê a #11, que travava por qualquer pedido da mesa | implementado |
+| 44 | 5 | DEV: `acceptsOrders` falso vira dois avisos: com `pendingRequestCount` no teto de 10 (constante espelhada da #63 da `qr-table-payment`, só para escolher o texto), "A mesa já tem muitos pedidos esperando o garçom; aguarde um instante"; senão, a conta em fechamento. Sem trava, o carrinho mostra "N pedidos da mesa aguardando o garçom" como informação | implementado |
+| 45 | 5 | DEV: se a mesa diz que este celular tem um pedido aguardando e o `localStorage` não o tem (aba anônima, limpeza), a tela adota esse id como "último pedido", e Pedidos volta a acompanhá-lo | implementado |
+| 46 | 5 | DEV: `TABLE_ORDER_REQUEST_ALREADY_PENDING` passa a dizer "Você já tem um pedido aguardando o garçom"; `TABLE_ORDER_REQUEST_LIMIT_REACHED` traduzido; os dois releem a mesa. No salão, vários pedidos da mesma mesa já se distinguem pelo nome do cliente e pela hora do pedido no card (sem mudança) | implementado |
 
 Valores de status: `pendente` · `implementado` · `revertida pela #n`
 
@@ -139,6 +143,8 @@ Consumido, não criado aqui: `docs/decisions/task-qr-table-ordering.md` e
 | O ConfirmDialog compartilhado tem estilo próprio (botão vermelho, cinza), fora do Portal | Componente existente, reusado como pedido (#20) | Portal no `confirm-dialog.css` numa task de estilo |
 | O Pix gerado não se cancela pelo celular (#35) | Não há rota de cancelar; o garçom recusa ou o prazo de 30 min libera | Rota de cancelar pelo aparelho que gerou |
 | O valor ao marcar depende da rota de simular, que ainda não existe no 8080 (#30, #33) | O front já chama e cai na contagem | Ajustar caminho e formato quando a rota sair |
+| Rodada 5 sem teste no navegador | O backend do 8080 estava para reiniciar com a mudança | Testar o envio de dois celulares na mesma mesa quando o 8080 voltar |
+| Dois clientes com o mesmo nome na mesma mesa só se distinguem no salão pela hora do pedido | O nome é livre e o código do aparelho não sai em resposta | Nenhuma prevista |
 | Sem teste automatizado | Ferramenta de teste do front ainda não decidida (`frontend/CLAUDE.md`) | Task 4.1 |
 
 ---
