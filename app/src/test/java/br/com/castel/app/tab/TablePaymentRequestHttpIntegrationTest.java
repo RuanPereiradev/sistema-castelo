@@ -370,7 +370,140 @@ class TablePaymentRequestHttpIntegrationTest extends AbstractIntegrationTest {
                 String.class, UUID.fromString(requestId))).isEqualTo("EXPIRED");
     }
 
+    /** Decisions #55–#58: the same amount as the real request, no Pix, nothing reserved, no customer. */
+    @Test
+    void shouldQuoteTheAmountOfTheRealRequestWithoutReservingAnythingOrAskingTheCustomer() {
+        configurePix();
+        String trioId = order(createItem("Pastel " + suffix, "3.35"), 3);
+        String units = unitsOf(trioId, 2) + "," + unitsOf(smallId, 1);
+
+        JsonNode quote = send(publicPost("/payment-requests/quote", quoteBody("true", units)), 200);
+
+        assertThat(quote.get("amount").asString()).isEqualTo("44.06");
+        assertThat(quote.has("pixPayload")).isFalse();
+        JsonNode tab = send(publicGet("/tab"), 200);
+        assertThat(itemOf(tab, trioId).get("reservedQuantity").asInt()).isZero();
+        assertThat(itemOf(tab, smallId).get("reservedQuantity").asInt()).isZero();
+        JsonNode request = send(publicPost("/payment-requests", paymentBody(CUSTOMER_NAME, "true",
+                unitsOf(trioId, 2), unitsOf(smallId, 1))), 201);
+        assertThat(request.get("amount").asString()).isEqualTo(quote.get("amount").asString());
+        assertThat(request.get("serviceCharge").asString()).isEqualTo(quote.get("serviceCharge").asString());
+    }
+
+    @Test
+    void shouldRefuseAQuoteOfMoreUnitsThanTheLineHas() {
+        configurePix();
+
+        assertCode(publicPost("/payment-requests/quote", quoteBody("true", unitsOf(smallId, 2))), 422,
+                "INVALID_TABLE_PAYMENT_REQUEST");
+    }
+
+    @Test
+    void shouldRefuseAQuoteOfAnItemAlreadyPaid() {
+        configurePix();
+        confirm(send(publicPost("/payment-requests", itemsBody(smallId)), 201));
+
+        assertCode(publicPost("/payment-requests/quote", quoteBody("true", unitsOf(smallId, 1))), 409,
+                "TAB_ITEM_ALREADY_PAID");
+    }
+
+    @Test
+    void shouldAnswerTabNotFoundToAQuoteFromATableWithoutATab() {
+        configurePix();
+        String emptyTableToken = send(post("/api/restaurant/dining-tables", adminToken,
+                "{\"label\":\"Pix vazia %s\"}".formatted(suffix)), 201).get("orderingToken").asString();
+
+        assertCode(anonymous("/public/tables/" + emptyTableToken + "/payment-requests/quote")
+                .POST(HttpRequest.BodyPublishers.ofString(quoteBody("true", unitsOf(smallId, 1)))), 404,
+                "TAB_NOT_FOUND");
+    }
+
+    // ------------------------------------------------------------- confirmed payments of a tab (#59–#61)
+
+    /** Requested hundred then small, confirmed small then hundred: the list follows the confirmation. */
+    @Test
+    void shouldListTheConfirmedPaymentsOfTheTabOldestConfirmationFirstWithTheRefundedOne() {
+        configurePix();
+        JsonNode hundred = send(publicPost("/payment-requests", itemsBody(hundredId)), 201);
+        JsonNode small = send(publicPost("/payment-requests", itemsBody(smallId)), 201);
+        confirm(small);
+        confirm(hundred);
+        String smallRequestId = small.get("id").asString();
+        send(post(PAYMENTS + "/" + smallRequestId + "/refund", waiterToken, "{\"reason\":\"comprovante falso\"}"),
+                200);
+
+        JsonNode confirmed = send(get(confirmedOf(tabId), waiterToken), 200);
+
+        assertThat(ids(confirmed)).containsExactly(smallRequestId, hundred.get("id").asString());
+        JsonNode refunded = confirmed.get(0);
+        assertThat(refunded.get("refunded").asBoolean()).isTrue();
+        assertThat(refunded.get("refundReason").asString()).isEqualTo("comprovante falso");
+        assertThat(confirmed.get(1).get("refunded").asBoolean()).isFalse();
+    }
+
+    @Test
+    void shouldLeavePendingPaymentsOutOfTheConfirmedList() {
+        configurePix();
+        confirm(send(publicPost("/payment-requests", itemsBody(smallId)), 201));
+        String pendingId = send(publicPost("/payment-requests", itemsBody(hundredId)), 201).get("id").asString();
+
+        assertThat(ids(send(get(confirmedOf(tabId), waiterToken), 200))).hasSize(1).doesNotContain(pendingId);
+    }
+
+    @Test
+    void shouldLeaveTheConfirmedPaymentsOfAnotherTabOut() {
+        configurePix();
+        String ownId = confirm(send(publicPost("/payment-requests", itemsBody(smallId)), 201));
+        String ownTabId = tabId;
+        arrange();
+        String otherId = confirm(send(publicPost("/payment-requests", itemsBody(smallId)), 201));
+
+        assertThat(ids(send(get(confirmedOf(ownTabId), waiterToken), 200))).containsExactly(ownId)
+                .doesNotContain(otherId);
+    }
+
+    @Test
+    void shouldRefuseAStatusOtherThanConfirmed() {
+        assertCode(get(PAYMENTS + "?status=PENDING&tabId=" + tabId, waiterToken), 400, "VALIDATION_FAILED");
+    }
+
+    @Test
+    void shouldRefuseTheConfirmedListWithoutATab() {
+        assertCode(get(PAYMENTS + "?status=CONFIRMED", waiterToken), 400, "VALIDATION_FAILED");
+    }
+
+    @Test
+    void shouldAnswerAnEmptyListForAnUnknownTab() {
+        assertThat(send(get(confirmedOf(UUID.randomUUID().toString()), waiterToken), 200)).isEmpty();
+    }
+
+    @Test
+    void shouldNotLetTheFrontDeskReadTheConfirmedPayments() {
+        assertCode(get(confirmedOf(tabId), accessTokenFor(createUser(Role.FRONT_DESK))), 403, "ACCESS_DENIED");
+    }
+
+    @Test
+    void shouldKeepAnsweringThePendingQueueWithoutParameters() {
+        configurePix();
+        String confirmedId = confirm(send(publicPost("/payment-requests", itemsBody(smallId)), 201));
+        String pendingId = send(publicPost("/payment-requests", itemsBody(hundredId)), 201).get("id").asString();
+
+        assertThat(ids(send(get(PAYMENTS, waiterToken), 200))).contains(pendingId).doesNotContain(confirmedId);
+    }
+
     // ------------------------------------------------------------- fixtures
+
+    private static String confirmedOf(String tabId) {
+        return PAYMENTS + "?status=CONFIRMED&tabId=" + tabId;
+    }
+
+    private static List<String> ids(JsonNode array) {
+        return StreamSupport.stream(array.spliterator(), false).map(node -> node.get("id").asString()).toList();
+    }
+
+    private static String quoteBody(String includeServiceCharge, String items) {
+        return "{\"includeServiceCharge\":%s,\"items\":[%s]}".formatted(includeServiceCharge, items);
+    }
 
     /** Ages a pending request past its window, as the clock would, leaving it stored PENDING. */
     private void ageThirtyOneMinutes(String requestId) {

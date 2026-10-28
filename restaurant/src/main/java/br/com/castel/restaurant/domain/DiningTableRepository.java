@@ -15,6 +15,14 @@ public interface DiningTableRepository {
      */
     Optional<DiningTable> findActiveByOrderingToken(UUID orderingToken);
 
+    /**
+     * Locks the row of the table {@code FOR NO KEY UPDATE} until the transaction ends, so two
+     * submissions from its QR code count the requests waiting one after the other (decision #64 of
+     * task qr-table-payment). Not {@code FOR UPDATE}: opening a tab on the table takes
+     * {@code FOR KEY SHARE} through its foreign key, which does not conflict with this lock.
+     */
+    void lockForOrdering(DiningTableId id);
+
     /** Whether the property already has a table under this label, ignoring letter case. */
     boolean existsByLabel(UUID propertyId, String label);
 

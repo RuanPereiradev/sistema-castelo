@@ -20,14 +20,22 @@ public interface TableOrderRequestRepository {
     /** The request, only when it was sent from this table: the customer's read. */
     Optional<TableOrderRequest> findByIdOnDiningTable(TableOrderRequestId id, DiningTableId diningTableId);
 
-    /** The {@code PENDING} request of the table whose window is still open at {@code now}. */
-    Optional<TableOrderRequest> findOpenOnDiningTable(DiningTableId diningTableId, Instant now);
+    /**
+     * The {@code PENDING} request of this device on the table whose window is still open at
+     * {@code now}; at most one, by {@code idx_table_order_request_pending_by_device} (decision #62).
+     */
+    Optional<TableOrderRequest> findOpenOnDiningTableForDevice(
+            DiningTableId diningTableId, String customerDeviceId, Instant now);
+
+    /** How many {@code PENDING} requests of the table are still inside their window (decision #62). */
+    int countOpenOnDiningTable(DiningTableId diningTableId, Instant now);
 
     /**
-     * The {@code PENDING} request of the table whose window is over at {@code now}, locked
-     * {@code FOR UPDATE}. Two phones on the same table queue on it, and the second finds nothing.
+     * The {@code PENDING} requests of the table whose window is over at {@code now}, locked
+     * {@code FOR UPDATE} in the order of their ids. The submission takes them under the lock of the
+     * table row, so two phones on the same table queue and the second finds them expired.
      */
-    Optional<TableOrderRequest> findOverdueOnDiningTableForUpdate(DiningTableId diningTableId, Instant now);
+    List<TableOrderRequest> findOverdueOnDiningTableForUpdate(DiningTableId diningTableId, Instant now);
 
     /** The {@code PENDING} requests of the property still inside their window, oldest first. */
     List<TableOrderRequest> findOpen(UUID propertyId, Instant now);
@@ -42,7 +50,8 @@ public interface TableOrderRequestRepository {
     /**
      * Inserts a new request and flushes, so the partial unique index answers now (decision #22).
      *
-     * @throws TableOrderRequestAlreadyPendingException if the table already has a {@code PENDING} request
+     * @throws TableOrderRequestAlreadyPendingException if the device already has a {@code PENDING}
+     *     request on the table
      */
     TableOrderRequest add(TableOrderRequest request);
 

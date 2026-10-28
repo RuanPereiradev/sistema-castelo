@@ -36,8 +36,10 @@ import org.hibernate.annotations.FetchMode;
  * tab, as that waiter (decision #7); or {@linkplain #reject rejects} it as a whole (decision #11).
  * Nobody answering in {@link #PENDING_WINDOW} makes it {@linkplain #expire expire} (decision #14).
  *
- * <p>At most one {@code PENDING} request per table (decision #15) is a rule about the set of
- * requests, so it is held by {@code idx_table_order_request_pending_by_table} and not here.
+ * <p>One {@code PENDING} request per device and at most {@link #MAXIMUM_PENDING_PER_TABLE} per table
+ * (decision #62 of task qr-table-payment, which replaces the one per table of decision #15) are rules
+ * about the set of requests: the use case counts them under the lock of the table and asks
+ * {@link #requireRoomOnTable}; {@code idx_table_order_request_pending_by_device} holds the first.
  *
  * <p>Past its window a request is still stored as {@code PENDING} until the expiry job writes it
  * (decision #29), so every reading goes through {@link #statusAt} and every resolution refuses it.
@@ -48,6 +50,9 @@ public class TableOrderRequest extends AuditedEntity {
 
     /** How long a request waits for a waiter (decision #14). */
     public static final Duration PENDING_WINDOW = Duration.ofMinutes(30);
+
+    /** How many requests wait for the waiter on one table at most (decision #62 of task qr-table-payment). */
+    public static final int MAXIMUM_PENDING_PER_TABLE = 10;
 
     /** How many lines one request takes (decision #20). */
     public static final int MAXIMUM_LINES = 20;
@@ -124,6 +129,35 @@ public class TableOrderRequest extends AuditedEntity {
     public static boolean acceptsOrdersWith(Optional<Tab> activeTab) {
         Objects.requireNonNull(activeTab, "activeTab");
         return acceptsOrdersWithTabIn(activeTab.map(Tab::status));
+    }
+
+    /**
+     * Whether the phone takes an order on the table: the tab, as {@link #acceptsOrdersWithTabIn}, and
+     * room under the cap of requests waiting (decision #66 of task qr-table-payment).
+     */
+    public static boolean acceptsOrdersWithTabIn(Optional<TabStatus> activeTabStatus, int pendingOnTable) {
+        return acceptsOrdersWithTabIn(activeTabStatus) && pendingOnTable < MAXIMUM_PENDING_PER_TABLE;
+    }
+
+    /**
+     * Refuses a submission the table has no room for (decisions #62 and #65 of task qr-table-payment):
+     * the device already waiting first, then the cap of the table. Receives what the use case counted
+     * under the lock of the table, after the overdue requests were expired.
+     *
+     * @param devicePending whether this device already has a request waiting on the table
+     * @param pendingOnTable how many requests wait on the table
+     * @throws TableOrderRequestAlreadyPendingException if the device already has one waiting
+     * @throws TableOrderRequestLimitReachedException if the table already has 10 waiting
+     */
+    public static void requireRoomOnTable(boolean devicePending, int pendingOnTable) {
+        if (devicePending) {
+            throw new TableOrderRequestAlreadyPendingException(
+                    "This device already has a pending request on this dining table");
+        }
+        if (pendingOnTable >= MAXIMUM_PENDING_PER_TABLE) {
+            throw new TableOrderRequestLimitReachedException(
+                    "This dining table already has " + MAXIMUM_PENDING_PER_TABLE + " pending requests");
+        }
     }
 
     /**

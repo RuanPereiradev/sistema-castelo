@@ -12,6 +12,11 @@ import org.springframework.data.repository.query.Param;
 /** Spring Data's view of {@code dining_table}, used only by {@link JpaDiningTableRepository}. */
 interface SpringDataDiningTableRepository extends JpaRepository<DiningTable, DiningTableId> {
 
+    /** Locks the row {@code FOR NO KEY UPDATE} and answers its id. Native: JPQL has no such lock mode. */
+    @Query(value = "select cast(id as varchar) from dining_table where id = :id for no key update",
+            nativeQuery = true)
+    Optional<String> lockForNoKeyUpdate(@Param("id") UUID id);
+
     @Query("select t from DiningTable t where t.orderingToken = :orderingToken and t.active = true")
     Optional<DiningTable> findActiveByOrderingToken(@Param("orderingToken") UUID orderingToken);
 

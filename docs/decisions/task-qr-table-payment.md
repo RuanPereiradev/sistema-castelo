@@ -13,10 +13,10 @@
 | | |
 |---|---|
 | Branch | `task/qr-table-payment` (worktree `../castel-qr-ordering`), a partir de `task/qr-table-ordering` (PR #38) |
-| Rodada atual | 3 — achados da review (#48–#54) |
-| Build | 2026-10-22, rodada 3: `./mvnw clean verify` passa no reator inteiro, ArchUnit incluído |
-| Testes | 2104 no total, 0 falhas (agente de testes: `TabPaymentPartTest`, `TablePaymentRequestTest`, `PixReceiverTest`, `TableOrderRequestTest`, `TablePaymentRequestHttpIntegrationTest`, `TableOrderRequestHttpIntegrationTest`). #50 sem teste de concorrência |
-| `.http` | `37` (51 requisições) e `38` (60) verdes contra um Postgres descartável (2026-10-22), com chave aleatória normalizada, chave fora do DICT recusada e grupos somando o total. Conferidos à mão no mesmo banco: estorno pelo restaurante depois do estorno no balcão (#49) e expiração pela tarefa, uma transação por pedido (#50) |
+| Rodada atual | 6 — 1 pedido aguardando por aparelho, até 10 por mesa (#62–#66) |
+| Build | Rodada 6 (2026-10-23), numa cópia fora do worktree: `./mvnw clean verify` passa inteiro, ArchUnit incluído — 2122 testes, 0 falhas (nenhum teste existente quebrou: o de "segundo pendente na mesma mesa" usa o mesmo aparelho) |
+| Testes | nenhum teste novo nesta rodada (o implementador não escreve teste); falta cobrir dois aparelhos na mesma mesa, o teto de 10 (inclusive concorrente), `pendingRequestId` por aparelho e `pendingRequestCount` |
+| `.http` | `37` (67 requisições: dois aparelhos aguardando na mesma mesa, o mesmo aparelho recusado, 10 aceitos e o 11º recusado, `acceptsOrders` falso no teto) e `38` (70) verdes contra um Postgres descartável (2026-10-23). A V14 mudou de novo nesta rodada (#63) |
 
 Continua a `qr-table-ordering`. Ordem: backend primeiro, testar as rotas, depois o front (Ruan, 2026-10-22).
 
@@ -95,6 +95,18 @@ Levantamento de 2026-10-22 no código:
 | 52 | 3 | DEV (review, sugestão): o envio e o fechamento da comanda expiram na hora os pagamentos vencidos dessa comanda, liberando as unidades, travando os pedidos antes da comanda; só um Pix ainda dentro da janela segura o fechamento (#28) | implementado |
 | 53 | 3 | DEV (review): a chave do Pix é guardada na forma do DICT: CPF (dígitos, verificadores conferidos pelo `Cpf`) e CNPJ (14 dígitos, só o tamanho) sem pontuação, telefone como `+55` e 10 ou 11 dígitos (o `+` é o que distingue de um CPF), e-mail e chave aleatória (UUID) em minúsculas; outra forma, ou caractere fora do ASCII, `INVALID_PIX_RECEIVER`. Nome e cidade que ficariam vazios no padrão são recusados ao gravar, não no celular. Revê a #33 | implementado |
 | 54 | 3 | DEV (review, sugestão): a pré-conta e a comanda pública mostram `unpaidServiceChargeBase`; vezes a taxa, mais as fatias congeladas, dá a taxa mostrada | implementado |
+| 55 | 4 | Rota de **simular valor**: o celular manda as unidades escolhidas e `includeServiceCharge` e recebe o valor da parte (itens, taxa, total) calculado pelo backend, **sem reservar nada nem gerar Pix**. Serve para a Conta mostrar o valor enquanto o cliente marca, sem o navegador calcular dinheiro (Ruan, 2026-10-22) | implementado |
+| 56 | 4 | DEV (#55): rota `POST /public/tables/{orderingToken}/payment-requests/quote`, corpo `{includeServiceCharge, items: [{tabItemId, quantity}]}` → `200 {subtotal, serviceCharge, amount, items: [{tabItemId, quantity, lineTotal, serviceCharge}]}`. `customerName` e `customerDeviceId` não são pedidos nem validados: a simulação não grava nada que precise de autor; se vierem, são ignorados | implementado |
+| 57 | 4 | DEV (#55): a simulação usa a mesma conta do pedido — `Tab.priceForPayment` valida as escolhas e calcula valores e fatias; `reserveForPayment` é ela mais a reserva das unidades —, então o arredondamento é um só. Mesmas recusas e na mesma ordem do pedido, inclusive `PIX_RECEIVER_NOT_CONFIGURED` primeiro, para a tela saber cedo que não há Pix; não reserva, não grava, não gera Pix | implementado |
+| 58 | 4 | DEV (#55): transação só de leitura, sem trava da comanda. O valor simulado pode diferir do pedido real se alguém pagar, reservar ou lançar entre os dois; o pedido real é a autoridade. A simulação também não expira pedido vencido (não grava): unidades de um pedido vencido que a tarefa ainda não gravou aparecem reservadas por até um minuto, embora o envio real as libere antes. Comanda fechada ou juntada entre a leitura do id e a da comanda responde `404 TAB_NOT_FOUND`, como no envio (#51) | implementado |
+| 59 | 5 | O garçom estorna o Pix confirmado pelo salão (confirma a #9). Pede uma leitura dos pagamentos do celular já confirmados da comanda, para o salão ter de onde estornar (Ruan, 2026-10-22) | implementado |
+| 60 | 5 | DEV (#59): `GET /api/restaurant/table-payment-requests?status=CONFIRMED&tabId={tabId}` (`ADMIN`, `WAITER`), ao lado da fila (o `GET` sem parâmetro continua sendo os pendentes). Responde a mesma lista de `TablePaymentRequestResponse`, estornados incluídos (`refunded`, `refundedAt`, `refundReason`), mais antigo primeiro pela hora da confirmação. `status` só aceita `CONFIRMED` e exige `tabId`; outro valor ou `tabId` ausente: `400 VALIDATION_FAILED` | implementado |
+| 61 | 5 | DEV (#59): comanda desconhecida responde lista vazia, não 404: é um filtro de leitura, como os outros filtros de lista do restaurante, e não precisa ler a comanda | implementado |
+| 62 | 6 | **1 pedido aguardando por aparelho** (`customerDeviceId`), com **teto de 10 aguardando por mesa**, no lugar de 1 por mesa: vários clientes da mesma mesa pedem ao mesmo tempo, cada um com o seu nome, e o garçom confirma um a um. **Reverte a #15 da `qr-table-ordering`** na parte "1 pendente por mesa" (a regeneração do QR continua). Origem: mesa de 11 pessoas no mesmo QR ficaria em fila (Ruan, 2026-10-23) | implementado |
+| 63 | 6 | DEV (#62): a V14 troca o índice da V13 — apaga `idx_table_order_request_pending_by_table` e cria o único parcial `idx_table_order_request_pending_by_device` em `(dining_table_id, customer_device_id) WHERE status = 'PENDING'`. A V13 está no PR #38 e não muda; a V14 mudou de novo, o que é aceitável porque não está em nenhuma `main` nem banco compartilhado (só bancos descartáveis e o `castel_qr` de teste, que o coordenador recria). Pedido antigo, sem aparelho, não entra no índice (NULL é distinto) | implementado |
+| 64 | 6 | DEV (#62): o envio trava a linha da mesa com `FOR NO KEY UPDATE` antes de tudo, expira os vencidos da mesa, e só então confere aparelho e teto: dois celulares mandando o 10º e o 11º ao mesmo tempo se enfileiram e o segundo conta certo. `NO KEY UPDATE` e não `UPDATE` porque a confirmação abre comanda com chave estrangeira para a mesa (`FOR KEY SHARE`), que não conflita com ele: a ordem de travas mesa → pedidos do envio não cruza com pedido → comanda da confirmação | implementado |
+| 65 | 6 | DEV (#62): ordem das recusas do envio: o aparelho já tem pedido aguardando (`TABLE_ORDER_REQUEST_ALREADY_PENDING`, 409, agora por aparelho); a mesa tem 10 aguardando (`TABLE_ORDER_REQUEST_LIMIT_REACHED`, 409, código novo); depois as do pedido em si (nome, aparelho, comanda em `CLOSING`, linhas). Conta só os `PENDING` dentro da janela, depois de expirar os vencidos. O índice por aparelho continua respondendo `ALREADY_PENDING` se algo escapar | implementado |
+| 66 | 6 | DEV (#62): `GET /public/tables/{orderingToken}` lê o aparelho no header `X-Customer-Device`, como a leitura da comanda (#46). `pendingRequestId` é o pedido aguardando **desse** aparelho (nulo sem o header); `pendingRequestCount` é quantos aguardam na mesa; `acceptsOrders` é falso com a comanda em `CLOSING` ou com a mesa no teto de 10 | implementado |
 
 Valores de status: `pendente` · `implementado` · `revertida pela #n`
 
@@ -108,6 +120,9 @@ Rodada 1 entregou o backend; nenhum item saiu da lista. "Front pendente" marca o
 - [ ] Cliente escolhe itens e recebe o Pix copia e cola com o valor (#4, #7, #20) — backend feito (`pixPayload`); front pendente
 - [x] Taxa de serviço opcional no pagamento pelo celular (#38)
 - [x] Pagar parte da quantidade de um item, unidade a unidade (#39, #42–#45)
+- [x] Simular o valor da parte sem reservar nem gerar Pix (#55–#58)
+- [x] Leitura dos pagamentos confirmados da comanda, para o salão estornar (#59–#61)
+- [x] Pedido do celular: 1 aguardando por aparelho e até 10 por mesa (#62–#66)
 - [ ] Nome do cliente e código do aparelho no pedido, no pagamento e no item; "Só os meus" pelo aparelho (#40, #46) — backend feito; front pendente
 - [x] Pagamento aguardando reserva os itens; garçom confirma ou recusa; expira em 30 min (#8, #11, #13)
 - [x] Pagamento com a comanda `OPEN` e `CLOSING` (#6, #17, #25); fechamento abate o pago (#14, #19)
@@ -128,7 +143,9 @@ Rodada 1 entregou o backend; nenhum item saiu da lista. "Front pendente" marca o
 |---|---|
 | `GET /public/tables/{orderingToken}/tab` — header opcional `X-Customer-Device` (#46) | `{diningTableLabel, status, items: [{id, itemName, variantName, modifiers: [{name, quantity}], quantity, weightGrams, lineTotal, status, paid, paidQuantity, reservedQuantity, customerName, mine}], subtotal, serviceChargeRate, serviceCharge, total, paidAmount, amountDue, acceptsPayment}` — só itens ativos (#31); `paid` = todas as unidades pagas; `mine` verdadeiro só para item do aparelho do header; nenhum código de aparelho volta; `acceptsPayment` falso sem Pix cadastrado; `404 TAB_NOT_FOUND` sem comanda ativa |
 | `POST /public/tables/{orderingToken}/payment-requests` | corpo `{customerName, customerDeviceId, includeServiceCharge, items: [{tabItemId, quantity}]}` (#38, #39, #44, #46) → `201` `{id, status, refunded, subtotal, serviceCharge, amount, includeServiceCharge, pixPayload, items: [{tabItemId, quantity, lineTotal, serviceCharge}], requestedAt, expiresAt}` |
+| `GET /public/tables/{orderingToken}` (da `qr-table-ordering`) — header opcional `X-Customer-Device` (#66) | `{diningTableLabel, acceptsOrders, pendingRequestId, pendingRequestCount}`: `pendingRequestId` é o pedido aguardando **do aparelho** do header (nulo sem ele); `pendingRequestCount` é quantos aguardam na mesa; `acceptsOrders` falso com a comanda em `CLOSING` ou com 10 aguardando |
 | `POST /public/tables/{orderingToken}/order-requests` (da `qr-table-ordering`) | corpo ganha `customerName` e `customerDeviceId`, obrigatórios (#46); a fila interna do pedido mostra `customerName`, e o item da comanda criado na confirmação guarda os dois |
+| `POST /public/tables/{orderingToken}/payment-requests/quote` | simular valor (#55–#58): corpo `{includeServiceCharge, items: [{tabItemId, quantity}]}` → `200` `{subtotal, serviceCharge, amount, items: [{tabItemId, quantity, lineTotal, serviceCharge}]}`; não reserva, não grava, não gera Pix; mesmas recusas do pedido, `PIX_RECEIVER_NOT_CONFIGURED` primeiro |
 | `GET /public/tables/{orderingToken}/payment-requests/{id}` | o mesmo formato, com o estado atual |
 
 **Interno**
@@ -136,6 +153,7 @@ Rodada 1 entregou o backend; nenhum item saiu da lista. "Front pendente" marca o
 | Rota | Perfis |
 |---|---|
 | `GET /api/restaurant/table-payment-requests` | `ADMIN`, `WAITER` — pendentes, com mesa, itens e valor |
+| `GET /api/restaurant/table-payment-requests?status=CONFIRMED&tabId={tabId}` | `ADMIN`, `WAITER` — os confirmados da comanda, estornados incluídos, pela hora da confirmação (#59–#61); mesmo `TablePaymentRequestResponse`; `status` diferente de `CONFIRMED` ou sem `tabId`: `400 VALIDATION_FAILED`; comanda desconhecida: `200 []` |
 | `POST /api/restaurant/table-payment-requests/{id}/confirm` | `ADMIN`, `WAITER` |
 | `POST /api/restaurant/table-payment-requests/{id}/reject` | `ADMIN`, `WAITER` |
 | `POST /api/restaurant/table-payment-requests/{id}/refund` | `ADMIN`, `WAITER` — corpo `{reason}` (#30); estorna um confirmado e libera os itens (#21) |
@@ -149,6 +167,8 @@ A pré-conta (`GET /api/restaurant/tabs/{tabId}/bill`) e o `TabResponse` ganham 
 
 | Código | HTTP | Quando |
 |---|---|---|
+| `TABLE_ORDER_REQUEST_ALREADY_PENDING` | 409 | o **aparelho** já tem um pedido aguardando na mesa (antes: a mesa; #62, #65) |
+| `TABLE_ORDER_REQUEST_LIMIT_REACHED` | 409 | a mesa já tem 10 pedidos aguardando (#62, #65) |
 | `TAB_ITEM_ALREADY_PAID` | 409 | unidades pedidas além das livres, com o resto todo pago; também ao cancelar, transferir, juntar e trocar de mesa uma linha com qualquer unidade paga (#43, #44) |
 | `TAB_ITEM_RESERVED_FOR_PAYMENT` | 409 | unidades pedidas além das livres, com alguma em outro pagamento aguardando; também ao cancelar, transferir, juntar, trocar de mesa uma linha com unidade reservada, e ao fechar a comanda (#28, #29, #43, #44) |
 | `PIX_RECEIVER_NOT_CONFIGURED` | 409 | sem Pix cadastrado |

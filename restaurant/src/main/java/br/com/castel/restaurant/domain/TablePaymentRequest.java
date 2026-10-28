@@ -163,15 +163,29 @@ public class TablePaymentRequest extends AuditedEntity {
         request.tabId = tab.id();
         request.status = TablePaymentRequestStatus.PENDING;
         request.items = new ArrayList<>(part.items());
-        request.subtotal = part.items().stream().map(TablePaymentRequestItem::lineTotal).reduce(Money.ZERO, Money::plus);
-        request.serviceCharge = part.items().stream()
-                .map(TablePaymentRequestItem::serviceCharge)
-                .reduce(Money.ZERO, Money::plus);
+        request.subtotal = part.subtotal();
+        request.serviceCharge = part.serviceCharge();
         request.serviceChargeRateFraction = part.serviceChargeRate().fraction();
         request.requestedAt = requestedAt;
         request.expiresAt = requestedAt.plus(PENDING_WINDOW);
         request.pixPayload = pixReceiver.pixPayloadFor(request.amount(), request.id.value().toString());
         return request;
+    }
+
+    /**
+     * What a request with these units would cost, without creating it: the same refusals in the same
+     * order — a Pix receiver configured first, so the screen knows early — and the same computation,
+     * reserving nothing (decisions #55 and #57). The customer is not asked: nothing is written.
+     *
+     * @throws PixReceiverNotConfiguredException if no Pix receiver is configured
+     * @see Tab#priceForPayment for the refusals of the items
+     */
+    public static Tab.PaymentPart quote(Tab tab, List<Tab.PartChoice> choices, boolean includeServiceCharge,
+            Percentage currentRate, Optional<PixReceiver> receiver) {
+        Objects.requireNonNull(tab, "tab");
+        Objects.requireNonNull(receiver, "receiver");
+        receiver.orElseThrow(() -> new PixReceiverNotConfiguredException("No Pix receiver is configured"));
+        return tab.priceForPayment(choices, includeServiceCharge, currentRate);
     }
 
     // ------------------------------------------------------------------ the waiter

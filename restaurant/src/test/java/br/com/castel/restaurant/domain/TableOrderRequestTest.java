@@ -11,6 +11,7 @@ import static br.com.castel.restaurant.domain.TabFixtures.pizza;
 import static br.com.castel.restaurant.domain.TabFixtures.tabInStatus;
 import static br.com.castel.restaurant.domain.TabFixtures.wednesdayAt;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import br.com.castel.restaurant.api.MenuCategoryId;
@@ -49,6 +50,8 @@ class TableOrderRequestTest {
     private static final String CUSTOMER_NAME = "Ana";
     private static final String DEVICE_ID = "phone-of-ana-0001";
     private static final String INVALID_CUSTOMER_NAME = "INVALID_CUSTOMER_NAME";
+    private static final String ALREADY_PENDING = "TABLE_ORDER_REQUEST_ALREADY_PENDING";
+    private static final String LIMIT_REACHED = "TABLE_ORDER_REQUEST_LIMIT_REACHED";
     private static final String INVALID_CUSTOMER_DEVICE_ID = "INVALID_CUSTOMER_DEVICE_ID";
 
     private final InMemoryMenuItems menuItems = new InMemoryMenuItems();
@@ -455,6 +458,50 @@ class TableOrderRequestTest {
         @Test
         void shouldRefuseAMissingDeviceCode() {
             assertRejectedWith(() -> submitBy(CUSTOMER_NAME, null), INVALID_CUSTOMER_DEVICE_ID);
+        }
+    }
+
+    // ------------------------------------------------------------------ room on the table (#62, #65, #66 of qr-table-payment)
+
+    @Nested
+    class RoomOnTable {
+
+        @Test
+        void shouldTakeTheTenthRequestOfTheTable() {
+            assertThatCode(() -> TableOrderRequest.requireRoomOnTable(false,
+                    TableOrderRequest.MAXIMUM_PENDING_PER_TABLE - 1)).doesNotThrowAnyException();
+        }
+
+        @Test
+        void shouldRefuseTheEleventhRequestOfTheTable() {
+            assertRejectedWith(() -> TableOrderRequest.requireRoomOnTable(false,
+                    TableOrderRequest.MAXIMUM_PENDING_PER_TABLE), LIMIT_REACHED);
+        }
+
+        @Test
+        void shouldRefuseASecondRequestOfTheSameDevice() {
+            assertRejectedWith(() -> TableOrderRequest.requireRoomOnTable(true, 1), ALREADY_PENDING);
+        }
+
+        @Test
+        void shouldTellTheDeviceItIsAlreadyWaitingBeforeTellingItTheTableIsFull() {
+            assertRejectedWith(() -> TableOrderRequest.requireRoomOnTable(true,
+                    TableOrderRequest.MAXIMUM_PENDING_PER_TABLE), ALREADY_PENDING);
+        }
+
+        @Test
+        void shouldTellThePhoneToOrderWithNineWaiting() {
+            assertThat(TableOrderRequest.acceptsOrdersWithTabIn(Optional.of(TabStatus.OPEN), 9)).isTrue();
+        }
+
+        @Test
+        void shouldNotTellThePhoneToOrderWithTenWaiting() {
+            assertThat(TableOrderRequest.acceptsOrdersWithTabIn(Optional.empty(), 10)).isFalse();
+        }
+
+        @Test
+        void shouldNotTellThePhoneToOrderWhileClosingEvenWithNothingWaiting() {
+            assertThat(TableOrderRequest.acceptsOrdersWithTabIn(Optional.of(TabStatus.CLOSING), 0)).isFalse();
         }
     }
 

@@ -59,8 +59,18 @@ public class PublicTablePaymentController {
             @Valid @RequestBody SubmitTablePaymentRequest request) {
         return PublicTablePaymentRequestResponse.from(
                 payments.submit(OrderingTokenPath.parse(orderingToken), request.getCustomerName(),
-                        request.getCustomerDeviceId(), choicesOf(request), request.getIncludeServiceCharge()),
+                        request.getCustomerDeviceId(), choicesOf(request.getItems()),
+                        request.getIncludeServiceCharge()),
                 clock.instant());
+    }
+
+    /** Simulates the amount while the customer chooses: reserves nothing, writes nothing (decision #55). */
+    @PostMapping("/payment-requests/quote")
+    public TablePaymentQuoteResponse quotePaymentRequest(
+            @PathVariable("orderingToken") String orderingToken,
+            @Valid @RequestBody QuoteTablePaymentRequest request) {
+        return TablePaymentQuoteResponse.from(payments.quote(OrderingTokenPath.parse(orderingToken),
+                choicesOf(request.getItems()), request.getIncludeServiceCharge()));
     }
 
     @GetMapping("/payment-requests/{requestId}")
@@ -72,10 +82,10 @@ public class PublicTablePaymentController {
     }
 
     /** A missing list is an empty one, which the domain refuses with its own code. */
-    private static List<Tab.PartChoice> choicesOf(SubmitTablePaymentRequest request) {
-        return request.getItems() == null
+    private static List<Tab.PartChoice> choicesOf(List<SubmitTablePaymentRequest.Item> items) {
+        return items == null
                 ? List.of()
-                : request.getItems().stream()
+                : items.stream()
                         .map(item -> new Tab.PartChoice(TabItemId.of(item.getTabItemId()), item.getQuantity()))
                         .toList();
     }

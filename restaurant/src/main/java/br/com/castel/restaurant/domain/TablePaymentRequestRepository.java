@@ -20,6 +20,12 @@ public interface TablePaymentRequestRepository {
     /** The request, only when it was sent from this table: the phone's read. */
     Optional<TablePaymentRequest> findByIdOnDiningTable(TablePaymentRequestId id, DiningTableId diningTableId);
 
+    /**
+     * The {@code CONFIRMED} requests of the tab, refunded ones included, by the moment they were
+     * confirmed: where the floor refunds from (decision #59). Empty for a tab with none, or unknown.
+     */
+    List<TablePaymentRequest> findConfirmedOnTab(TabId tabId);
+
     /** The {@code PENDING} requests of the property still inside their window, oldest first. */
     List<TablePaymentRequest> findOpen(UUID propertyId, Instant now);
 

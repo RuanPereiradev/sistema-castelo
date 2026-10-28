@@ -29,6 +29,11 @@ class JpaDiningTableRepository implements DiningTableRepository {
     }
 
     @Override
+    public void lockForOrdering(DiningTableId id) {
+        springData.lockForNoKeyUpdate(id.value());
+    }
+
+    @Override
     public boolean existsByLabel(UUID propertyId, String label) {
         return springData.existsByLabel(propertyId, label);
     }

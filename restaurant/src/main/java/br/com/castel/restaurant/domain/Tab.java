@@ -1224,6 +1224,21 @@ public class Tab extends AuditedEntity {
             Objects.requireNonNull(serviceChargeRate, "serviceChargeRate");
             items = List.copyOf(items);
         }
+
+        /** The value of the units chosen. */
+        public Money subtotal() {
+            return items.stream().map(TablePaymentRequestItem::lineTotal).reduce(Money.ZERO, Money::plus);
+        }
+
+        /** The service charge of the part: the shares of its items, which add up to it. */
+        public Money serviceCharge() {
+            return items.stream().map(TablePaymentRequestItem::serviceCharge).reduce(Money.ZERO, Money::plus);
+        }
+
+        /** What the Pix of this part charges. */
+        public Money amount() {
+            return subtotal().plus(serviceCharge());
+        }
     }
 
     /** What a confirmed part left on the folio: its own charge and the Pix registered against it. */
@@ -1263,6 +1278,24 @@ public class Tab extends AuditedEntity {
      * @throws TabItemReservedForPaymentException if another request waiting for the waiter holds them
      */
     public PaymentPart reserveForPayment(List<PartChoice> choices, boolean includeServiceCharge,
+            Percentage currentRate) {
+        PaymentPart part = priceForPayment(choices, includeServiceCharge, currentRate);
+        part.items().forEach(chosen -> item(chosen.tabItemId()).reserveUnits(chosen.quantity()));
+        return part;
+    }
+
+    /**
+     * What the units chosen cost, with every check of {@link #reserveForPayment} and the same
+     * rounding, reserving nothing: the simulation the phone shows while the customer chooses
+     * (decisions #55 and #57 of task qr-table-payment), and the first half of the reservation.
+     *
+     * @throws TabNotOpenException if the tab is neither {@code OPEN} nor {@code CLOSING}
+     * @throws InvalidTablePaymentRequestException if nothing was chosen, an item was chosen twice, an
+     *     item is not on this tab or is cancelled, or a quantity falls outside the line
+     * @throws TabItemAlreadyPaidException if the units beyond the free ones are paid
+     * @throws TabItemReservedForPaymentException if another request waiting for the waiter holds them
+     */
+    public PaymentPart priceForPayment(List<PartChoice> choices, boolean includeServiceCharge,
             Percentage currentRate) {
         Objects.requireNonNull(currentRate, "currentRate");
         requireStatusAccepting(status.acceptsTablePayment(), "takes no payment from the phone");
@@ -1307,7 +1340,6 @@ public class Tab extends AuditedEntity {
             TabItem item = ordered.get(index);
             int units = chosen.get(item);
             part.add(TablePaymentRequestItem.of(item.id(), units, values.get(index), shares.get(index)));
-            item.reserveUnits(units);
         }
         return new PaymentPart(rate, part);
     }
