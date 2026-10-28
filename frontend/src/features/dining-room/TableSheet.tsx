@@ -6,14 +6,16 @@ import { DINING_ROOM, describeError } from './diningRoomMessages';
 import { DINING_TABLES_KEY, type DiningTable } from './useDiningTables';
 import { ACTIVE_TABS_KEY, type TabSummary } from './useActiveTabs';
 import { activeItems, tabKey, useOpenTab, useTab, type Tab, type TabItem } from './useTab';
-import { useCancelTab, useReopenTab, useStartClosing } from './useTabActions';
+import { useCancelTab, useReopenTab, useStartClosing, useDeliverTabItem } from './useTabActions';
 import { minutesSince, statusLabel, statusOf } from './tableStatus';
 import { AddItemModal } from './AddItemModal';
+import { BillSplitDialog } from './BillSplitDialog';
 import { CancelItemDialog } from './CancelItemDialog';
 import { ConfirmDialog } from './ConfirmDialog';
 import { TransferItemsDialog } from './TransferItemsDialog';
 import { MergeTabDialog } from './MergeTabDialog';
 import { MoveTableDialog } from './MoveTableDialog';
+import { PaymentModal } from './PaymentModal';
 
 interface Props {
   readonly table: DiningTable;
@@ -75,7 +77,17 @@ export function TableSheet({ table, areaLabel, summary, now, onClose, onNotice }
   );
   const [moreActions, setMoreActions] = useState(false);
   const [dialog, setDialog] = useState<
-    'none' | 'add-item' | 'request-bill' | 'cancel-bill' | 'cancel-tab' | 'transfer' | 'merge' | 'move' | 'cancel-item'
+    | 'none'
+    | 'add-item'
+    | 'request-bill'
+    | 'bill-split'
+    | 'cancel-bill'
+    | 'cancel-tab'
+    | 'transfer'
+    | 'merge'
+    | 'move'
+    | 'cancel-item'
+    | 'payment'
   >('none');
   const [reason, setReason] = useState('');
   const [cancellingItemId, setCancellingItemId] = useState<string | null>(null);
@@ -85,6 +97,7 @@ export function TableSheet({ table, areaLabel, summary, now, onClose, onNotice }
   const startClosing = useStartClosing(tabId ?? '');
   const reopenTab = useReopenTab(tabId ?? '');
   const cancelTab = useCancelTab(tabId ?? '');
+  const deliverItem = useDeliverTabItem(tabId ?? '');
 
   async function refreshAll(): Promise<void> {
     await Promise.all([
@@ -286,11 +299,14 @@ export function TableSheet({ table, areaLabel, summary, now, onClose, onNotice }
                               type="button"
                               className="dr-action-btn dr-action-small"
                               onClick={() => {
-                                setCancellingItemId(item.id);
-                                setDialog('cancel-item');
+                                void run(
+                                  () => deliverItem.mutateAsync(item.id),
+                                  DINING_ROOM.notice.itemDelivered,
+                                );
                               }}
+                              disabled={busy || deliverItem.isPending}
                             >
-                              ✓ Entregar
+                              {deliverItem.isPending ? '…' : '✓ Entregar'}
                             </button>
                           )}
                           <button
@@ -345,7 +361,7 @@ export function TableSheet({ table, areaLabel, summary, now, onClose, onNotice }
                     <button
                       type="button"
                       className="dr-action-btn dr-action-secondary"
-                      onClick={() => setDialog('request-bill')}
+                      onClick={() => setDialog('bill-split')}
                       disabled={busy}
                     >
                       {DINING_ROOM.requestBill}
@@ -396,14 +412,24 @@ export function TableSheet({ table, areaLabel, summary, now, onClose, onNotice }
                     )}
                   </>
                 ) : (
-                  <button
-                    type="button"
-                    className="dr-action-btn dr-action-secondary"
-                    onClick={() => setDialog('cancel-bill')}
-                    disabled={busy}
-                  >
-                    {DINING_ROOM.cancelBillRequest}
-                  </button>
+                  <>
+                    <button
+                      type="button"
+                      className="dr-action-btn dr-action-primary"
+                      onClick={() => setDialog('payment')}
+                      disabled={busy}
+                    >
+                      💰 Receber pagamento
+                    </button>
+                    <button
+                      type="button"
+                      className="dr-action-btn dr-action-secondary"
+                      onClick={() => setDialog('cancel-bill')}
+                      disabled={busy}
+                    >
+                      {DINING_ROOM.cancelBillRequest}
+                    </button>
+                  </>
                 )}
                 <button type="button" className="dr-action-btn dr-action-ghost" onClick={onClose}>
                   {DINING_ROOM.back}
@@ -427,17 +453,15 @@ export function TableSheet({ table, areaLabel, summary, now, onClose, onNotice }
             }}
           />
 
-          <ConfirmDialog
-            isOpen={dialog === 'request-bill'}
-            title={DINING_ROOM.requestBillTitle}
-            message={DINING_ROOM.requestBillMessage}
-            confirmLabel={DINING_ROOM.requestBillConfirm}
-            cancelLabel={DINING_ROOM.keep}
-            isLoading={startClosing.isPending}
-            onConfirm={() =>
-              void run(() => startClosing.mutateAsync(), DINING_ROOM.notice.billSent(table.label))
-            }
-            onCancel={closeDialog}
+          <BillSplitDialog
+            isOpen={dialog === 'bill-split'}
+            tab={tab}
+            onClose={closeDialog}
+            onBillRequested={() => {
+              closeDialog();
+              onNotice(DINING_ROOM.notice.billSent(table.label));
+              void refreshAll();
+            }}
           />
 
           <ConfirmDialog
@@ -527,6 +551,19 @@ export function TableSheet({ table, areaLabel, summary, now, onClose, onNotice }
               void refreshAll();
               onClose();
             }}
+          />
+
+          <PaymentModal
+            isOpen={dialog === 'payment'}
+            tab={tab}
+            balance={tab.total}
+            onClose={closeDialog}
+            onPaymentProcessed={() => {
+              closeDialog();
+              onNotice(DINING_ROOM.notice.paymentProcessed);
+              void refreshAll();
+            }}
+            onError={onNotice}
           />
         </>
       )}

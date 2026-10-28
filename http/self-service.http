@@ -1,0 +1,94 @@
+### Self-Service Scale API Tests
+
+# Variables
+@baseUrl = http://localhost:8080/api
+@cardNumber = 42
+@waiterToken = Bearer eyJhbGciOiJIUzI1NiJ9...
+
+---
+
+### 1. Open Self-Service Tab
+POST {{baseUrl}}/restaurant/tabs
+Authorization: {{waiterToken}}
+Content-Type: application/json
+
+{
+  "origin": "SELF_SERVICE",
+  "cardNumber": {{cardNumber}}
+}
+
+> {%
+  client.global.set("tabId", response.body.id);
+  client.global.set("tabTotal", response.body.total);
+%}
+
+---
+
+### 2. Get Tab (Verify It Was Created)
+GET {{baseUrl}}/restaurant/tabs/{{tabId}}
+Authorization: {{waiterToken}}
+
+---
+
+### 3. Find Tab by Card Number (Should Already Exist)
+GET {{baseUrl}}/restaurant/tabs?cardNumber={{cardNumber}}
+Authorization: {{waiterToken}}
+
+---
+
+### 4. Get Public Menu (To Find Weight-Based Items)
+GET http://localhost:8080/public/menu
+Content-Type: application/json
+
+---
+
+### 5. Add Weight-Based Item to Tab
+POST {{baseUrl}}/restaurant/tabs/{{tabId}}/items
+Authorization: {{waiterToken}}
+Content-Type: application/json
+
+{
+  "menuItemId": "item-id-here",
+  "weightGrams": 250
+}
+
+---
+
+### 6. Verify Item Was Added (Check Total Changed)
+GET {{baseUrl}}/restaurant/tabs/{{tabId}}
+Authorization: {{waiterToken}}
+
+---
+
+### 7. Try Invalid Card (Should Fail)
+POST {{baseUrl}}/restaurant/tabs
+Authorization: {{waiterToken}}
+Content-Type: application/json
+
+{
+  "origin": "SELF_SERVICE",
+  "cardNumber": 1000
+}
+
+---
+
+### 8. Try Missing Card Number (Should Fail)
+POST {{baseUrl}}/restaurant/tabs
+Authorization: {{waiterToken}}
+Content-Type: application/json
+
+{
+  "origin": "SELF_SERVICE"
+}
+
+---
+
+### 9. Try Creating Table-Service Tab Instead (Should Fail)
+POST {{baseUrl}}/restaurant/tabs
+Authorization: {{waiterToken}}
+Content-Type: application/json
+
+{
+  "origin": "TABLE_SERVICE",
+  "cardNumber": {{cardNumber}}
+}

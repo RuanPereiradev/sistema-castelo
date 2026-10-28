@@ -1,0 +1,334 @@
+/* Self-Service Scale Screen */
+
+.self-service-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 1rem;
+  background-color: var(--color-bg);
+  color: var(--color-text);
+}
+
+.self-service-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 2rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--color-divider);
+}
+
+.self-service-header h1 {
+  margin: 0;
+  font-size: 1.5rem;
+}
+
+.self-service-card-info {
+  font-size: 0.9rem;
+  color: var(--login-subtle);
+}
+
+.self-service-main {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  flex: 1;
+  overflow-y: auto;
+}
+
+/* Card Number Input */
+.ss-card-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.ss-card-section label {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--login-subtle);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.ss-card-input {
+  padding: 0.75rem;
+  font-size: 1.2rem;
+  border: 2px solid var(--color-divider);
+  border-radius: 0.3rem;
+  background-color: var(--color-surface);
+  color: var(--color-text);
+  text-align: center;
+}
+
+.ss-card-input:focus {
+  outline: none;
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 3px rgba(232, 149, 127, 0.1);
+}
+
+.ss-card-hint {
+  font-size: 0.8rem;
+  color: var(--login-subtle);
+}
+
+/* Item Selection */
+.ss-items-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.ss-items-label {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--login-subtle);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.ss-items-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 0.75rem;
+}
+
+.ss-item-button {
+  padding: 1rem;
+  border: 2px solid var(--color-divider);
+  border-radius: 0.3rem;
+  background-color: var(--color-surface);
+  color: var(--color-text);
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  text-align: left;
+  font-size: 0.85rem;
+}
+
+.ss-item-button:hover:not(:disabled) {
+  border-color: var(--color-accent);
+  background-color: rgba(232, 149, 127, 0.05);
+}
+
+.ss-item-button.selected {
+  border-color: var(--color-accent);
+  background-color: rgba(232, 149, 127, 0.15);
+  box-shadow: 0 0 0 2px rgba(232, 149, 127, 0.3);
+}
+
+.ss-item-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.ss-item-name {
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.ss-item-price {
+  font-size: 0.75rem;
+  color: var(--login-subtle);
+}
+
+/* Weight Input */
+.ss-weight-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.ss-weight-section label {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--login-subtle);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.ss-weight-input {
+  padding: 0.75rem;
+  font-size: 1.2rem;
+  border: 2px solid var(--color-divider);
+  border-radius: 0.3rem;
+  background-color: var(--color-surface);
+  color: var(--color-text);
+  text-align: center;
+}
+
+.ss-weight-input:focus {
+  outline: none;
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 3px rgba(232, 149, 127, 0.1);
+}
+
+.ss-weight-hint {
+  font-size: 0.8rem;
+  color: var(--login-subtle);
+}
+
+/* Price Preview */
+.ss-price-preview {
+  padding: 1rem;
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-divider);
+  border-radius: 0.3rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.ss-price-line {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.9rem;
+}
+
+.ss-price-label {
+  color: var(--login-subtle);
+}
+
+.ss-price-value {
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.ss-price-total {
+  font-size: 1.1rem;
+  border-top: 1px solid var(--color-divider);
+  padding-top: 0.5rem;
+}
+
+.ss-price-total .ss-price-value {
+  color: var(--color-accent);
+  font-size: 1.2rem;
+}
+
+/* Tab Total */
+.ss-tab-total {
+  padding: 1rem;
+  background-color: rgba(232, 149, 127, 0.1);
+  border: 1px solid rgba(232, 149, 127, 0.3);
+  border-radius: 0.3rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.ss-tab-total-label {
+  font-weight: 600;
+  color: var(--color-accent);
+}
+
+.ss-tab-total-value {
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: var(--color-accent);
+}
+
+/* Actions */
+.ss-actions {
+  display: flex;
+  gap: 0.75rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--color-divider);
+}
+
+.ss-action-btn {
+  flex: 1;
+  padding: 0.75rem 1rem;
+  font-size: 1rem;
+  font-weight: 600;
+  border: none;
+  border-radius: 0.3rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.ss-action-primary {
+  background-color: var(--color-accent);
+  color: white;
+}
+
+.ss-action-primary:hover:not(:disabled) {
+  box-shadow: 0 4px 12px rgba(232, 149, 127, 0.3);
+}
+
+.ss-action-primary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.ss-action-secondary {
+  background-color: var(--color-surface);
+  color: var(--color-text);
+  border: 2px solid var(--color-divider);
+}
+
+.ss-action-secondary:hover:not(:disabled) {
+  border-color: var(--color-accent);
+  background-color: rgba(232, 149, 127, 0.05);
+}
+
+.ss-action-secondary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* States */
+.ss-loading {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 200px;
+  color: var(--login-subtle);
+  font-size: 0.9rem;
+}
+
+.ss-no-items {
+  padding: 2rem 1rem;
+  text-align: center;
+  color: var(--login-subtle);
+  background-color: var(--color-surface);
+  border-radius: 0.3rem;
+  border: 1px solid var(--color-divider);
+}
+
+.ss-error {
+  padding: 0.75rem;
+  background-color: rgba(231, 76, 60, 0.1);
+  border: 1px solid rgba(231, 76, 60, 0.3);
+  border-radius: 0.3rem;
+  color: #e74c3c;
+  font-size: 0.85rem;
+  margin-top: 0.5rem;
+}
+
+.ss-notice {
+  padding: 0.75rem;
+  background-color: rgba(39, 174, 96, 0.1);
+  border: 1px solid rgba(39, 174, 96, 0.3);
+  border-radius: 0.3rem;
+  color: #27ae60;
+  font-size: 0.85rem;
+  margin-top: 0.5rem;
+}
+
+/* Mobile First */
+@media (min-width: 600px) {
+  .self-service-container {
+    max-width: 500px;
+    margin: 0 auto;
+    padding: 2rem 1rem;
+  }
+
+  .ss-items-grid {
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  }
+}

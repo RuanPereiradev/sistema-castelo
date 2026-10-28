@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@stomp/stompjs": "^7.0.0",
     "@tanstack/react-query": "^5.104.1",
     "date-fns": "^4.4.0",
     "react": "^18.3.1",

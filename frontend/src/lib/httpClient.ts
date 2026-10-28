@@ -14,6 +14,7 @@ export interface RequestOptions {
   readonly accessToken?: string;
   readonly skipRefresh?: boolean;
   readonly skipAuth?: boolean;
+  readonly headers?: Record<string, string>;
 }
 
 async function readCode(response: Response): Promise<string | null> {
@@ -30,7 +31,7 @@ async function makeRequest<T>(
   path: string,
   options: RequestOptions & { readonly accessToken?: string },
 ): Promise<T> {
-  const headers: Record<string, string> = { Accept: 'application/json' };
+  const headers: Record<string, string> = { Accept: 'application/json', ...options.headers };
   if (options.body !== undefined) {
     headers['Content-Type'] = 'application/json';
   }
