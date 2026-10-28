@@ -15,6 +15,7 @@ import { ConfirmDialog } from './ConfirmDialog';
 import { TransferItemsDialog } from './TransferItemsDialog';
 import { MergeTabDialog } from './MergeTabDialog';
 import { MoveTableDialog } from './MoveTableDialog';
+import { PaidByPhoneSection } from './PaidByPhoneSection';
 import { PaymentModal } from './PaymentModal';
 
 interface Props {
@@ -23,6 +24,11 @@ interface Props {
   /** The active tab of the table, when it has one. Absent means the table is free. */
   readonly summary: TabSummary | undefined;
   readonly now: number;
+  /** Requests sent from this table's QR, waiting for a waiter. */
+  readonly pendingRequestCount: number;
+  /** Pix sent from this table's QR, waiting for a waiter to check the receipt. */
+  readonly pendingPixCount: number;
+  readonly onShowRequests: () => void;
   readonly onClose: () => void;
   readonly onNotice: (message: string) => void;
 }
@@ -66,7 +72,17 @@ function quantityOf(item: TabItem): string {
  * The bottom sheet of one table: facts, the lines of the tab with their totals,
  * and the actions its status allows. Every action re-reads the server afterwards.
  */
-export function TableSheet({ table, areaLabel, summary, now, onClose, onNotice }: Props) {
+export function TableSheet({
+  table,
+  areaLabel,
+  summary,
+  now,
+  pendingRequestCount,
+  pendingPixCount,
+  onShowRequests,
+  onClose,
+  onNotice,
+}: Props) {
   const queryClient = useQueryClient();
   const status = statusOf(summary);
   const tabId = summary?.id ?? null;
@@ -181,6 +197,15 @@ export function TableSheet({ table, areaLabel, summary, now, onClose, onNotice }
           </div>
 
           <Ornament />
+
+          {pendingRequestCount + pendingPixCount > 0 && (
+            <div className="dr-sheet-note dr-sheet-request-note">
+              <p>{DINING_ROOM.orderRequests.inSheet(pendingRequestCount, pendingPixCount)}</p>
+              <button type="button" className="dr-action-btn dr-action-primary" onClick={onShowRequests}>
+                {DINING_ROOM.orderRequests.seeRequests}
+              </button>
+            </div>
+          )}
 
           {status === 'free' ? (
             <>
@@ -341,6 +366,8 @@ export function TableSheet({ table, areaLabel, summary, now, onClose, onNotice }
                   </div>
                 </div>
               )}
+
+              <PaidByPhoneSection tabId={tab.id} onNotice={onNotice} />
 
               {status === 'billRequested' && (
                 <p className="dr-sheet-note">{DINING_ROOM.billWithCashier}</p>

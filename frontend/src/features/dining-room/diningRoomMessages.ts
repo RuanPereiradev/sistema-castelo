@@ -77,6 +77,11 @@ export const DINING_ROOM = {
     itemsTransferred: 'Itens transferidos',
     tabsMerged: 'Comandas juntadas',
     tableMoved: (label: string) => `Comanda movida para a mesa ${label}`,
+    requestConfirmed: (label: string) => `Pedido da mesa ${label} confirmado e lançado`,
+    requestRejected: (label: string) => `Pedido da mesa ${label} recusado`,
+    pixConfirmed: (label: string) => `Pix da mesa ${label} confirmado`,
+    pixRejected: (label: string) => `Pix da mesa ${label} recusado`,
+    pixRefunded: (customer: string) => `Pix de ${customer} estornado`,
     paymentProcessed: 'Pagamento recebido',
     tabClosed: (label: string) => `Comanda da mesa ${label} fechada`,
   },
@@ -92,6 +97,82 @@ export const DINING_ROOM = {
     creditCard: 'Cartão de crédito',
     debitCard: 'Cartão de débito',
     roomAccount: 'Conta de hóspede',
+  },
+  orderRequests: {
+    open: 'Pedidos do celular',
+    openWithCount: (count: number) => `Pedidos do celular · ${count}`,
+    title: 'Pedidos do celular',
+    subtitle: 'Aguardando o garçom',
+    /** The map's badge: short, it sits on top of a table about 110 px wide. */
+    badgeFor: (orders: number, pix: number) =>
+      orders > 0 && pix > 0
+        ? 'Pedido e Pix'
+        : pix > 0
+          ? pix === 1
+            ? 'Pix aguardando'
+            : `${pix} Pix aguardando`
+          : orders === 1
+            ? 'Pedido aguardando'
+            : `${orders} pedidos aguardando`,
+    loading: 'Carregando os pedidos do celular…',
+    failed: 'Não deu para carregar os pedidos do celular.',
+    empty: 'Nenhum pedido do celular aguardando.',
+    emptyForTable: 'Esta mesa não tem pedido do celular aguardando.',
+    showAll: 'Ver todos',
+    inSheet: (orders: number, pix: number) => {
+      const parts = [
+        orders === 0 ? null : orders === 1 ? 'um pedido aguardando' : `${orders} pedidos aguardando`,
+        pix === 0 ? null : pix === 1 ? 'um Pix para conferir' : `${pix} Pix para conferir`,
+      ].filter(Boolean);
+      return `Do celular desta mesa: ${parts.join(' e ')}.`;
+    },
+    seeRequests: 'Ver no celular da mesa',
+    anonymous: 'Cliente sem nome',
+    requestedAt: (time: string) => `Pedido às ${time}`,
+    expiresIn: (minutes: number) => (minutes <= 0 ? 'Expira agora' : `Expira em ${minutes} min`),
+    expiresAt: (time: string) => `às ${time}`,
+    noQuantity: 'sem quantidade',
+    confirm: 'Confirmar',
+    confirming: 'Confirmando…',
+    reject: 'Recusar',
+    rejecting: 'Recusando…',
+    rejectTitle: 'Recusar o pedido?',
+    rejectMessage: (label: string, customer: string) =>
+      `O pedido de ${customer} na mesa ${label} sai da fila e nada é lançado. Avise o cliente; não há desfazer.`,
+    rejectConfirm: 'Recusar pedido',
+    keep: 'Voltar',
+    ordersSection: 'Pedidos',
+    pixSection: 'Pix para conferir',
+    pixAmount: 'Valor do Pix',
+    withService: (value: string) => `com serviço ${value}`,
+    withoutService: 'sem serviço',
+    units: (quantity: number, lineQuantity: number) =>
+      quantity === lineQuantity ? `${quantity}×` : `${quantity} de ${lineQuantity}`,
+    confirmPix: 'Confirmar Pix',
+    pixHint: 'Confira o comprovante no celular do cliente antes de confirmar.',
+    rejectPixTitle: 'Recusar o Pix?',
+    rejectPixMessage: (label: string, customer: string) =>
+      `O Pix de ${customer} na mesa ${label} é recusado e os itens voltam para a conta. Use quando o comprovante não confere.`,
+    rejectPixConfirm: 'Recusar Pix',
+  },
+  paidByPhone: {
+    title: 'Pagos pelo celular',
+    loading: 'Carregando os Pix confirmados…',
+    unavailable: 'Indisponível por enquanto: o servidor ainda não lista os Pix confirmados.',
+    failed: 'Não deu para carregar os Pix confirmados.',
+    empty: 'Nenhum Pix confirmado nesta comanda.',
+    confirmedAt: (time: string) => `Confirmado às ${time}`,
+    refunded: 'Estornado',
+    refundedAt: (time: string) => `Estornado às ${time}`,
+    refundReason: (reason: string) => `Motivo: ${reason}`,
+    refund: 'Estornar',
+    refunding: 'Estornando…',
+    refundTitle: 'Estornar o Pix?',
+    refundMessage: (customer: string, amount: string) =>
+      `O Pix de ${customer} (${amount}) é estornado e os itens voltam a ficar em aberto na conta. Não há desfazer: devolva o dinheiro ao cliente por fora.`,
+    refundReasonLabel: 'Motivo do estorno',
+    refundReasonPlaceholder: 'Ex.: cliente pagou duas vezes',
+    refundConfirm: 'Estornar Pix',
   },
 } as const;
 
@@ -187,7 +268,6 @@ const ERROR_MESSAGES: Readonly<Record<string, string>> = {
   FOLIO_OWNED_BY_TAB: 'Este folio é da comanda. Procure o garçom.',
   PAYMENT_EXCEEDS_BALANCE: 'O valor do pagamento excede o saldo.',
   PAYMENT_NOT_FOUND: 'Este pagamento não existe.',
-  PAYMENT_ALREADY_REFUNDED: 'Este pagamento já foi reembolsado.',
   INVALID_PAYMENT_AMOUNT: 'Valor de pagamento inválido.',
   PAYMENT_METHOD_NOT_ACCEPTED: 'Esta forma de pagamento não é aceita.',
 
@@ -224,7 +304,6 @@ const ERROR_MESSAGES: Readonly<Record<string, string>> = {
 
   // Expense and financial management
   INVALID_CHARGE_REASON: 'Motivo do lançamento inválido.',
-  INVALID_PAYMENT_REFUND_REASON: 'Motivo do reembolso inválido.',
   EXPENSE_NOT_FOUND: 'Esta despesa não existe.',
   EXPENSE_ALREADY_PAID: 'Esta despesa já foi paga.',
   INVALID_EXPENSE_AMOUNT: 'Valor da despesa inválido.',
@@ -232,7 +311,70 @@ const ERROR_MESSAGES: Readonly<Record<string, string>> = {
   INVALID_EXPENSE_DATES: 'As datas da despesa são inválidas.',
   INVALID_EXPENSE_EMPLOYEE: 'Funcionário inválido.',
   INVALID_EXPENSE_CANCELLATION: 'Não é possível cancelar esta despesa.',
+  TABLE_ORDER_REQUEST_NOT_PENDING: 'Outro garçom já resolveu este pedido. A lista vai se atualizar.',
+  TABLE_ORDER_REQUEST_EXPIRED: 'Este pedido passou do prazo e expirou. Fale com o cliente e lance você mesmo, se for o caso.',
+  TABLE_ORDER_REQUEST_NOT_FOUND: 'Este pedido não existe mais. A lista vai se atualizar.',
+  TABLE_PAYMENT_REQUEST_NOT_PENDING: 'Outro garçom já resolveu este Pix. A lista vai se atualizar.',
+  TABLE_PAYMENT_REQUEST_EXPIRED: 'Este Pix passou dos 30 minutos e expirou. Se o cliente pagou, lance o pagamento pelo caixa.',
+  TABLE_PAYMENT_REQUEST_NOT_FOUND: 'Este Pix não existe mais. A lista vai se atualizar.',
+  TABLE_PAYMENT_REQUEST_NOT_REFUNDABLE: 'Só um Pix confirmado e ainda não estornado pode ser estornado.',
+  INVALID_PAYMENT_REFUND_REASON: 'Escreva o motivo do estorno, com até 500 letras.',
+  PAYMENT_ALREADY_REFUNDED: 'Este pagamento já foi estornado. A tela vai se atualizar.',
 };
+
+/** Confirming a Pix, the tab's own state matters more than in other places. */
+const REFUND_PIX_MESSAGES: Readonly<Record<string, string>> = {
+  TAB_NOT_OPEN: 'A comanda desta mesa já foi fechada: o estorno agora é pelo caixa.',
+};
+
+export function describeRefundPixError(error: unknown): string {
+  if (error instanceof ApiError && error.code) {
+    const specific = REFUND_PIX_MESSAGES[error.code];
+    if (specific) {
+      return specific;
+    }
+  }
+  return describeError(error);
+}
+
+const CONFIRM_PIX_MESSAGES: Readonly<Record<string, string>> = {
+  PAYMENT_EXCEEDS_BALANCE: 'A conta já recebeu mais do que falta: este Pix passaria do saldo. Recuse e acerte no caixa.',
+  TAB_NOT_OPEN: 'A comanda desta mesa já foi fechada ou cancelada. Recuse o Pix e acerte no caixa.',
+};
+
+export function describeConfirmPixError(error: unknown): string {
+  if (error instanceof ApiError && error.code) {
+    const specific = CONFIRM_PIX_MESSAGES[error.code];
+    if (specific) {
+      return specific;
+    }
+  }
+  return describeError(error);
+}
+
+/**
+ * A confirmation refused by the posting keeps the request pending (#21 of
+ * qr-table-ordering): the waiter reads why and rejects, or fixes and retries.
+ */
+const CONFIRM_REQUEST_MESSAGES: Readonly<Record<string, string>> = {
+  MENU_ITEM_UNAVAILABLE: 'Um item deste pedido está esgotado. Recuse o pedido e avise o cliente.',
+  MENU_ITEM_OUTSIDE_AVAILABILITY_WINDOW: 'Um item deste pedido não é servido neste horário. Recuse o pedido e avise o cliente.',
+  MENU_ITEM_VARIANT_UNAVAILABLE: 'Um tamanho escolhido está indisponível. Recuse o pedido e avise o cliente.',
+  MENU_ITEM_NOT_FOUND: 'Um item deste pedido saiu do cardápio. Recuse o pedido e avise o cliente.',
+  TAB_NOT_OPEN: 'A comanda da mesa não aceita item agora (a conta foi pedida). Recuse o pedido ou reabra a comanda.',
+  TAB_ALREADY_OPEN_FOR_DINING_TABLE: 'A mesa ganhou comanda ao mesmo tempo. Tente confirmar de novo.',
+  INACTIVE_DINING_TABLE: 'Esta mesa foi desativada. Recuse o pedido.',
+};
+
+export function describeConfirmRequestError(error: unknown): string {
+  if (error instanceof ApiError && error.code) {
+    const specific = CONFIRM_REQUEST_MESSAGES[error.code];
+    if (specific) {
+      return specific;
+    }
+  }
+  return describeError(error);
+}
 
 const GENERIC_FAILURE = 'Não deu certo. Tente de novo; se continuar, avise o caixa.';
 const OFFLINE = 'Sem conexão com o servidor. Veja a rede e tente de novo.';
