@@ -85,6 +85,15 @@ ALTER TABLE table_order_request
     ADD COLUMN customer_name      VARCHAR(40),
     ADD COLUMN customer_device_id VARCHAR(64);
 
+-- One request waiting per device, no longer one per table (decision #62): several
+-- customers of the same table order at once, each under their own name. The cap of 10
+-- waiting per table is counted by the submission under the lock of the table row
+-- (decision #64). A request from before V14 has no device and stays out of the index.
+DROP INDEX idx_table_order_request_pending_by_table;
+CREATE UNIQUE INDEX idx_table_order_request_pending_by_device
+    ON table_order_request (dining_table_id, customer_device_id)
+    WHERE status = 'PENDING';
+
 -- A closing with nothing left to pay posts no charge (decision #19), so a CLOSING or
 -- CLOSED tab no longer needs one in force (decision #37).
 ALTER TABLE tab DROP CONSTRAINT ck_tab_closing;

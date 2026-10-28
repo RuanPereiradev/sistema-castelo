@@ -25,7 +25,7 @@ import org.springframework.stereotype.Repository;
 @Repository
 class JpaTableOrderRequestRepository implements TableOrderRequestRepository {
 
-    static final String PENDING_BY_TABLE_INDEX = "idx_table_order_request_pending_by_table";
+    static final String PENDING_BY_DEVICE_INDEX = "idx_table_order_request_pending_by_device";
 
     private final SpringDataTableOrderRequestRepository springData;
 
@@ -49,14 +49,22 @@ class JpaTableOrderRequestRepository implements TableOrderRequestRepository {
     }
 
     @Override
-    public Optional<TableOrderRequest> findOpenOnDiningTable(DiningTableId diningTableId, Instant now) {
-        return springData.findOpenOnDiningTable(diningTableId, now);
+    public Optional<TableOrderRequest> findOpenOnDiningTableForDevice(
+            DiningTableId diningTableId, String customerDeviceId, Instant now) {
+        return springData.findOpenOnDiningTableForDevice(diningTableId, customerDeviceId, now);
     }
 
     @Override
-    public Optional<TableOrderRequest> findOverdueOnDiningTableForUpdate(DiningTableId diningTableId, Instant now) {
-        return springData.lockOverdueOnDiningTable(diningTableId.value(), now)
-                .flatMap(locked -> springData.findById(TableOrderRequestId.of(locked)));
+    public int countOpenOnDiningTable(DiningTableId diningTableId, Instant now) {
+        return Math.toIntExact(springData.countOpenOnDiningTable(diningTableId, now));
+    }
+
+    @Override
+    public List<TableOrderRequest> findOverdueOnDiningTableForUpdate(DiningTableId diningTableId, Instant now) {
+        List<TableOrderRequestId> locked = springData.lockOverdueOnDiningTable(diningTableId.value(), now).stream()
+                .map(TableOrderRequestId::of)
+                .toList();
+        return springData.findAllById(locked);
     }
 
     @Override
@@ -91,8 +99,9 @@ class JpaTableOrderRequestRepository implements TableOrderRequestRepository {
      * The detail names no table: it reaches the phone, which is not authenticated (decision #38).
      */
     private static RuntimeException translate(DataIntegrityViolationException violation) {
-        if (PENDING_BY_TABLE_INDEX.equals(constraintNameOf(violation))) {
-            return new TableOrderRequestAlreadyPendingException("This dining table already has a pending request");
+        if (PENDING_BY_DEVICE_INDEX.equals(constraintNameOf(violation))) {
+            return new TableOrderRequestAlreadyPendingException(
+                    "This device already has a pending request on this dining table");
         }
         return violation;
     }

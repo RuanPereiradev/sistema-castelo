@@ -10,12 +10,14 @@ import br.com.castel.restaurant.domain.TableOrderRequestLineModifier;
 import jakarta.validation.Valid;
 import java.time.Clock;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
@@ -44,9 +46,17 @@ public class PublicTableOrderingController {
         this.clock = clock;
     }
 
+    /**
+     * The device reading comes in the same header as the read of the tab, never in the URL; without
+     * it {@code pendingRequestId} is null (decision #66 of task qr-table-payment).
+     */
     @GetMapping
-    public PublicTableResponse readTable(@PathVariable("orderingToken") String orderingToken) {
-        return PublicTableResponse.from(requests.viewTable(tokenOf(orderingToken)));
+    public PublicTableResponse readTable(
+            @PathVariable("orderingToken") String orderingToken,
+            @RequestHeader(name = PublicTablePaymentController.CUSTOMER_DEVICE_HEADER, required = false)
+                    String customerDeviceId) {
+        return PublicTableResponse.from(
+                requests.viewTable(tokenOf(orderingToken), Optional.ofNullable(customerDeviceId)));
     }
 
     @PostMapping("/order-requests")
