@@ -6,6 +6,8 @@ import br.com.castel.billing.api.PaymentId;
 import br.com.castel.billing.application.FolioService;
 import br.com.castel.sharedkernel.Money;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Pattern;
+import java.util.List;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -52,6 +54,17 @@ public class FolioController {
     public FolioResponse findOpenStayFolio(
             @RequestParam(name = "referenceCode", required = false) String referenceCode) {
         return FolioResponse.from(folios.findOpenStayByReferenceCode(referenceCode));
+    }
+
+    /**
+     * The open folios the front desk works from, stay and tab. Only {@code OPEN} is listed: the closed
+     * ones are the whole history, with no paging yet. Without {@code status} the request falls to the
+     * lookup by reference code above; with both, this route wins and the reference code is ignored.
+     */
+    @GetMapping(params = "status")
+    public List<FolioResponse> listOpenFolios(
+            @RequestParam(name = "status") @Pattern(regexp = "OPEN") String status) {
+        return folios.findOpen().stream().map(FolioResponse::from).toList();
     }
 
     /**

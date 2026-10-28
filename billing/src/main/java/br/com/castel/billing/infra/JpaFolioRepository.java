@@ -14,6 +14,7 @@ import br.com.castel.billing.domain.IdempotencyKeyReusedException;
 import br.com.castel.sharedkernel.DomainException;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceException;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -83,6 +84,11 @@ class JpaFolioRepository implements FolioRepository {
     @Override
     public Optional<Folio> findOpenStayByReferenceCode(UUID propertyId, String referenceCode) {
         return springData.findByReferenceCode(propertyId, referenceCode, FolioStatus.OPEN, FolioType.STAY);
+    }
+
+    @Override
+    public List<Folio> findOpen(UUID propertyId) {
+        return springData.findByStatus(propertyId, FolioStatus.OPEN);
     }
 
     @Override

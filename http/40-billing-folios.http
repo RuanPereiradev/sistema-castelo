@@ -1010,3 +1010,47 @@ Authorization: Bearer {{waiterToken}}
         client.assert(response.body.code === "ACCESS_DENIED", "code deveria ser ACCESS_DENIED");
     });
 %}
+
+
+### ------------------------------------------------------------------
+### Lista de folios abertos (task billing-open-folios)
+### ------------------------------------------------------------------
+
+
+### 55. Lista os abertos: o TAB do cenario 1 aparece, o STAY fechado no 17 nao
+GET {{host}}/api/billing/folios?status=OPEN
+Authorization: Bearer {{frontDeskToken}}
+
+> {%
+    client.test("lista de abertos retorna 200 com o TAB e sem o STAY fechado", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        const ids = response.body.map(function(folio) { return folio.id; });
+        client.assert(ids.indexOf(client.global.get("tabFolioId")) >= 0, "o folio TAB aberto deveria estar na lista");
+        client.assert(ids.indexOf(client.global.get("stayFolioId")) < 0, "o folio STAY fechado nao deveria estar na lista");
+        client.assert(response.body.every(function(folio) { return folio.status === "OPEN"; }), "todos deveriam estar OPEN");
+    });
+%}
+
+
+### 56. Lista por status diferente de OPEN -> 400 VALIDATION_FAILED
+GET {{host}}/api/billing/folios?status=CLOSED
+Authorization: Bearer {{frontDeskToken}}
+
+> {%
+    client.test("so OPEN e listavel: 400 VALIDATION_FAILED", function() {
+        client.assert(response.status === 400, "esperado 400, recebido " + response.status);
+        client.assert(response.body.code === "VALIDATION_FAILED", "code " + response.body.code);
+    });
+%}
+
+
+### 57. Garcom tentando listar os abertos -> 403 ACCESS_DENIED
+GET {{host}}/api/billing/folios?status=OPEN
+Authorization: Bearer {{waiterToken}}
+
+> {%
+    client.test("garcom nao lista folios: 403 ACCESS_DENIED", function() {
+        client.assert(response.status === 403, "esperado 403, recebido " + response.status);
+        client.assert(response.body.code === "ACCESS_DENIED", "code deveria ser ACCESS_DENIED");
+    });
+%}
