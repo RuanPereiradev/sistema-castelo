@@ -83,33 +83,50 @@ public class TableOrderRequestService {
     // ------------------------------------------------------------------ the customer
 
     /**
+     * The table as the phone reads it: whether it takes an order, how many requests wait on it, and
+     * the one of the device reading, if any (decision #66 of task qr-table-payment).
+     *
+     * @param customerDeviceId the device reading; empty when the phone did not say
      * @throws DiningTableNotFoundException if the code is unknown, regenerated or of a deactivated table
      */
     @Transactional(readOnly = true)
-    public TableOrderingView viewTable(UUID orderingToken) {
+    public TableOrderingView viewTable(UUID orderingToken, Optional<String> customerDeviceId) {
         DiningTable diningTable = loadTable(orderingToken);
+        Instant now = now();
+        int pendingOnTable = requests.countOpenOnDiningTable(diningTable.id(), now);
         return new TableOrderingView(
                 diningTable,
-                TableOrderRequest.acceptsOrdersWithTabIn(tabRepository.findActiveStatusOnDiningTable(diningTable.id())),
-                requests.findOpenOnDiningTable(diningTable.id(), now()).map(TableOrderRequest::id));
+                TableOrderRequest.acceptsOrdersWithTabIn(
+                        tabRepository.findActiveStatusOnDiningTable(diningTable.id()), pendingOnTable),
+                customerDeviceId
+                        .flatMap(device -> requests.findOpenOnDiningTableForDevice(diningTable.id(), device, now))
+                        .map(TableOrderRequest::id),
+                pendingOnTable);
     }
 
     /**
      * Sends a request from the QR code of the table.
      *
      * @throws DiningTableNotFoundException if the code is unknown, regenerated or of a deactivated table
-     * @throws br.com.castel.restaurant.domain.TableOrderRequestAlreadyPendingException if the table
-     *     already has a request waiting
+     * <p>The row of the table is locked first, so two phones submitting at once count the requests
+     * waiting one after the other; the overdue ones are expired, and only then the device and the cap
+     * of the table are checked (decisions #62, #64 and #65 of task qr-table-payment).
+     *
+     * @see TableOrderRequest#requireRoomOnTable for the refusals of the table
      * @see TableOrderRequest#submit for the refusals of the request itself
      */
     @Transactional
-    public TableOrderRequest submit(UUID orderingToken, List<TableOrderRequestLine> lines) {
+    public TableOrderRequest submit(UUID orderingToken, String customerName, String customerDeviceId,
+            List<TableOrderRequestLine> lines) {
         DiningTable diningTable = loadTable(orderingToken);
         Instant now = now();
-        requests.findOverdueOnDiningTableForUpdate(diningTable.id(), now)
-                .ifPresent(overdue -> expire(overdue, now));
-        TableOrderRequest request = TableOrderRequest.submit(currentProperty.id(), diningTable,
-                activeTabOn(diningTable.id()), lines, menuItems, now, currentProperty.timeZone());
+        diningTables.lockForOrdering(diningTable.id());
+        requests.findOverdueOnDiningTableForUpdate(diningTable.id(), now).forEach(overdue -> expire(overdue, now));
+        TableOrderRequest.requireRoomOnTable(
+                requests.findOpenOnDiningTableForDevice(diningTable.id(), customerDeviceId, now).isPresent(),
+                requests.countOpenOnDiningTable(diningTable.id(), now));
+        TableOrderRequest request = TableOrderRequest.submit(currentProperty.id(), diningTable, customerName,
+                customerDeviceId, activeTabOn(diningTable.id()), lines, menuItems, now, currentProperty.timeZone());
         TableOrderRequest saved = requests.add(request);
         events.publishEvent(TableOrderRequestStatusChanged.of(saved, now));
         return saved;
@@ -151,7 +168,7 @@ public class TableOrderRequestService {
         request.requireAnswerableAt(now);
         TabId tabId = tabRepository.findActiveIdOnDiningTable(request.diningTableId())
                 .orElseGet(() -> tabs.open(TabOrigin.TABLE_SERVICE, request.diningTableId(), null).id());
-        request.lines().forEach(line -> tabs.addItem(tabId, commandFrom(line)));
+        request.lines().forEach(line -> tabs.addItem(tabId, commandFrom(line, request)));
         request.confirm(auditorAware.currentAuditorId(), now, tabId);
         TableOrderRequest saved = requests.save(request);
         events.publishEvent(TableOrderRequestStatusChanged.of(saved, now));
@@ -214,8 +231,11 @@ public class TableOrderRequestService {
         return tabRepository.findActive(currentProperty.id(), diningTableId, null).stream().findFirst();
     }
 
-    /** The line as the waiter would have ordered it; a customer never sends a weight (decision #20). */
-    private static AddTabItemCommand commandFrom(TableOrderRequestLine line) {
+    /**
+     * The line as the waiter would have ordered it, with the customer who asked for it (decision #40 of
+     * task qr-table-payment); a customer never sends a weight (decision #20).
+     */
+    private static AddTabItemCommand commandFrom(TableOrderRequestLine line, TableOrderRequest request) {
         return new AddTabItemCommand(
                 line.menuItemId(),
                 line.variantId().orElse(null),
@@ -224,7 +244,9 @@ public class TableOrderRequestService {
                 line.modifiers().stream()
                         .map(chosen -> new AddTabItemCommand.ChosenModifier(chosen.modifierId(), chosen.quantity()))
                         .toList(),
-                line.specialInstructions().orElse(null));
+                line.specialInstructions().orElse(null),
+                request.customerName().orElse(null),
+                request.customerDeviceId().orElse(null));
     }
 
     private static TableOrderRequestNotFoundException notFound(TableOrderRequestId requestId) {

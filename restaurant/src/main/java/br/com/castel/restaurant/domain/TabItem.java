@@ -17,6 +17,8 @@ import jakarta.persistence.FetchType;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.OrderBy;
 import jakarta.persistence.Table;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -175,6 +177,26 @@ public class TabItem extends AuditedEntity {
     private UUID transferredBy;
 
     // ---- end transfer and merge
+
+    // ---- payment from the phone of the table (task qr-table-payment)
+
+    /* Units paid by confirmed requests, and units held by requests waiting for the waiter (decision #42). */
+    @Column(name = "paid_quantity", nullable = false)
+    private short paidQuantity;
+
+    @Column(name = "reserved_quantity", nullable = false)
+    private short reservedQuantity;
+
+    /* The frozen service shares of the paid units, summed over the requests that paid them. */
+    @Column(name = "paid_service_charge", nullable = false)
+    private Money paidServiceCharge = Money.ZERO;
+
+    /* Who ordered the item from the phone of the table (decision #40); null when the waiter ordered it. */
+    @Column(name = "customer_name", updatable = false)
+    private String customerName;
+
+    @Column(name = "customer_device_id", updatable = false)
+    private String customerDeviceId;
 
     protected TabItem() {
         // for JPA
@@ -545,5 +567,137 @@ public class TabItem extends AuditedEntity {
 
     public Optional<UUID> transferredBy() {
         return Optional.ofNullable(transferredBy);
+    }
+
+    // ------------------------------------------------------------------ payment from the phone (task qr-table-payment)
+
+    /** Every unit paid from the phone of the table (decision #39). */
+    public boolean isPaid() {
+        return paidQuantity == quantity;
+    }
+
+    /** Some unit is held by a payment request waiting for the waiter (decision #8). */
+    public boolean isReservedForPayment() {
+        return reservedQuantity > 0;
+    }
+
+    public int paidQuantity() {
+        return paidQuantity;
+    }
+
+    public int reservedQuantity() {
+        return reservedQuantity;
+    }
+
+    /** Units neither paid nor held by a request: what can still be chosen to pay. */
+    public int freeQuantity() {
+        return quantity - paidQuantity - reservedQuantity;
+    }
+
+    /** The frozen service shares of the paid units; zero when none is paid. */
+    public Money paidServiceCharge() {
+        return paidServiceCharge;
+    }
+
+    /** Who ordered the item from the phone; empty when the waiter ordered it. */
+    public Optional<String> customerName() {
+        return Optional.ofNullable(customerName);
+    }
+
+    /** The device that ordered the item from the phone; never shown to another device. */
+    public Optional<String> customerDeviceId() {
+        return Optional.ofNullable(customerDeviceId);
+    }
+
+    /** Records who ordered the item from the phone. Receives values the request already validated. */
+    void orderedByCustomer(String validCustomerName, String validCustomerDeviceId) {
+        this.customerName = validCustomerName;
+        this.customerDeviceId = validCustomerDeviceId;
+    }
+
+    /**
+     * What {@code units} of the line cost: the line total divided by the quantity, times the units.
+     * Exact, because the line total is the value of one unit times the quantity.
+     */
+    Money valueOf(int units) {
+        BigDecimal unitValue = lineTotal.amount().divide(BigDecimal.valueOf(quantity), 2, RoundingMode.UNNECESSARY);
+        return Money.of(unitValue.multiply(BigDecimal.valueOf(units)));
+    }
+
+    /** What the paid units cost the ones who paid them: their value and their frozen service shares. */
+    Money paidAmount() {
+        return valueOf(paidQuantity).plus(paidServiceCharge);
+    }
+
+    /** The value of the units not paid; what the service charge of the tab still applies to. */
+    Money unpaidValue() {
+        return lineTotal.minus(valueOf(paidQuantity));
+    }
+
+    /**
+     * Refuses a line any payment touches: cancelling, transferring, merging and moving work on the
+     * whole line, and a paid or reserved unit cannot go with it (decisions #9, #21, #29 and #43).
+     *
+     * @throws TabItemAlreadyPaidException if any unit was paid
+     * @throws TabItemReservedForPaymentException if a payment request waiting for the waiter holds any unit
+     */
+    void requireFreeOfPayment() {
+        if (paidQuantity > 0) {
+            throw new TabItemAlreadyPaidException("Tab item " + id.value() + " has paid units");
+        }
+        if (reservedQuantity > 0) {
+            throw new TabItemReservedForPaymentException("Tab item " + id.value() + " is held by a payment");
+        }
+    }
+
+    /**
+     * Refuses more units than are free (decision #44): the rest all paid answers that it is paid,
+     * otherwise that a payment holds it.
+     *
+     * @throws TabItemAlreadyPaidException if the units beyond the free ones are all paid
+     * @throws TabItemReservedForPaymentException if a payment waiting for the waiter holds some of them
+     */
+    void requireFreeUnits(int units) {
+        if (units <= freeQuantity()) {
+            return;
+        }
+        if (reservedQuantity == 0) {
+            throw new TabItemAlreadyPaidException("Tab item " + id.value() + " has only " + freeQuantity() + " unpaid units");
+        }
+        throw new TabItemReservedForPaymentException(
+                "Tab item " + id.value() + " has only " + freeQuantity() + " units free of payment");
+    }
+
+    /** Holds units for a request. Receives units the {@link Tab} found free. */
+    void reserveUnits(int units) {
+        this.reservedQuantity = (short) (reservedQuantity + units);
+    }
+
+    /** The request was rejected or expired: its units are free again. */
+    void releaseReservedUnits(int units) {
+        requireUnits(units <= reservedQuantity, units, "reserved");
+        this.reservedQuantity = (short) (reservedQuantity - units);
+    }
+
+    /** The request was confirmed: its units are paid, with their frozen share of the charge. */
+    void payReservedUnits(int units, Money serviceChargeShare) {
+        requireUnits(units <= reservedQuantity, units, "reserved");
+        this.reservedQuantity = (short) (reservedQuantity - units);
+        this.paidQuantity = (short) (paidQuantity + units);
+        this.paidServiceCharge = paidServiceCharge.plus(Objects.requireNonNull(serviceChargeShare, "serviceChargeShare"));
+    }
+
+    /** The request was refunded: its units are free again and its share leaves the item. */
+    void refundPaidUnits(int units, Money serviceChargeShare) {
+        requireUnits(units <= paidQuantity, units, "paid");
+        this.paidQuantity = (short) (paidQuantity - units);
+        this.paidServiceCharge = paidServiceCharge.minus(Objects.requireNonNull(serviceChargeShare, "serviceChargeShare"));
+    }
+
+    /** A request that finds its units any other way is a defect, not a rule: the tab locks every write. */
+    private void requireUnits(boolean held, int units, String how) {
+        if (!held) {
+            throw new IllegalStateException("Tab item " + id.value() + " does not have " + units + " units " + how);
+        }
     }
 }

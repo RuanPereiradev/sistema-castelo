@@ -13,9 +13,16 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Clock;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.Callable;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.StreamSupport;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -47,6 +54,9 @@ class TableOrderRequestHttpIntegrationTest extends AbstractIntegrationTest {
     private static final String PASSWORD = "qr-test-password";
     private static final String TABS = "/api/restaurant/tabs";
     private static final String REQUESTS = "/api/restaurant/table-order-requests";
+    private static final String CUSTOMER_NAME = "Ana";
+    private static final String DEVICE_ID = "phone-of-ana-0001";
+    private static final String DEVICE_HEADER = "X-Customer-Device";
 
     @LocalServerPort
     private int port;
@@ -142,7 +152,7 @@ class TableOrderRequestHttpIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
-    void shouldRefuseASecondPendingRequestOnTheSameTable() {
+    void shouldRefuseASecondPendingRequestOfTheSameDevice() {
         JsonNode table = createDiningTable("Dupla " + suffix);
         submit(table, orderOf(sodaId, 1));
 
@@ -247,7 +257,148 @@ class TableOrderRequestHttpIntegrationTest extends AbstractIntegrationTest {
                 "TABLE_ORDER_REQUEST_NOT_FOUND");
     }
 
+    @Test
+    void shouldShowTheWaiterTheNameOfTheCustomerButNeverTheDeviceCode() {
+        JsonNode table = createDiningTable("Nome " + suffix);
+        String requestId = submit(table, orderOf(sodaId, 1));
+        assertThat(elementWithId(send(get(REQUESTS, waiterToken), 200), requestId).get("customerName").asString())
+                .isEqualTo(CUSTOMER_NAME);
+
+        String tabId = send(post(REQUESTS + "/" + requestId + "/confirm", waiterToken, ""), 200)
+                .get("tabId").asString();
+
+        HttpResponse<String> tab = exchange(get(TABS + "/" + tabId, waiterToken));
+        assertThat(jsonMapper.readTree(tab.body()).get("items").get(0).get("customerName").asString())
+                .isEqualTo(CUSTOMER_NAME);
+        assertThat(tab.body()).doesNotContain(DEVICE_ID);
+    }
+
+    @Test
+    void shouldRefuseAnOrderWithoutTheNameOfTheCustomer() {
+        JsonNode table = createDiningTable("Sem nome " + suffix);
+
+        assertCode(publicPost(table.get("orderingToken").asString(), orderBy(null, DEVICE_ID, sodaId, 1)), 422,
+                "INVALID_CUSTOMER_NAME");
+    }
+
+    @Test
+    void shouldRefuseAnOrderWithAMalformedDeviceCode() {
+        JsonNode table = createDiningTable("Sem aparelho " + suffix);
+
+        assertCode(publicPost(table.get("orderingToken").asString(), orderBy(CUSTOMER_NAME, "short", sodaId, 1)), 422,
+                "INVALID_CUSTOMER_DEVICE_ID");
+    }
+
+    // ------------------------------------------------------------- one waiting per device, ten per table (#62–#66)
+
+    @Test
+    void shouldLetTwoDevicesWaitAtOnceOnTheSameTableEachWithItsName() {
+        JsonNode table = createDiningTable("Duas pessoas " + suffix);
+        String ana = submit(table, orderBy("Ana", device(1), sodaId, 1));
+        String bruno = submit(table, orderBy("Bruno", device(2), sodaId, 1));
+
+        JsonNode queue = send(get(REQUESTS, waiterToken), 200);
+
+        assertThat(elementWithId(queue, ana).get("customerName").asString()).isEqualTo("Ana");
+        assertThat(elementWithId(queue, bruno).get("customerName").asString()).isEqualTo("Bruno");
+    }
+
+    @Test
+    void shouldRefuseTheEleventhRequestWaitingOnTheTableAndStopOfferingToOrder() {
+        JsonNode table = createDiningTable("Onze " + suffix);
+        String token = table.get("orderingToken").asString();
+        for (int device = 1; device <= 10; device++) {
+            submit(table, orderBy("Pessoa " + device, device(device), sodaId, 1));
+        }
+
+        assertCode(publicPost(token, orderBy("Pessoa 11", device(11), sodaId, 1)), 409,
+                "TABLE_ORDER_REQUEST_LIMIT_REACHED");
+        JsonNode read = send(publicGet(token, ""), 200);
+        assertThat(read.get("acceptsOrders").asBoolean()).isFalse();
+        assertThat(read.get("pendingRequestCount").asInt()).isEqualTo(10);
+    }
+
+    @Test
+    void shouldTakeANewDeviceAgainOnceTheWaiterConfirmsOneOfTheTen() {
+        JsonNode table = createDiningTable("Libera " + suffix);
+        String first = submit(table, orderBy("Pessoa 1", device(1), sodaId, 1));
+        for (int device = 2; device <= 10; device++) {
+            submit(table, orderBy("Pessoa " + device, device(device), sodaId, 1));
+        }
+        send(post(REQUESTS + "/" + first + "/confirm", waiterToken, ""), 200);
+
+        send(publicPost(table.get("orderingToken").asString(), orderBy("Pessoa 11", device(11), sodaId, 1)), 201);
+    }
+
+    @Test
+    void shouldShowThePendingRequestOnlyToTheDeviceThatSentIt() {
+        JsonNode table = createDiningTable("Meu pedido " + suffix);
+        String token = table.get("orderingToken").asString();
+        String requestId = submit(table, orderBy("Ana", device(1), sodaId, 1));
+
+        JsonNode own = send(publicGet(token, "").header(DEVICE_HEADER, device(1)), 200);
+        JsonNode other = send(publicGet(token, "").header(DEVICE_HEADER, device(2)), 200);
+        JsonNode anonymous = send(publicGet(token, ""), 200);
+
+        assertThat(own.get("pendingRequestId").asString()).isEqualTo(requestId);
+        assertThat(isNull(other.get("pendingRequestId"))).isTrue();
+        assertThat(isNull(anonymous.get("pendingRequestId"))).isTrue();
+        assertThat(other.get("pendingRequestCount").asInt()).isEqualTo(1);
+        assertThat(other.get("acceptsOrders").asBoolean()).isTrue();
+    }
+
+    /** Decision #64: the lock of the table queues the submissions, so the eleventh counts right. */
+    @Test
+    void shouldAcceptExactlyTenOfElevenDevicesSubmittingAtTheSameMoment() throws Exception {
+        String token = createDiningTable("Corrida " + suffix).get("orderingToken").asString();
+        List<Callable<HttpResponse<String>>> phones = new ArrayList<>();
+        for (int device = 1; device <= 11; device++) {
+            String body = orderBy("Pessoa " + device, device(device), sodaId, 1);
+            phones.add(() -> exchange(publicPost(token, body)));
+        }
+
+        List<HttpResponse<String>> responses = concurrently(phones);
+
+        assertThat(responses).filteredOn(response -> response.statusCode() == 201).hasSize(10);
+        HttpResponse<String> refused = responses.stream().filter(response -> response.statusCode() != 201)
+                .findFirst().orElseThrow();
+        assertThat(refused.statusCode()).as(refused.body()).isEqualTo(409);
+        assertThat(jsonMapper.readTree(refused.body()).get("code").asString())
+                .isEqualTo("TABLE_ORDER_REQUEST_LIMIT_REACHED");
+    }
+
     // ------------------------------------------------------------- fixtures
+
+    private static String device(int number) {
+        return "phone-device-%03d".formatted(number);
+    }
+
+    private static boolean isNull(JsonNode node) {
+        return node == null || node.isNull();
+    }
+
+    /** Runs every task at the same moment, released together by one latch, and waits for all. */
+    private static <T> List<T> concurrently(List<Callable<T>> tasks) throws Exception {
+        ExecutorService executor = Executors.newFixedThreadPool(tasks.size());
+        try {
+            CountDownLatch start = new CountDownLatch(1);
+            List<Future<T>> futures = new ArrayList<>();
+            for (Callable<T> task : tasks) {
+                futures.add(executor.submit(() -> {
+                    start.await();
+                    return task.call();
+                }));
+            }
+            start.countDown();
+            List<T> results = new ArrayList<>();
+            for (Future<T> future : futures) {
+                results.add(future.get(30, TimeUnit.SECONDS));
+            }
+            return results;
+        } finally {
+            executor.shutdownNow();
+        }
+    }
 
     private String submit(JsonNode table, String body) {
         return send(publicPost(table.get("orderingToken").asString(), body), 201).get("id").asString();
@@ -267,7 +418,18 @@ class TableOrderRequestHttpIntegrationTest extends AbstractIntegrationTest {
     }
 
     private static String orderOf(String menuItemId, int quantity) {
-        return "{\"lines\":[{\"menuItemId\":\"%s\",\"quantity\":%d,\"modifiers\":[]}]}".formatted(menuItemId, quantity);
+        return orderBy(CUSTOMER_NAME, DEVICE_ID, menuItemId, quantity);
+    }
+
+    private static String orderBy(String customerName, String customerDeviceId, String menuItemId, int quantity) {
+        return """
+                {"customerName":%s,"customerDeviceId":%s,
+                 "lines":[{"menuItemId":"%s","quantity":%d,"modifiers":[]}]}
+                """.formatted(quoted(customerName), quoted(customerDeviceId), menuItemId, quantity);
+    }
+
+    private static String quoted(String value) {
+        return value == null ? "null" : "\"" + value + "\"";
     }
 
     private static String openingBody(String diningTableId) {

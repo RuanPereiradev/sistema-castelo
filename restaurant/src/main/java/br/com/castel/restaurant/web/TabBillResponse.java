@@ -12,7 +12,11 @@ import java.util.List;
  * split groups and an even split.
  *
  * <p>{@code serviceChargeRate} travels in percent points ({@code "10.00"}), the unit of the setting.
- * {@code paid} and {@code balance} are null while the tab has no folio.
+ * {@code unpaidServiceChargeBase} is the part of the base the phone did not pay: it times the rate,
+ * plus the shares frozen in the payments, is {@code serviceCharge} (task qr-table-payment).
+ * {@code paid} and {@code balance} are null while the tab has no folio. {@code paidAmount} is what the
+ * phone of the table paid for its items and {@code amountDue} the total less that (task
+ * qr-table-payment); {@code paid} and {@code balance} are the folio's, every payment included.
  *
  * <p>The even split follows {@link TabClosingView#evenSplit} (decision D11).
  */
@@ -23,11 +27,15 @@ public record TabBillResponse(
         boolean serviceChargeApplied,
         String subtotal,
         String serviceChargeBase,
+        String unpaidServiceChargeBase,
         String serviceChargeRate,
         String serviceCharge,
         String total,
         String paid,
         String balance,
+        // ---- payment from the phone (task qr-table-payment)
+        String paidAmount,
+        String amountDue,
         List<SplitGroupResponse> groups,
         Integer evenSplitParts,
         Integer evenSplitGroup,
@@ -56,11 +64,14 @@ public record TabBillResponse(
                 tab.serviceChargeApplied(),
                 bill.subtotal().asString(),
                 bill.serviceChargeBase().asString(),
+                bill.unpaidServiceChargeBase().asString(),
                 percentPoints(bill.serviceChargeRate()),
                 bill.serviceCharge().asString(),
                 bill.total().asString(),
                 view.paid().map(Money::asString).orElse(null),
                 view.balance().map(Money::asString).orElse(null),
+                bill.paidAmount().asString(),
+                bill.amountDue().asString(),
                 bill.groups().stream().map(SplitGroupResponse::from).toList(),
                 split.parts().orElse(null),
                 split.splitGroup().orElse(null),

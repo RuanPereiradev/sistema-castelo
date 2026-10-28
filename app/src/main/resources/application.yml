@@ -56,6 +56,10 @@ castel:
     table-order-request-expiry-period: PT1M
     # Liga a tarefa; o perfil test a desliga.
     table-order-request-expiry-enabled: true
+    # O mesmo para os pagamentos pelo celular da mesa (task qr-table-payment): 30 min sem o garcom
+    # confirmar, o pagamento expira e os itens voltam a ficar livres.
+    table-payment-request-expiry-period: PT1M
+    table-payment-request-expiry-enabled: true
 
   payment:
     # Adquirente. v1: fake (nenhum pagamento sai do sistema). O adaptador real da v1.1

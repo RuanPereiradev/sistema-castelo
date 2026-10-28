@@ -21,8 +21,8 @@ interface SpringDataTableOrderRequestRepository extends JpaRepository<TableOrder
 
     @Query(value = "select cast(id as varchar) from table_order_request "
             + "where dining_table_id = :diningTableId and status = 'PENDING' and expires_at <= :now "
-            + "for update", nativeQuery = true)
-    Optional<String> lockOverdueOnDiningTable(
+            + "order by id for update", nativeQuery = true)
+    List<String> lockOverdueOnDiningTable(
             @Param("diningTableId") UUID diningTableId, @Param("now") Instant now);
 
     @Query(value = "select cast(id as varchar) from table_order_request "
@@ -35,10 +35,18 @@ interface SpringDataTableOrderRequestRepository extends JpaRepository<TableOrder
             @Param("id") TableOrderRequestId id, @Param("diningTableId") DiningTableId diningTableId);
 
     @Query("select r from TableOrderRequest r where r.diningTableId = :diningTableId "
+            + "and r.customerDeviceId = :customerDeviceId "
             + "and r.status = br.com.castel.restaurant.domain.TableOrderRequestStatus.PENDING "
             + "and r.expiresAt > :now")
-    Optional<TableOrderRequest> findOpenOnDiningTable(
-            @Param("diningTableId") DiningTableId diningTableId, @Param("now") Instant now);
+    Optional<TableOrderRequest> findOpenOnDiningTableForDevice(
+            @Param("diningTableId") DiningTableId diningTableId,
+            @Param("customerDeviceId") String customerDeviceId,
+            @Param("now") Instant now);
+
+    @Query("select count(r) from TableOrderRequest r where r.diningTableId = :diningTableId "
+            + "and r.status = br.com.castel.restaurant.domain.TableOrderRequestStatus.PENDING "
+            + "and r.expiresAt > :now")
+    long countOpenOnDiningTable(@Param("diningTableId") DiningTableId diningTableId, @Param("now") Instant now);
 
     @Query("select r from TableOrderRequest r where r.propertyId = :propertyId "
             + "and r.status = br.com.castel.restaurant.domain.TableOrderRequestStatus.PENDING "

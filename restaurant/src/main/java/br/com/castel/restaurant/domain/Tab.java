@@ -2,6 +2,7 @@ package br.com.castel.restaurant.domain;
 
 import br.com.castel.billing.api.ChargeId;
 import br.com.castel.billing.api.FolioId;
+import br.com.castel.billing.api.PaymentId;
 import br.com.castel.billing.api.PaymentMethod;
 import br.com.castel.billing.api.ReceivedPaymentView;
 import br.com.castel.sharedkernel.AuditedEntity;
@@ -279,6 +280,7 @@ public class Tab extends AuditedEntity {
                 ? orderByWeight(menuItem, order, serviceChargeable, orderedBy, orderedAt)
                 : orderByUnit(menuItem, order, serviceChargeable, orderedBy, orderedAt);
         item.attachTo(id);
+        item.orderedByCustomer(order.customerName(), order.customerDeviceId());
         items.add(item);
         return item;
     }
@@ -384,6 +386,8 @@ public class Tab extends AuditedEntity {
      * @throws TabNotOpenException if the tab is not {@code OPEN}
      * @throws TabItemNotFoundException if the tab has no such item
      * @throws TabItemAlreadyCancelledException if the item was already cancelled
+     * @throws TabItemAlreadyPaidException if the phone of the table paid the item (task qr-table-payment)
+     * @throws TabItemReservedForPaymentException if a payment waiting for the waiter holds the item
      * @throws InvalidCancellationReasonException if the reason is missing, blank or past 500 characters
      */
     public void cancelItem(TabItemId itemId, String reason, UUID cancelledBy, Instant cancelledAt) {
@@ -392,6 +396,7 @@ public class Tab extends AuditedEntity {
         requireStatusAccepting(status.acceptsItemCancellation(), "has no item cancelled");
         TabItem item = item(itemId);
         item.requireCancellable();
+        item.requireFreeOfPayment();
         item.cancel(requireValidReason(reason), cancelledBy, cancelledAt);
     }
 
@@ -697,8 +702,10 @@ public class Tab extends AuditedEntity {
     /**
      * Starts the closing: the pre-bill. In this order: the status; an active item; the rate is frozen
      * (decision F1); the folio of the tab is opened, or the one it already has is reused after a
-     * reopening; the total is posted on it as one charge (decision F6); the tab goes to
-     * {@code CLOSING}, which takes no item, no cancellation and no change of the service charge.
+     * reopening; what is still due is posted on it as one charge — the total less what the phone of
+     * the table already paid, and nothing at all when that is zero (decision #19 of task
+     * qr-table-payment); the tab goes to {@code CLOSING}, which takes no item, no cancellation and no
+     * change of the service charge.
      *
      * @param currentRate the rate of the setting now, frozen here
      * @throws TabNotOpenException if the tab is not {@code OPEN}
@@ -717,7 +724,7 @@ public class Tab extends AuditedEntity {
         if (folioId == null) {
             this.folioId = billing.openFolio(id).value();
         }
-        this.tabChargeId = billing.charge(new FolioId(folioId), id, total(currentRate), chargeDescription()).value();
+        this.tabChargeId = postClosingCharge(billing);
         this.closingStartedBy = startedBy;
         this.closingStartedAt = startedAt;
         this.status = TabStatus.CLOSING;
@@ -738,8 +745,9 @@ public class Tab extends AuditedEntity {
     }
 
     /**
-     * The waiter's override: back to {@code OPEN}, with a reason (decision F10). The charge in force is
-     * reversed with that reason, and the reversal on the folio is the record of who reopened and when.
+     * The waiter's override: back to {@code OPEN}, with a reason (decision F10). The charge of the
+     * closing in force, if the closing posted one, is reversed with that reason — the parts the phone
+     * paid stay (decision #19 of task qr-table-payment) — and the reversal on the folio is the record of who reopened and when.
      * What was paid stays on the folio as credit; the frozen rate is dropped and read again on the next
      * closing, which reuses the folio.
      *
@@ -750,7 +758,9 @@ public class Tab extends AuditedEntity {
         Objects.requireNonNull(billing, "billing");
         requireClosingStep(status.acceptsReopening(), "cannot be reopened");
         String validReason = requireValidReopeningReason(reason);
-        billing.reverse(new FolioId(folioId), new ChargeId(tabChargeId), validReason);
+        if (tabChargeId != null) {
+            billing.reverse(new FolioId(folioId), new ChargeId(tabChargeId), validReason);
+        }
         this.tabChargeId = null;
         this.serviceChargeRateFraction = null;
         this.closingStartedAt = null;
@@ -764,12 +774,15 @@ public class Tab extends AuditedEntity {
      * hold the closing (decision F12). Frees the dining table or the card.
      *
      * @throws TabNotClosingException if the tab is not {@code CLOSING}
+     * @throws TabItemReservedForPaymentException if a payment from the phone still waits for the
+     *     waiter (decision #28 of task qr-table-payment)
      */
     public void close(TabBilling billing, UUID closedBy, Instant closedAt) {
         Objects.requireNonNull(billing, "billing");
         Objects.requireNonNull(closedBy, "closedBy");
         Objects.requireNonNull(closedAt, "closedAt");
         requireClosingStep(status.acceptsSettlement(), "cannot be closed");
+        requireNoItemReservedForPayment();
         billing.closeFolio(new FolioId(folioId));
         this.destination = TabDestination.DIRECT_PAYMENT;
         this.closedBy = closedBy;
@@ -818,10 +831,47 @@ public class Tab extends AuditedEntity {
      * The service charge, once over {@link #serviceChargeBase()}, rounded half up to the cent — never
      * item by item.
      *
+     * <p>With items paid from the phone of the table (task qr-table-payment), their share of the
+     * charge is the one frozen in the payment, whatever the rate became (decision #10), and the rate
+     * in force applies, once, to the base of the items not paid (decision #26). With nothing paid this
+     * is the base times the rate, as in task 3.2.
+     *
      * @param currentRate the rate of the setting now; used only while no rate is frozen
      */
     public Money serviceCharge(Percentage currentRate) {
-        return serviceChargeBase().percentage(rateInForce(currentRate));
+        Money paidShares = items.stream()
+                .filter(TabItem::isActive)
+                .map(TabItem::paidServiceCharge)
+                .reduce(Money.ZERO, Money::plus);
+        return paidShares.plus(unpaidServiceChargeBase().percentage(rateInForce(currentRate)));
+    }
+
+    /**
+     * What the phone of the table already paid: the line totals of the items paid and their frozen
+     * shares of the charge (task qr-table-payment). Zero when nobody paid.
+     */
+    public Money paidAmount() {
+        return items.stream()
+                .filter(TabItem::isActive)
+                .map(TabItem::paidAmount)
+                .reduce(Money.ZERO, Money::plus);
+    }
+
+    /**
+     * The total less {@link #paidAmount()}: the items not paid and the charge over them, at the rate
+     * in force. What the closing posts (decision #19 of task qr-table-payment).
+     *
+     * @param currentRate the rate of the setting now; used only while no rate is frozen
+     */
+    public Money amountDue(Percentage currentRate) {
+        return total(currentRate).minus(paidAmount());
+    }
+
+    private Money unpaidServiceChargeBase() {
+        return items.stream()
+                .filter(item -> serviceChargeApplied && item.countsForServiceCharge())
+                .map(TabItem::unpaidValue)
+                .reduce(Money.ZERO, Money::plus);
     }
 
     /** The subtotal plus the service charge. */
@@ -832,7 +882,9 @@ public class Tab extends AuditedEntity {
     /** The pre-bill: totals, the rate in force and the split groups. */
     public TabBill bill(Percentage currentRate) {
         Percentage rate = rateInForce(currentRate);
-        return TabBill.of(items(), serviceChargeApplied, subtotal(), serviceChargeBase(), rate, serviceCharge(rate));
+        return TabBill.of(items(), serviceChargeApplied, subtotal(), serviceChargeBase(), unpaidServiceChargeBase(),
+                rate, serviceCharge(rate),
+                paidAmount());
     }
 
     /**
@@ -949,6 +1001,9 @@ public class Tab extends AuditedEntity {
      * @throws TabNotOpenException if either tab is not {@code OPEN}
      * @throws TabItemNotFoundException if any item is not on this tab
      * @throws TabItemAlreadyCancelledException if any item is cancelled
+     * @throws TabItemAlreadyPaidException if the phone of the table paid any item (decision #21 of
+     *     task qr-table-payment)
+     * @throws TabItemReservedForPaymentException if a payment waiting for the waiter holds any item
      */
     public TabTransferResult transferItemsTo(Tab destination, Set<TabItemId> itemIds, UUID by, Instant at) {
         Objects.requireNonNull(destination, "destination");
@@ -968,6 +1023,7 @@ public class Tab extends AuditedEntity {
             if (!item.status().acceptsTransfer()) {
                 throw new TabItemAlreadyCancelledException("Tab item " + item.id().value() + " is cancelled");
             }
+            item.requireFreeOfPayment();
         }
         return moveTo(destination, moving, TabTransferKind.TRANSFER, by, at);
     }
@@ -1044,8 +1100,12 @@ public class Tab extends AuditedEntity {
      *       {@code serviceChargeApplied}, {@code guestCount}, and on each line its split group and
      *       waived charge): always carried. Losing one is always a bug, because nobody decided it.
      *   <li><b>Settling the bill</b> (the folio, the charge, the frozen rate, the closing, the
-     *       cancellation, the merge): null on an {@code OPEN} tab by construction, so there is
-     *       nothing to carry. The folio of the tab being absorbed is closed by the merge (T2).
+     *       cancellation, the merge): never carried. The charge, the frozen rate, the closing, the
+     *       cancellation and the merge are null on an {@code OPEN} tab by construction. The folio is
+     *       not: a reopened tab, or one with a part paid from the phone (task qr-table-payment), has
+     *       one, and it stays with the tab being absorbed, which closes it (T2) — billing refuses it
+     *       with money pending, and a line with a paid or reserved unit refuses the move (decision
+     *       #29 of task qr-table-payment), so no paid money changes table.
      * </ul>
      *
      * <p>{@code openedAt} and {@code openedBy} are the party's, not the move's (decision T21): the
@@ -1073,11 +1133,17 @@ public class Tab extends AuditedEntity {
         }
         requireStatusAccepting(status.acceptsMerge(), "takes no merge");
         mergedTab.requireStatusAccepting(mergedTab.status.acceptsMerge(), "cannot be merged");
-        mergedTab.folioId().ifPresent(billing::closeFolio);
         List<TabItem> moving = mergedTab.items.stream()
                 .filter(TabItem::isActive)
                 .sorted(ITEM_ORDER)
                 .toList();
+        /*
+         * The money of a part paid from the phone is on the folio of the tab being absorbed, which is
+         * closed here: its items would arrive paid on a tab whose folio never saw them, and a refund
+         * would find that folio closed (decision #29 of task qr-table-payment).
+         */
+        moving.forEach(TabItem::requireFreeOfPayment);
+        mergedTab.folioId().ifPresent(billing::closeFolio);
         TabTransferResult result = mergedTab.moveTo(this, moving, kind, by, at);
         this.guestCount = guestCountAfterAbsorbing(mergedTab, kind);
         mergedTab.mergedIntoTabId = id.value();
@@ -1144,6 +1210,238 @@ public class Tab extends AuditedEntity {
 
     public Optional<UUID> mergedBy() {
         return Optional.ofNullable(mergedBy);
+    }
+
+    // ------------------------------------------------------------------ payment from the phone (task qr-table-payment)
+
+    /**
+     * What a payment request holds of this tab: the rate its service charge was calculated with and
+     * each item with its frozen line total and share of the charge.
+     */
+    public record PaymentPart(Percentage serviceChargeRate, List<TablePaymentRequestItem> items) {
+
+        public PaymentPart {
+            Objects.requireNonNull(serviceChargeRate, "serviceChargeRate");
+            items = List.copyOf(items);
+        }
+
+        /** The value of the units chosen. */
+        public Money subtotal() {
+            return items.stream().map(TablePaymentRequestItem::lineTotal).reduce(Money.ZERO, Money::plus);
+        }
+
+        /** The service charge of the part: the shares of its items, which add up to it. */
+        public Money serviceCharge() {
+            return items.stream().map(TablePaymentRequestItem::serviceCharge).reduce(Money.ZERO, Money::plus);
+        }
+
+        /** What the Pix of this part charges. */
+        public Money amount() {
+            return subtotal().plus(serviceCharge());
+        }
+    }
+
+    /** What a confirmed part left on the folio: its own charge and the Pix registered against it. */
+    public record PaidPart(ChargeId partChargeId, PaymentId paymentId) {
+
+        public PaidPart {
+            Objects.requireNonNull(partChargeId, "partChargeId");
+            Objects.requireNonNull(paymentId, "paymentId");
+        }
+    }
+
+    /** Units of one item the customer chose to pay; {@code quantity} null is refused like any invalid one. */
+    public record PartChoice(TabItemId tabItemId, Integer quantity) {
+
+        public PartChoice {
+            Objects.requireNonNull(tabItemId, "tabItemId");
+        }
+    }
+
+    /**
+     * Reserves the units the customer chose for a payment request, and freezes what they cost
+     * (decisions #4, #8, #20, #38, #39 and #45): the value of the units, and, when the customer chose
+     * to include it, the service charge over the ones that count for it, at the rate in force — the
+     * current one while {@code OPEN}, the frozen one while {@code CLOSING} — rounded half up once over
+     * the sum and shared among the items by the largest remainder, so the shares add up to the charge
+     * of the request.
+     *
+     * <p>In this order: the status; at least one choice; no item chosen twice; then item by item, in
+     * the order of the tab: on this tab, not cancelled, a quantity from 1 to the quantity of the line,
+     * and no more than its free units. All or nothing: nothing is reserved until every choice passed.
+     *
+     * @param includeServiceCharge whether the customer pays the service charge on these units
+     * @throws TabNotOpenException if the tab is neither {@code OPEN} nor {@code CLOSING}
+     * @throws InvalidTablePaymentRequestException if nothing was chosen, an item was chosen twice, an
+     *     item is not on this tab or is cancelled, or a quantity falls outside the line
+     * @throws TabItemAlreadyPaidException if the units beyond the free ones are paid
+     * @throws TabItemReservedForPaymentException if another request waiting for the waiter holds them
+     */
+    public PaymentPart reserveForPayment(List<PartChoice> choices, boolean includeServiceCharge,
+            Percentage currentRate) {
+        PaymentPart part = priceForPayment(choices, includeServiceCharge, currentRate);
+        part.items().forEach(chosen -> item(chosen.tabItemId()).reserveUnits(chosen.quantity()));
+        return part;
+    }
+
+    /**
+     * What the units chosen cost, with every check of {@link #reserveForPayment} and the same
+     * rounding, reserving nothing: the simulation the phone shows while the customer chooses
+     * (decisions #55 and #57 of task qr-table-payment), and the first half of the reservation.
+     *
+     * @throws TabNotOpenException if the tab is neither {@code OPEN} nor {@code CLOSING}
+     * @throws InvalidTablePaymentRequestException if nothing was chosen, an item was chosen twice, an
+     *     item is not on this tab or is cancelled, or a quantity falls outside the line
+     * @throws TabItemAlreadyPaidException if the units beyond the free ones are paid
+     * @throws TabItemReservedForPaymentException if another request waiting for the waiter holds them
+     */
+    public PaymentPart priceForPayment(List<PartChoice> choices, boolean includeServiceCharge,
+            Percentage currentRate) {
+        Objects.requireNonNull(currentRate, "currentRate");
+        requireStatusAccepting(status.acceptsTablePayment(), "takes no payment from the phone");
+        if (choices == null || choices.isEmpty()) {
+            throw new InvalidTablePaymentRequestException("A payment request needs at least one item");
+        }
+        Map<TabItem, Integer> chosen = new LinkedHashMap<>();
+        for (PartChoice choice : choices) {
+            TabItem item = items.stream()
+                    .filter(candidate -> candidate.refersTo(choice.tabItemId()))
+                    .findFirst()
+                    .orElseThrow(() -> new InvalidTablePaymentRequestException(
+                            "Item " + choice.tabItemId().value() + " is not on the tab of this table"));
+            if (chosen.containsKey(item)) {
+                throw new InvalidTablePaymentRequestException("Item " + item.id().value() + " was chosen twice");
+            }
+            chosen.put(item, choice.quantity());
+        }
+        List<TabItem> ordered = chosen.keySet().stream().sorted(ITEM_ORDER).toList();
+        for (TabItem item : ordered) {
+            Integer units = chosen.get(item);
+            if (!item.isActive()) {
+                throw new InvalidTablePaymentRequestException("Item " + item.id().value() + " is cancelled");
+            }
+            if (units == null || units < 1 || units > item.quantity()) {
+                throw new InvalidTablePaymentRequestException(
+                        "Item " + item.id().value() + " is paid from 1 to " + item.quantity() + " units");
+            }
+            item.requireFreeUnits(units);
+        }
+        Percentage rate = rateInForce(currentRate);
+        List<Money> values = ordered.stream().map(item -> item.valueOf(chosen.get(item))).toList();
+        List<Money> bases = new ArrayList<>();
+        for (int index = 0; index < ordered.size(); index++) {
+            boolean counts = includeServiceCharge && serviceChargeApplied && ordered.get(index).countsForServiceCharge();
+            bases.add(counts ? values.get(index) : Money.ZERO);
+        }
+        Money serviceCharge = bases.stream().reduce(Money.ZERO, Money::plus).percentage(rate);
+        List<Money> shares = TabBill.shareByLargestRemainder(serviceCharge, bases);
+        List<TablePaymentRequestItem> part = new ArrayList<>();
+        for (int index = 0; index < ordered.size(); index++) {
+            TabItem item = ordered.get(index);
+            int units = chosen.get(item);
+            part.add(TablePaymentRequestItem.of(item.id(), units, values.get(index), shares.get(index)));
+        }
+        return new PaymentPart(rate, part);
+    }
+
+    /**
+     * The waiter saw the receipt: the part goes on the folio and its units become paid (decisions #8,
+     * #17 and #25).
+     *
+     * <p>The folio of the tab is opened when the tab has none yet, and is the one the closing reuses.
+     * The part is posted as a charge of its own with the frozen amount, and the Pix of that amount is
+     * registered against it, keyed by the id of the request. While {@code CLOSING}, the charge of the
+     * closing is swapped for what is still due once these units are paid, at the frozen rate: the live
+     * charges of the folio are always the parts paid plus one closing charge over the units not paid,
+     * which is what keeps a reopening and a refund right.
+     *
+     * @throws TabNotOpenException if the tab is neither {@code OPEN} nor {@code CLOSING}
+     */
+    public PaidPart payPart(TablePaymentRequest request, TabBilling billing) {
+        Objects.requireNonNull(request, "request");
+        Objects.requireNonNull(billing, "billing");
+        requireStatusAccepting(status.acceptsTablePayment(), "takes no payment from the phone");
+        if (folioId == null) {
+            this.folioId = billing.openFolio(id).value();
+        }
+        FolioId folio = new FolioId(folioId);
+        ChargeId partCharge = billing.charge(folio, id, request.amount(), partChargeDescription(request.id()));
+        request.items().forEach(part -> item(part.tabItemId()).payReservedUnits(part.quantity(), part.serviceCharge()));
+        if (status.holdsClosingCharge()) {
+            repostClosingCharge(billing, "Part paid from the phone, table payment request " + request.id().value());
+        }
+        ReceivedPaymentView payment = billing.receivePayment(
+                folio, PaymentMethod.PIX, request.amount(), request.id().value().toString());
+        return new PaidPart(partCharge, payment.paymentId());
+    }
+
+    /** The request was rejected or expired: the units it held are free again (decisions #8 and #13). */
+    public void releasePaymentOf(TablePaymentRequest request) {
+        Objects.requireNonNull(request, "request");
+        request.items().forEach(part -> item(part.tabItemId()).releaseReservedUnits(part.quantity()));
+    }
+
+    /**
+     * Undoes a confirmed part (decision #21): the Pix is refunded — unless it already was, at the
+     * counter (decision #49) — and the charge of the part reversed, both with the waiter's reason, and its units are free again, their share leaving the item. While
+     * {@code CLOSING}, the charge of the closing is swapped for what is due now that these units are
+     * unpaid, as {@link #payPart} does the other way.
+     *
+     * @throws TabNotOpenException if the tab is neither {@code OPEN} nor {@code CLOSING}
+     */
+    public void refundPart(TablePaymentRequest request, String reason, TabBilling billing) {
+        Objects.requireNonNull(request, "request");
+        Objects.requireNonNull(billing, "billing");
+        requireStatusAccepting(status.acceptsTablePayment(), "has its payments settled");
+        FolioId folio = new FolioId(folioId);
+        PaymentId payment = request.paymentId().orElseThrow();
+        /*
+         * A Pix already refunded at the counter is left as it is (decision #49): the money went back
+         * already, and what is left to undo is the charge of the part and the units.
+         */
+        if (!billing.isPaymentRefunded(folio, payment)) {
+            billing.refundPayment(folio, payment, reason);
+        }
+        billing.reverse(folio, request.partChargeId().orElseThrow(), reason);
+        request.items().forEach(part -> item(part.tabItemId()).refundPaidUnits(part.quantity(), part.serviceCharge()));
+        if (status.holdsClosingCharge()) {
+            repostClosingCharge(billing, reason);
+        }
+    }
+
+    /**
+     * Posts what is still due as the charge of the closing, at the frozen rate, or nothing when it is
+     * zero (decision #19).
+     *
+     * @return the charge posted, or null
+     */
+    private UUID postClosingCharge(TabBilling billing) {
+        Money due = amountDue(serviceChargeRate().orElseThrow());
+        return due.isPositive()
+                ? billing.charge(new FolioId(folioId), id, due, chargeDescription()).value()
+                : null;
+    }
+
+    /** Reverses the charge of the closing in force, if any, and posts what is due now (decision #25). */
+    private void repostClosingCharge(TabBilling billing, String reason) {
+        if (tabChargeId != null) {
+            billing.reverse(new FolioId(folioId), new ChargeId(tabChargeId), reason);
+        }
+        this.tabChargeId = postClosingCharge(billing);
+    }
+
+    /** {@code close} waits for every Pix still waiting for the waiter (decision #28). */
+    private void requireNoItemReservedForPayment() {
+        items.stream()
+                .filter(TabItem::isReservedForPayment)
+                .findFirst()
+                .ifPresent(item -> {
+                    throw new TabItemReservedForPaymentException("Tab item " + item.id().value() + " is held by a payment");
+                });
+    }
+
+    private String partChargeDescription(TablePaymentRequestId requestId) {
+        return chargeDescription() + " part " + requestId.value();
     }
 
     /** Written on the folio, where the operator reads it; English, as every text of the backend. */

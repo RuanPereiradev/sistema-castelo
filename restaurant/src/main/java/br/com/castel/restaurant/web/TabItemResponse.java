@@ -45,7 +45,13 @@ public record TabItemResponse(
         // ---- transfer and merge (task 3.6)
         String transferredFromTabId,
         String transferredAt,
-        String transferredBy) {
+        String transferredBy,
+        // ---- payment from the phone (task qr-table-payment)
+        boolean paid,
+        boolean reserved,
+        int paidQuantity,
+        int reservedQuantity,
+        String customerName) {
 
     public static TabItemResponse from(TabItem item) {
         return new TabItemResponse(
@@ -76,7 +82,12 @@ public record TabItemResponse(
                 item.splitGroup(),
                 item.transferredFromTabId().map(id -> id.value().toString()).orElse(null),
                 item.transferredAt().map(Instant::toString).orElse(null),
-                item.transferredBy().map(UUID::toString).orElse(null));
+                item.transferredBy().map(UUID::toString).orElse(null),
+                item.isPaid(),
+                item.isReservedForPayment(),
+                item.paidQuantity(),
+                item.reservedQuantity(),
+                item.customerName().orElse(null));
     }
 
     /** A modifier as it went on the item: name and price frozen. */

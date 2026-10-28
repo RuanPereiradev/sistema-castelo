@@ -5,7 +5,8 @@ import jakarta.validation.constraints.NotBlank;
 import java.util.List;
 
 /**
- * Body of {@code POST /public/tables/{orderingToken}/order-requests}: the lines the customer chose.
+ * Body of {@code POST /public/tables/{orderingToken}/order-requests}: who the customer is (decision #40
+ * of task qr-table-payment) and the lines they chose.
  *
  * <p>As in {@link AddTabItemRequest}, only the ids are checked here: an absent {@code menuItemId} or
  * {@code modifierId} answers 400. No lines, more than 20 and an item sold by weight are rules of the
@@ -14,8 +15,30 @@ import java.util.List;
  */
 public class SubmitTableOrderRequest {
 
+    /** The name typed at the entrance; checked by the domain ({@code INVALID_CUSTOMER_NAME}). */
+    private String customerName;
+
+    /** The random code the phone keeps for its device; checked by the domain. */
+    private String customerDeviceId;
+
     @Valid
     private List<Line> lines;
+
+    public String getCustomerName() {
+        return customerName;
+    }
+
+    public void setCustomerName(String customerName) {
+        this.customerName = customerName;
+    }
+
+    public String getCustomerDeviceId() {
+        return customerDeviceId;
+    }
+
+    public void setCustomerDeviceId(String customerDeviceId) {
+        this.customerDeviceId = customerDeviceId;
+    }
 
     public List<Line> getLines() {
         return lines;

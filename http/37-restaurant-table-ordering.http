@@ -249,6 +249,8 @@ POST {{host}}/public/tables/{{orderingToken}}/order-requests
 Content-Type: application/json
 
 {
+  "customerName": "Ana",
+  "customerDeviceId": "device-{{suffix}}-ana",
   "lines": [
     {
       "menuItemId": "{{pizzaId}}",
@@ -274,13 +276,27 @@ Content-Type: application/json
 %}
 
 
-### 13. O QR mostra o pedido aguardando
+### 13. O QR do aparelho da Ana mostra o pedido dela aguardando
+GET {{host}}/public/tables/{{orderingToken}}
+X-Customer-Device: device-{{suffix}}-ana
+
+> {%
+    client.test("pendingRequestId e o pedido da Ana", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        client.assert(response.body.pendingRequestId === client.global.get("requestId"), "pending " + response.body.pendingRequestId);
+        client.assert(response.body.pendingRequestCount === 1, "aguardando " + response.body.pendingRequestCount);
+    });
+%}
+
+
+### 13b. Sem o aparelho, nenhum pedido e "meu"; a contagem da mesa continua
 GET {{host}}/public/tables/{{orderingToken}}
 
 > {%
-    client.test("pendingRequestId e o pedido enviado", function() {
+    client.test("sem header: pendingRequestId nulo, contagem 1", function() {
         client.assert(response.status === 200, "esperado 200, recebido " + response.status);
-        client.assert(response.body.pendingRequestId === client.global.get("requestId"), "pending " + response.body.pendingRequestId);
+        client.assert(response.body.pendingRequestId === null, "pending " + response.body.pendingRequestId);
+        client.assert(response.body.pendingRequestCount === 1, "aguardando " + response.body.pendingRequestCount);
     });
 %}
 
@@ -311,6 +327,7 @@ Authorization: Bearer {{waiterToken}}
         client.assert(request.lines[0].menuItemName === "Pizza QR " + client.global.get("suffix"), "item " + request.lines[0].menuItemName);
         client.assert(request.lines[0].modifiers[0].modifierName === "Borda QR " + client.global.get("suffix"), "adicional");
         client.assert(request.lines[0].specialInstructions === "sem cebola", "observacao");
+        client.assert(request.customerName === "Ana", "nome " + request.customerName);
     });
 %}
 
@@ -339,6 +356,7 @@ Authorization: Bearer {{waiterToken}}
         client.assert(response.body.status === "OPEN", "status " + response.body.status);
         client.assert(response.body.items.length === 2, "itens " + response.body.items.length);
         client.assert(response.body.subtotal === "106.00", "subtotal " + response.body.subtotal);
+        client.assert(response.body.items[0].customerName === "Ana", "item com o nome de quem pediu");
     });
 %}
 
@@ -397,6 +415,8 @@ POST {{host}}/public/tables/{{orderingToken}}/order-requests
 Content-Type: application/json
 
 {
+  "customerName": "Ana",
+  "customerDeviceId": "device-{{suffix}}-ana",
   "lines": [{"menuItemId": "{{pizzaId}}", "quantity": 1}]
 }
 
@@ -425,6 +445,8 @@ POST {{host}}/public/tables/{{orderingToken}}/order-requests
 Content-Type: application/json
 
 {
+  "customerName": "Ana",
+  "customerDeviceId": "device-{{suffix}}-ana",
   "lines": [{"menuItemId": "{{juiceId}}", "quantity": 12}]
 }
 
@@ -482,6 +504,8 @@ POST {{host}}/public/tables/{{orderingToken}}/order-requests
 Content-Type: application/json
 
 {
+  "customerName": "Ana",
+  "customerDeviceId": "device-{{suffix}}-ana",
   "lines": [{"menuItemId": "{{juiceId}}", "quantity": 1}]
 }
 
@@ -493,18 +517,62 @@ Content-Type: application/json
 %}
 
 
-### 29. Segundo pedido com um aguardando -> 409 TABLE_ORDER_REQUEST_ALREADY_PENDING
+### 29. Mesmo aparelho, segundo pedido aguardando -> 409 TABLE_ORDER_REQUEST_ALREADY_PENDING
 POST {{host}}/public/tables/{{orderingToken}}/order-requests
 Content-Type: application/json
 
 {
+  "customerName": "Ana",
+  "customerDeviceId": "device-{{suffix}}-ana",
   "lines": [{"menuItemId": "{{pizzaId}}", "quantity": 1}]
 }
 
 > {%
-    client.test("um pendente por mesa: 409 TABLE_ORDER_REQUEST_ALREADY_PENDING", function() {
+    client.test("um pendente por aparelho: 409 TABLE_ORDER_REQUEST_ALREADY_PENDING", function() {
         client.assert(response.status === 409, "esperado 409, recebido " + response.status);
         client.assert(response.body.code === "TABLE_ORDER_REQUEST_ALREADY_PENDING", "code " + response.body.code);
+    });
+%}
+
+
+### 29b. Outro aparelho na mesma mesa pede ao mesmo tempo: aceito
+POST {{host}}/public/tables/{{orderingToken}}/order-requests
+Content-Type: application/json
+
+{
+  "customerName": "Bia",
+  "customerDeviceId": "device-{{suffix}}-bia",
+  "lines": [{"menuItemId": "{{pizzaId}}", "quantity": 1}]
+}
+
+> {%
+    client.test("dois aparelhos aguardando na mesma mesa: 201", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+    });
+    client.global.set("biaRequestId", response.body.id);
+%}
+
+
+### 29c. O QR da Bia mostra o pedido dela; a mesa tem 2 aguardando
+GET {{host}}/public/tables/{{orderingToken}}
+X-Customer-Device: device-{{suffix}}-bia
+
+> {%
+    client.test("pedido da Bia, 2 na mesa", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        client.assert(response.body.pendingRequestId === client.global.get("biaRequestId"), "pending " + response.body.pendingRequestId);
+        client.assert(response.body.pendingRequestCount === 2, "aguardando " + response.body.pendingRequestCount);
+    });
+%}
+
+
+### 29d. Garcom recusa o da Bia (a bancada segue com um so aguardando)
+POST {{host}}/api/restaurant/table-order-requests/{{biaRequestId}}/reject
+Authorization: Bearer {{waiterToken}}
+
+> {%
+    client.test("pedido da Bia recusado", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
     });
 %}
 
@@ -561,6 +629,8 @@ POST {{host}}/public/tables/{{orderingToken}}/order-requests
 Content-Type: application/json
 
 {
+  "customerName": "Ana",
+  "customerDeviceId": "device-{{suffix}}-ana",
   "lines": [{"menuItemId": "{{juiceId}}", "quantity": 1}]
 }
 
@@ -577,6 +647,8 @@ POST {{host}}/public/tables/{{orderingToken}}/order-requests
 Content-Type: application/json
 
 {
+  "customerName": "Ana",
+  "customerDeviceId": "device-{{suffix}}-ana",
   "lines": [{"menuItemId": "{{buffetId}}"}]
 }
 
@@ -593,6 +665,8 @@ POST {{host}}/public/tables/{{orderingToken}}/order-requests
 Content-Type: application/json
 
 {
+  "customerName": "Ana",
+  "customerDeviceId": "device-{{suffix}}-ana",
   "lines": []
 }
 
@@ -613,6 +687,8 @@ POST {{host}}/public/tables/{{orderingToken}}/order-requests
 Content-Type: application/json
 
 {
+  "customerName": "Ana",
+  "customerDeviceId": "device-{{suffix}}-ana",
   "lines": {{tooManyLines}}
 }
 
@@ -620,6 +696,242 @@ Content-Type: application/json
     client.test("21 linhas: 422 INVALID_TABLE_ORDER_REQUEST", function() {
         client.assert(response.status === 422, "esperado 422, recebido " + response.status);
         client.assert(response.body.code === "INVALID_TABLE_ORDER_REQUEST", "code " + response.body.code);
+    });
+%}
+
+
+### 37b. Pedido sem nome -> 422 INVALID_CUSTOMER_NAME
+POST {{host}}/public/tables/{{orderingToken}}/order-requests
+Content-Type: application/json
+
+{
+  "customerName": "   ",
+  "customerDeviceId": "device-{{suffix}}-ana",
+  "lines": [{"menuItemId": "{{pizzaId}}", "quantity": 1}]
+}
+
+> {%
+    client.test("sem nome: 422 INVALID_CUSTOMER_NAME", function() {
+        client.assert(response.status === 422, "esperado 422, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_CUSTOMER_NAME", "code " + response.body.code);
+    });
+%}
+
+
+### 37c. Codigo do aparelho invalido -> 422 INVALID_CUSTOMER_DEVICE_ID
+POST {{host}}/public/tables/{{orderingToken}}/order-requests
+Content-Type: application/json
+
+{
+  "customerName": "Ana",
+  "customerDeviceId": "abc",
+  "lines": [{"menuItemId": "{{pizzaId}}", "quantity": 1}]
+}
+
+> {%
+    client.test("aparelho invalido: 422 INVALID_CUSTOMER_DEVICE_ID", function() {
+        client.assert(response.status === 422, "esperado 422, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_CUSTOMER_DEVICE_ID", "code " + response.body.code);
+    });
+%}
+
+
+### 37d.01. Teto da mesa: aparelho 1 de 10 pede na segunda mesa
+POST {{host}}/public/tables/{{otherOrderingToken}}/order-requests
+Content-Type: application/json
+
+{
+  "customerName": "Cliente 1",
+  "customerDeviceId": "device-{{suffix}}-cap-01",
+  "lines": [{"menuItemId": "{{pizzaId}}", "quantity": 1}]
+}
+
+> {%
+    client.test("pedido 1 de 10: 201", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+    });
+%}
+
+
+### 37d.02. Teto da mesa: aparelho 2 de 10 pede na segunda mesa
+POST {{host}}/public/tables/{{otherOrderingToken}}/order-requests
+Content-Type: application/json
+
+{
+  "customerName": "Cliente 2",
+  "customerDeviceId": "device-{{suffix}}-cap-02",
+  "lines": [{"menuItemId": "{{pizzaId}}", "quantity": 1}]
+}
+
+> {%
+    client.test("pedido 2 de 10: 201", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+    });
+%}
+
+
+### 37d.03. Teto da mesa: aparelho 3 de 10 pede na segunda mesa
+POST {{host}}/public/tables/{{otherOrderingToken}}/order-requests
+Content-Type: application/json
+
+{
+  "customerName": "Cliente 3",
+  "customerDeviceId": "device-{{suffix}}-cap-03",
+  "lines": [{"menuItemId": "{{pizzaId}}", "quantity": 1}]
+}
+
+> {%
+    client.test("pedido 3 de 10: 201", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+    });
+%}
+
+
+### 37d.04. Teto da mesa: aparelho 4 de 10 pede na segunda mesa
+POST {{host}}/public/tables/{{otherOrderingToken}}/order-requests
+Content-Type: application/json
+
+{
+  "customerName": "Cliente 4",
+  "customerDeviceId": "device-{{suffix}}-cap-04",
+  "lines": [{"menuItemId": "{{pizzaId}}", "quantity": 1}]
+}
+
+> {%
+    client.test("pedido 4 de 10: 201", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+    });
+%}
+
+
+### 37d.05. Teto da mesa: aparelho 5 de 10 pede na segunda mesa
+POST {{host}}/public/tables/{{otherOrderingToken}}/order-requests
+Content-Type: application/json
+
+{
+  "customerName": "Cliente 5",
+  "customerDeviceId": "device-{{suffix}}-cap-05",
+  "lines": [{"menuItemId": "{{pizzaId}}", "quantity": 1}]
+}
+
+> {%
+    client.test("pedido 5 de 10: 201", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+    });
+%}
+
+
+### 37d.06. Teto da mesa: aparelho 6 de 10 pede na segunda mesa
+POST {{host}}/public/tables/{{otherOrderingToken}}/order-requests
+Content-Type: application/json
+
+{
+  "customerName": "Cliente 6",
+  "customerDeviceId": "device-{{suffix}}-cap-06",
+  "lines": [{"menuItemId": "{{pizzaId}}", "quantity": 1}]
+}
+
+> {%
+    client.test("pedido 6 de 10: 201", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+    });
+%}
+
+
+### 37d.07. Teto da mesa: aparelho 7 de 10 pede na segunda mesa
+POST {{host}}/public/tables/{{otherOrderingToken}}/order-requests
+Content-Type: application/json
+
+{
+  "customerName": "Cliente 7",
+  "customerDeviceId": "device-{{suffix}}-cap-07",
+  "lines": [{"menuItemId": "{{pizzaId}}", "quantity": 1}]
+}
+
+> {%
+    client.test("pedido 7 de 10: 201", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+    });
+%}
+
+
+### 37d.08. Teto da mesa: aparelho 8 de 10 pede na segunda mesa
+POST {{host}}/public/tables/{{otherOrderingToken}}/order-requests
+Content-Type: application/json
+
+{
+  "customerName": "Cliente 8",
+  "customerDeviceId": "device-{{suffix}}-cap-08",
+  "lines": [{"menuItemId": "{{pizzaId}}", "quantity": 1}]
+}
+
+> {%
+    client.test("pedido 8 de 10: 201", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+    });
+%}
+
+
+### 37d.09. Teto da mesa: aparelho 9 de 10 pede na segunda mesa
+POST {{host}}/public/tables/{{otherOrderingToken}}/order-requests
+Content-Type: application/json
+
+{
+  "customerName": "Cliente 9",
+  "customerDeviceId": "device-{{suffix}}-cap-09",
+  "lines": [{"menuItemId": "{{pizzaId}}", "quantity": 1}]
+}
+
+> {%
+    client.test("pedido 9 de 10: 201", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+    });
+%}
+
+
+### 37d.10. Teto da mesa: aparelho 10 de 10 pede na segunda mesa
+POST {{host}}/public/tables/{{otherOrderingToken}}/order-requests
+Content-Type: application/json
+
+{
+  "customerName": "Cliente 10",
+  "customerDeviceId": "device-{{suffix}}-cap-10",
+  "lines": [{"menuItemId": "{{pizzaId}}", "quantity": 1}]
+}
+
+> {%
+    client.test("pedido 10 de 10: 201", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+    });
+%}
+
+
+### 37e. O 11o aparelho -> 409 TABLE_ORDER_REQUEST_LIMIT_REACHED
+POST {{host}}/public/tables/{{otherOrderingToken}}/order-requests
+Content-Type: application/json
+
+{
+  "customerName": "Cliente 11",
+  "customerDeviceId": "device-{{suffix}}-cap-11",
+  "lines": [{"menuItemId": "{{pizzaId}}", "quantity": 1}]
+}
+
+> {%
+    client.test("teto de 10 por mesa: 409 TABLE_ORDER_REQUEST_LIMIT_REACHED", function() {
+        client.assert(response.status === 409, "esperado 409, recebido " + response.status);
+        client.assert(response.body.code === "TABLE_ORDER_REQUEST_LIMIT_REACHED", "code " + response.body.code);
+    });
+%}
+
+
+### 37f. A mesa no teto nao aceita pedido
+GET {{host}}/public/tables/{{otherOrderingToken}}
+
+> {%
+    client.test("acceptsOrders falso no teto, 10 aguardando", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        client.assert(response.body.acceptsOrders === false, "nao deveria aceitar pedido");
+        client.assert(response.body.pendingRequestCount === 10, "aguardando " + response.body.pendingRequestCount);
     });
 %}
 
@@ -704,6 +1016,8 @@ POST {{host}}/public/tables/{{orderingToken}}/order-requests
 Content-Type: application/json
 
 {
+  "customerName": "Ana",
+  "customerDeviceId": "device-{{suffix}}-ana",
   "lines": [{"menuItemId": "{{pizzaId}}", "quantity": 1}]
 }
 

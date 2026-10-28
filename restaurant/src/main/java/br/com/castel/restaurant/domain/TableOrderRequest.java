@@ -23,6 +23,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.regex.Pattern;
 import org.hibernate.annotations.Fetch;
 import org.hibernate.annotations.FetchMode;
 
@@ -35,8 +36,10 @@ import org.hibernate.annotations.FetchMode;
  * tab, as that waiter (decision #7); or {@linkplain #reject rejects} it as a whole (decision #11).
  * Nobody answering in {@link #PENDING_WINDOW} makes it {@linkplain #expire expire} (decision #14).
  *
- * <p>At most one {@code PENDING} request per table (decision #15) is a rule about the set of
- * requests, so it is held by {@code idx_table_order_request_pending_by_table} and not here.
+ * <p>One {@code PENDING} request per device and at most {@link #MAXIMUM_PENDING_PER_TABLE} per table
+ * (decision #62 of task qr-table-payment, which replaces the one per table of decision #15) are rules
+ * about the set of requests: the use case counts them under the lock of the table and asks
+ * {@link #requireRoomOnTable}; {@code idx_table_order_request_pending_by_device} holds the first.
  *
  * <p>Past its window a request is still stored as {@code PENDING} until the expiry job writes it
  * (decision #29), so every reading goes through {@link #statusAt} and every resolution refuses it.
@@ -48,8 +51,17 @@ public class TableOrderRequest extends AuditedEntity {
     /** How long a request waits for a waiter (decision #14). */
     public static final Duration PENDING_WINDOW = Duration.ofMinutes(30);
 
+    /** How many requests wait for the waiter on one table at most (decision #62 of task qr-table-payment). */
+    public static final int MAXIMUM_PENDING_PER_TABLE = 10;
+
     /** How many lines one request takes (decision #20). */
     public static final int MAXIMUM_LINES = 20;
+
+    /** Longest name a customer types on the phone, once trimmed (decision #46 of task qr-table-payment). */
+    public static final int MAXIMUM_CUSTOMER_NAME_LENGTH = 40;
+
+    /** What a device code is made of: 8 to 64 letters, digits, hyphens or underscores (decision #46). */
+    private static final Pattern CUSTOMER_DEVICE_ID = Pattern.compile("[A-Za-z0-9_-]{8,64}");
 
     @EmbeddedId
     @AttributeOverride(name = "value", column = @Column(name = "id"))
@@ -79,6 +91,13 @@ public class TableOrderRequest extends AuditedEntity {
 
     @AttributeOverride(name = "value", column = @Column(name = "tab_id"))
     private TabId tabId;
+
+    /* Who sent it from the phone (decision #40 of task qr-table-payment); null only on rows from before V14. */
+    @Column(name = "customer_name", updatable = false)
+    private String customerName;
+
+    @Column(name = "customer_device_id", updatable = false)
+    private String customerDeviceId;
 
     /*
      * The line owns table_order_request_id, like TabItem owns tab_id, so inserting a request writes
@@ -113,6 +132,35 @@ public class TableOrderRequest extends AuditedEntity {
     }
 
     /**
+     * Whether the phone takes an order on the table: the tab, as {@link #acceptsOrdersWithTabIn}, and
+     * room under the cap of requests waiting (decision #66 of task qr-table-payment).
+     */
+    public static boolean acceptsOrdersWithTabIn(Optional<TabStatus> activeTabStatus, int pendingOnTable) {
+        return acceptsOrdersWithTabIn(activeTabStatus) && pendingOnTable < MAXIMUM_PENDING_PER_TABLE;
+    }
+
+    /**
+     * Refuses a submission the table has no room for (decisions #62 and #65 of task qr-table-payment):
+     * the device already waiting first, then the cap of the table. Receives what the use case counted
+     * under the lock of the table, after the overdue requests were expired.
+     *
+     * @param devicePending whether this device already has a request waiting on the table
+     * @param pendingOnTable how many requests wait on the table
+     * @throws TableOrderRequestAlreadyPendingException if the device already has one waiting
+     * @throws TableOrderRequestLimitReachedException if the table already has 10 waiting
+     */
+    public static void requireRoomOnTable(boolean devicePending, int pendingOnTable) {
+        if (devicePending) {
+            throw new TableOrderRequestAlreadyPendingException(
+                    "This device already has a pending request on this dining table");
+        }
+        if (pendingOnTable >= MAXIMUM_PENDING_PER_TABLE) {
+            throw new TableOrderRequestLimitReachedException(
+                    "This dining table already has " + MAXIMUM_PENDING_PER_TABLE + " pending requests");
+        }
+    }
+
+    /**
      * Same as {@link #acceptsOrdersWith}, from the status of the active tab alone, for the public
      * read that does not load the tab (decision #40).
      */
@@ -129,16 +177,21 @@ public class TableOrderRequest extends AuditedEntity {
      * being sold by weight, since the customer has no scale. Everything else is checked by
      * {@link Tab#addItem} at confirmation.
      *
+     * @param customerName the name the customer typed on the phone (decision #40 of task qr-table-payment)
+     * @param customerDeviceId the random code the phone keeps for its device
      * @param activeTab the {@code OPEN} or {@code CLOSING} tab of the table, if any
      * @param menuItems where the item of each line is read from
      * @param propertyZone the zone the availability windows are read in
+     * @throws InvalidCustomerNameException if the name is missing, blank or past 40 characters
+     * @throws InvalidCustomerDeviceIdException if the device code is missing or malformed
      * @throws TabClosingRefusesOrderRequestException if the tab of the table is {@code CLOSING}
      * @throws InvalidTableOrderRequestException if there is no line, more than 20, or an item sold by weight
      * @throws MenuItemNotFoundException if the item of a line does not exist
      * @throws MenuItemUnavailableException if the item of a line is inactive or ran out
      * @throws MenuItemOutsideAvailabilityWindowException if the schedule does not serve an item now
      */
-    public static TableOrderRequest submit(UUID propertyId, DiningTable diningTable, Optional<Tab> activeTab,
+    public static TableOrderRequest submit(UUID propertyId, DiningTable diningTable, String customerName,
+            String customerDeviceId, Optional<Tab> activeTab,
             List<TableOrderRequestLine> lines, MenuItemRepository menuItems, Instant requestedAt,
             ZoneId propertyZone) {
         Objects.requireNonNull(propertyId, "propertyId");
@@ -146,6 +199,8 @@ public class TableOrderRequest extends AuditedEntity {
         Objects.requireNonNull(menuItems, "menuItems");
         Objects.requireNonNull(requestedAt, "requestedAt");
         Objects.requireNonNull(propertyZone, "propertyZone");
+        String validCustomerName = requireCustomerName(customerName);
+        String validCustomerDeviceId = requireCustomerDeviceId(customerDeviceId);
         if (!acceptsOrdersWith(activeTab)) {
             throw new TabClosingRefusesOrderRequestException("The tab of this dining table is closing");
         }
@@ -158,12 +213,43 @@ public class TableOrderRequest extends AuditedEntity {
                     requestedAt, propertyZone);
         }
         TableOrderRequest request = new TableOrderRequest(propertyId, diningTable.id(), requestedAt);
+        request.customerName = validCustomerName;
+        request.customerDeviceId = validCustomerDeviceId;
         for (int position = 0; position < lines.size(); position++) {
             TableOrderRequestLine line = lines.get(position);
             line.attachTo(request.id, position);
             request.lines.add(line);
         }
         return request;
+    }
+
+    /**
+     * The name the customer typed, trimmed, 1 to 40 characters (decision #46 of task qr-table-payment).
+     *
+     * @throws InvalidCustomerNameException if it is missing, blank or too long
+     */
+    public static String requireCustomerName(String customerName) {
+        if (customerName == null || customerName.isBlank()) {
+            throw new InvalidCustomerNameException("The customer needs a name");
+        }
+        String trimmed = customerName.trim();
+        if (trimmed.length() > MAXIMUM_CUSTOMER_NAME_LENGTH) {
+            throw new InvalidCustomerNameException(
+                    "A customer name takes at most " + MAXIMUM_CUSTOMER_NAME_LENGTH + " characters");
+        }
+        return trimmed;
+    }
+
+    /**
+     * The code of the customer's device: 8 to 64 letters, digits, hyphens or underscores (decision #46).
+     *
+     * @throws InvalidCustomerDeviceIdException if it is missing or does not match
+     */
+    public static String requireCustomerDeviceId(String customerDeviceId) {
+        if (customerDeviceId == null || !CUSTOMER_DEVICE_ID.matcher(customerDeviceId).matches()) {
+            throw new InvalidCustomerDeviceIdException("The customer device code is 8 to 64 letters, digits, - or _");
+        }
+        return customerDeviceId;
     }
 
     private static void requireOrderableByCustomer(MenuItemRepository menuItems, MenuItemId menuItemId,
@@ -306,6 +392,16 @@ public class TableOrderRequest extends AuditedEntity {
     /** The tab the lines went on; set only on {@code CONFIRMED}. */
     public Optional<TabId> tabId() {
         return Optional.ofNullable(tabId);
+    }
+
+    /** Who sent it from the phone; empty only on a request stored before task qr-table-payment. */
+    public Optional<String> customerName() {
+        return Optional.ofNullable(customerName);
+    }
+
+    /** The device that sent it; never shown to another device. */
+    public Optional<String> customerDeviceId() {
+        return Optional.ofNullable(customerDeviceId);
     }
 
     public List<TableOrderRequestLine> lines() {
