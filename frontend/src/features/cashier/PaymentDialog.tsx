@@ -1,5 +1,8 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useAuthorizedRequest } from '../../lib/useAuthorizedRequest';
+import { receiveFolioPayment } from './useOpenFolios';
 import type { Folio } from './useOpenFolios';
+import { CASHIER, describeError } from './cashierMessages';
 import '../../styles/payment-dialog.css';
 
 interface Props {
@@ -10,12 +13,24 @@ interface Props {
 }
 
 /**
- * Dialog pra receber pagamento de um folio.
+ * Dialog para receber pagamento de um folio.
+ * Usa Idempotency-Key para garantir que retentativas não cobrem duas vezes.
  */
 export function PaymentDialog({ isOpen, folio, onClose, onSuccess }: Props) {
   const [amount, setAmount] = useState(folio.balance);
   const [paymentMethod, setPaymentMethod] = useState('CASH');
   const [isProcessing, setIsProcessing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [idempotencyKey, setIdempotencyKey] = useState<string>('');
+  const apiCall = useAuthorizedRequest();
+
+  // Gera uma chave de idempotência única quando o dialog abre
+  useEffect(() => {
+    if (isOpen) {
+      setIdempotencyKey(`payment-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`);
+      setError(null);
+    }
+  }, [isOpen]);
 
   if (!isOpen) {
     return null;
@@ -23,54 +38,58 @@ export function PaymentDialog({ isOpen, folio, onClose, onSuccess }: Props) {
 
   async function handlePayment() {
     setIsProcessing(true);
+    setError(null);
     try {
-      // TODO: Implementar POST /billing/folios/{id}/payments
-      console.log('Payment:', { folioId: folio.id, amount, method: paymentMethod });
-      // await api.pay(folio.id, amount, paymentMethod);
+      await receiveFolioPayment(apiCall, folio.id, paymentMethod, amount, idempotencyKey);
       onSuccess();
+    } catch (err) {
+      setError(describeError(err));
     } finally {
       setIsProcessing(false);
     }
   }
 
   const balance = parseFloat(folio.balance);
-  const canPay = parseFloat(amount) > 0 && parseFloat(amount) <= balance;
+  const amountNum = parseFloat(amount || '0');
+  const canPay = amountNum > 0 && amountNum <= balance;
+  const displayName = folio.reference?.label || folio.guestName || `Folio ${folio.id.slice(0, 8)}`;
 
   return (
     <>
       <div className="dialog-overlay" onClick={onClose} />
       <div className="dialog payment-dialog">
         <div className="dialog-header">
-          <h3>Receber pagamento</h3>
-          <button className="dialog-close" onClick={onClose}>✕</button>
+          <h3>{CASHIER.receivePayment}</h3>
+          <button className="dialog-close" onClick={onClose} disabled={isProcessing}>✕</button>
         </div>
 
         <div className="dialog-content">
           <div className="payment-field">
-            <label>Folio</label>
-            <p className="payment-folio">{folio.guestName}</p>
+            <label>{CASHIER.folioNumber}</label>
+            <p className="payment-folio">{displayName}</p>
           </div>
 
           <div className="payment-field">
-            <label>Saldo devido</label>
+            <label>{CASHIER.balance}</label>
             <p className="payment-balance">{folio.balance}</p>
           </div>
 
           <div className="payment-field">
-            <label htmlFor="amount">Valor a receber</label>
+            <label htmlFor="amount">{CASHIER.amountToReceive}</label>
             <input
               id="amount"
-              type="number"
+              type="text"
+              inputMode="decimal"
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
               disabled={isProcessing}
-              step="0.01"
+              placeholder="0.00"
               className="payment-input"
             />
           </div>
 
           <div className="payment-field">
-            <label htmlFor="method">Forma de pagamento</label>
+            <label htmlFor="method">{CASHIER.paymentMethodLabel}</label>
             <select
               id="method"
               value={paymentMethod}
@@ -78,12 +97,14 @@ export function PaymentDialog({ isOpen, folio, onClose, onSuccess }: Props) {
               disabled={isProcessing}
               className="payment-select"
             >
-              <option value="CASH">Dinheiro</option>
-              <option value="PIX">Pix</option>
-              <option value="CREDIT_CARD">Cartão de crédito</option>
-              <option value="DEBIT_CARD">Cartão de débito</option>
+              <option value="CASH">{CASHIER.paymentMethod.CASH}</option>
+              <option value="PIX">{CASHIER.paymentMethod.PIX}</option>
+              <option value="CREDIT_CARD">{CASHIER.paymentMethod.CREDIT_CARD}</option>
+              <option value="DEBIT_CARD">{CASHIER.paymentMethod.DEBIT_CARD}</option>
             </select>
           </div>
+
+          {error && <p className="error-message">{error}</p>}
         </div>
 
         <div className="dialog-actions">
@@ -92,14 +113,14 @@ export function PaymentDialog({ isOpen, folio, onClose, onSuccess }: Props) {
             onClick={onClose}
             disabled={isProcessing}
           >
-            Cancelar
+            {CASHIER.cancel}
           </button>
           <button
             className="btn btn-primary"
             onClick={handlePayment}
             disabled={isProcessing || !canPay}
           >
-            {isProcessing ? 'Processando...' : 'Confirmar pagamento'}
+            {isProcessing ? CASHIER.processing : CASHIER.receivePayment}
           </button>
         </div>
       </div>

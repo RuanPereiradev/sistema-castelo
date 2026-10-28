@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="_ds/classical-447e33bc-5bdb-40f1-8281-a07d82674e64/styles.css">
+<script src="_ds/classical-447e33bc-5bdb-40f1-8281-a07d82674e64/_ds_bundle.js"></script>
+<style>html,body{margin:0;height:100%;}[data-v="portal"] a{color:#E8957F;}[data-v="portal"] a:hover{color:#F6D9CE;}[data-chips]::-webkit-scrollbar,[data-v="portal"] [role=dialog] *::-webkit-scrollbar{display:none;}</style>
+</helmet>
+<div data-v="portal" style="--color-bg:#3D0F1A; --color-surface:#4A1522; --color-text:#F4ECE3; --color-accent:#E8957F; --color-accent-100:#5A1D2B; --color-accent-200:#6B2634; --color-accent-300:#B86A5A; --color-accent-400:#F0AE9C; --color-accent-500:#E8957F; --color-accent-600:#F0AE9C; --color-accent-700:#F6D9CE; --color-divider:rgba(232,149,127,.3); width:100%; height:100%; box-sizing:border-box; background:#3D0F1A; color:#F4ECE3; font-family:var(--font-body); position:relative; overflow:hidden; display:flex; flex-direction:column;">
+
+  <sc-if value="{{ isPhone }}" hint-placeholder-val="{{ true }}">
+    <header style="flex:none; padding:14px 16px 0; display:flex; flex-direction:column; gap:12px;">
+      <div style="display:flex; align-items:center; gap:12px;">
+        <div style="width:36px; height:43px; flex:none; box-sizing:border-box; border:1.5px solid #E8957F; border-radius:3px 3px 50% 50% / 3px 3px 44% 44%; display:flex; align-items:center; justify-content:center; padding-bottom:4px; font-family:var(--font-heading); font-size:24px; line-height:1; color:#E8957F;">{{ brandInitial }}</div>
+        <div style="flex:1; min-width:0; display:flex; flex-direction:column;">
+          <span style="font-family:var(--font-heading); font-weight:600; font-size:12px; letter-spacing:.26em; text-transform:uppercase; color:#E8957F;">{{ brandName }} · {{ clock }}</span>
+          <span style="font-family:var(--font-heading); font-size:26px; line-height:1.1;">Mesas</span>
+        </div>
+        <div style="width:40px; height:40px; flex:none; border:1px solid rgba(232,149,127,.7); border-radius:50%; display:flex; align-items:center; justify-content:center; font-family:var(--font-heading); font-weight:600; font-size:15px; color:#F6D9CE;">G</div>
+      </div>
+      <div style="display:grid; grid-template-columns:1fr 1fr; border:1px solid rgba(232,149,127,.55); outline:1px solid rgba(232,149,127,.2); outline-offset:3px;">
+        <sc-for list="{{ areaOpts }}" as="a" hint-placeholder-count="2">
+          <button type="button" onClick="{{ a.pick }}" style="min-height:44px; border:0; background:{{ a.bg }}; color:{{ a.fg }}; font-family:var(--font-heading); font-weight:600; font-size:15px; letter-spacing:.14em; text-transform:uppercase; cursor:pointer;">{{ a.label }} · {{ a.count }}</button>
+        </sc-for>
+      </div>
+    </header>
+    <div data-chips="" style="flex:none; display:flex; gap:8px; overflow-x:auto; scrollbar-width:none; padding:16px 16px 12px; border-bottom:1px solid rgba(232,149,127,.3);">
+      <sc-for list="{{ chips }}" as="c" hint-placeholder-count="5">
+        <button type="button" onClick="{{ c.pick }}" style="flex:none; display:flex; align-items:center; gap:7px; min-height:38px; padding:0 12px; border:1px solid {{ c.bd }}; background:{{ c.bg }}; color:#F4ECE3; border-radius:2px; font-family:var(--font-body); font-size:13.5px; cursor:pointer; white-space:nowrap;">
+          <span style="width:12px; height:12px; box-sizing:border-box; border:{{ c.swBorder }}; background:{{ c.swBg }};"></span>{{ c.label }} <span style="font-variant-numeric:tabular-nums; color:#E8957F;">{{ c.count }}</span>
+        </button>
+      </sc-for>
+    </div>
+    <div style="flex:1; min-height:0; overflow:auto; padding:14px 16px 24px; display:flex; flex-direction:column; gap:12px;">
+      <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
+        <span style="font-family:var(--font-heading); font-weight:600; font-size:13px; letter-spacing:.2em; text-transform:uppercase; color:#E8957F;">❧ {{ areaTitle }}</span>
+        <button type="button" onClick="{{ toggleMine }}" aria-pressed="{{ mine }}" style="display:flex; align-items:center; gap:8px; min-height:36px; padding:0 4px; border:0; background:transparent; color:#F4ECE3; font-family:var(--font-body); font-size:13.5px; cursor:pointer;">
+          <span style="width:18px; height:18px; box-sizing:border-box; border:1.5px solid #E8957F; background:{{ mineBox }}; display:flex; align-items:center; justify-content:center; color:#3D0F1A; font-size:12px; line-height:1;">✓</span>Só as minhas
+        </button>
+      </div>
+      <sc-if value="{{ hasPhoneTables }}" hint-placeholder-val="{{ true }}">
+        <div style="display:grid; grid-template-columns:repeat(3, minmax(0,1fr)); gap:12px 10px;">
+          <sc-for list="{{ phoneTables }}" as="t" hint-placeholder-count="9">
+            <button type="button" onClick="{{ t.pick }}" aria-label="Mesa {{ t.num }}, {{ t.label }}" style="aspect-ratio:1 / 1.2; display:flex; flex-direction:column; align-items:center; justify-content:space-between; padding:14px 6px 9px; box-sizing:border-box; border:{{ t.border }}; background:{{ t.bg }}; color:{{ t.fg }}; border-radius:50% 50% 2px 2px / 34px 34px 2px 2px; text-align:center; font-family:var(--font-body); cursor:pointer; position:relative;">
+              <sc-if value="{{ t.mine }}" hint-placeholder-val="{{ false }}"><span title="Sua mesa" style="position:absolute; top:6px; right:10px; font-family:var(--font-heading); font-size:14px; line-height:1;">❧</span></sc-if>
+              <span style="font-family:var(--font-heading); font-size:36px; line-height:1; font-variant-numeric:tabular-nums; padding-top:4px;">{{ t.num }}</span>
+              <span style="display:flex; flex-direction:column; gap:2px;">
+                <span style="font-family:var(--font-heading); font-weight:600; font-size:11.5px; letter-spacing:.1em; text-transform:uppercase; line-height:1.15;">{{ t.label }}</span>
+                <span style="font-size:12px; line-height:1.3;">{{ t.meta }}</span>
+              </span>
+            </button>
+          </sc-for>
+        </div>
+      </sc-if>
+      <sc-if value="{{ noPhoneTables }}" hint-placeholder-val="{{ false }}">
+        <p style="margin:24px 0; text-align:center; font-size:14.5px; color:rgba(244,236,227,.74);">Nenhuma mesa neste filtro.</p>
+      </sc-if>
+    </div>
+
+    <sc-if value="{{ hasSel }}" hint-placeholder-val="{{ false }}">
+      <div onClick="{{ close }}" style="position:absolute; inset:0; background:rgba(18,4,8,.62);"></div>
+      <div ref="{{ sheetRef }}" role="dialog" aria-modal="true" style="position:absolute; left:8px; right:8px; bottom:0; max-height:80%; box-sizing:border-box; border:1px solid #E8957F; border-bottom:0; border-radius:50% 50% 0 0 / 44px 44px 0 0; padding:6px 6px 0; background:#3D0F1A; display:flex; flex-direction:column;">
+        <div style="flex:1; min-height:0; overflow:auto; scrollbar-width:none; border:1px solid rgba(232,149,127,.4); border-bottom:0; border-radius:50% 50% 0 0 / 40px 40px 0 0; padding:26px 16px 22px; display:flex; flex-direction:column; gap:14px; box-sizing:border-box;">
+          <div style="display:flex; flex-direction:column; align-items:center; gap:2px; text-align:center; position:relative;">
+            <span style="font-family:var(--font-heading); font-weight:600; font-size:12.5px; letter-spacing:.2em; text-transform:uppercase; color:#E8957F;">{{ sel.area }} · {{ sel.label }}</span>
+            <h2 style="margin:0; font-family:var(--font-heading); font-weight:400; font-size:40px; line-height:1;">Mesa {{ sel.num }}</h2>
+            <button type="button" class="btn btn-ghost btn-icon" onClick="{{ close }}" aria-label="Fechar" style="position:absolute; right:-4px; top:-8px; width:44px; height:44px;"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg></button>
+          </div>
+          <div style="display:flex; align-items:center; gap:12px; color:#E8957F;"><span style="flex:1; height:1px; background:rgba(232,149,127,.45);"></span><span style="font-family:var(--font-heading); font-size:18px; line-height:1;">❧</span><span style="flex:1; height:1px; background:rgba(232,149,127,.45);"></span></div>
+          <div style="display:flex; flex-wrap:wrap; justify-content:center; gap:6px 18px; font-size:14px;">
+            <sc-for list="{{ sel.facts }}" as="f" hint-placeholder-count="3"><span><span style="color:rgba(244,236,227,.68);">{{ f.k }}</span> {{ f.v }}</span></sc-for>
+          </div>
+          <sc-if value="{{ sel.hasItems }}" hint-placeholder-val="{{ false }}">
+            <div style="display:flex; flex-direction:column; border-top:1px solid rgba(232,149,127,.3);">
+              <sc-for list="{{ sel.items }}" as="it" hint-placeholder-count="3">
+                <div style="display:flex; gap:10px; align-items:baseline; padding:7px 0; border-bottom:1px solid rgba(232,149,127,.16); font-size:14.5px;">
+                  <span style="font-variant-numeric:tabular-nums; color:#E8957F; width:22px;">{{ it.q }}×</span><span style="flex:1;">{{ it.name }}</span><span style="font-variant-numeric:tabular-nums;">{{ it.sub }}</span>
+                </div>
+              </sc-for>
+              <div style="display:flex; justify-content:space-between; align-items:baseline; padding-top:10px;">
+                <span style="font-family:var(--font-heading); font-weight:600; font-size:13px; letter-spacing:.2em; text-transform:uppercase; color:#E8957F;">Total</span>
+                <span style="font-family:var(--font-heading); font-size:28px; font-variant-numeric:tabular-nums;">{{ sel.total }}</span>
+              </div>
+            </div>
+          </sc-if>
+          <sc-if value="{{ sel.note }}" hint-placeholder-val="{{ false }}">
+            <p style="margin:0; padding:12px 14px; background:#4A1522; border:1px solid rgba(232,149,127,.5); font-size:14px; line-height:1.5;">{{ sel.note }}</p>
+          </sc-if>
+          <div style="display:flex; flex-direction:column; gap:10px;">
+            <sc-for list="{{ sel.actions }}" as="ac" hint-placeholder-count="2">
+              <button type="button" class="{{ ac.cls }}" onClick="{{ ac.run }}" style="min-height:52px; font-size:17px; letter-spacing:.12em; text-transform:uppercase; border-color:rgba(232,149,127,.5); box-shadow:{{ ac.shadow }};">{{ ac.label }}</button>
+            </sc-for>
+          </div>
+        </div>
+      </div>
+    </sc-if>
+  </sc-if>
+
+  <sc-if value="{{ isDesk }}" hint-placeholder-val="{{ false }}">
+    <div style="flex:1; min-height:0; padding:12px; box-sizing:border-box; display:flex;">
+      <div style="flex:1; min-height:0; border:1px solid rgba(232,149,127,.55); outline:1px solid rgba(232,149,127,.22); outline-offset:-7px; display:flex; flex-direction:column;">
+        <header style="flex:none; height:72px; padding:0 30px; display:flex; align-items:center; gap:18px; border-bottom:1px solid rgba(232,149,127,.3);">
+          <div style="width:38px; height:46px; box-sizing:border-box; border:1.5px solid #E8957F; border-radius:3px 3px 50% 50% / 3px 3px 44% 44%; display:flex; align-items:center; justify-content:center; padding-bottom:4px; font-family:var(--font-heading); font-size:26px; line-height:1; color:#E8957F;">{{ brandInitial }}</div>
+          <span style="font-family:var(--font-heading); font-weight:600; font-size:15px; letter-spacing:.32em; text-transform:uppercase; color:#F6D9CE;">{{ brandName }}</span>
+          <span style="font-family:var(--font-heading); font-size:20px; color:#E8957F;">❧</span>
+          <span style="font-family:var(--font-heading); font-size:26px;">Mesas · Caixa</span>
+          <span style="flex:1;"></span>
+          <span style="font-family:var(--font-heading); font-size:22px; font-variant-numeric:tabular-nums; color:#F6D9CE;">{{ clock }}</span>
+          <span style="display:flex; align-items:center; gap:10px; font-size:14px;"><span style="width:34px; height:34px; border:1px solid rgba(232,149,127,.7); border-radius:50%; display:flex; align-items:center; justify-content:center; font-family:var(--font-heading); font-weight:600; color:#F6D9CE;">R</span>recepcao</span>
+        </header>
+        <div style="flex:1; min-height:0; display:flex;">
+          <main style="flex:1; min-width:0; display:flex; flex-direction:column; gap:22px; padding:22px 30px 28px; overflow:auto;">
+            <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+              <span style="font-family:var(--font-heading); font-weight:600; font-size:13px; letter-spacing:.2em; text-transform:uppercase; color:#E8957F; margin-right:8px;">Mostrar</span>
+              <sc-for list="{{ chips }}" as="c" hint-placeholder-count="6">
+                <button type="button" onClick="{{ c.pick }}" style="display:flex; align-items:center; gap:8px; min-height:36px; padding:0 12px; border:1px solid {{ c.bd }}; background:{{ c.bg }}; color:#F4ECE3; border-radius:2px; font-family:var(--font-body); font-size:14px; cursor:pointer;">
+                  <span style="width:13px; height:13px; box-sizing:border-box; border:{{ c.swBorder }}; background:{{ c.swBg }};"></span>{{ c.label }} <span style="font-variant-numeric:tabular-nums; color:#E8957F;">{{ c.count }}</span>
+                </button>
+              </sc-for>
+            </div>
+            <sc-for list="{{ deskGroups }}" as="g" hint-placeholder-count="2">
+              <div style="display:flex; flex-direction:column; gap:14px;">
+                <div style="display:flex; align-items:center; gap:14px;">
+                  <span style="font-family:var(--font-heading); font-weight:600; font-size:14px; letter-spacing:.28em; text-transform:uppercase; color:#E8957F;">❧ {{ g.label }}</span>
+                  <span style="flex:1; height:1px; background:rgba(232,149,127,.3);"></span>
+                  <span style="font-size:13px; color:rgba(244,236,227,.72); font-variant-numeric:tabular-nums;">{{ g.summary }}</span>
+                </div>
+                <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(124px, 1fr)); gap:16px 14px;">
+                  <sc-for list="{{ g.tables }}" as="t" hint-placeholder-count="8">
+                    <button type="button" onClick="{{ t.pick }}" aria-label="Mesa {{ t.num }}, {{ t.label }}" style="aspect-ratio:1 / 1.18; display:flex; flex-direction:column; align-items:center; justify-content:space-between; padding:16px 6px 10px; box-sizing:border-box; border:{{ t.border }}; background:{{ t.bg }}; color:{{ t.fg }}; border-radius:50% 50% 2px 2px / 40px 40px 2px 2px; box-shadow:{{ t.ring }}; text-align:center; font-family:var(--font-body); cursor:pointer;">
+                      <span style="font-family:var(--font-heading); font-size:42px; line-height:1; font-variant-numeric:tabular-nums; padding-top:6px;">{{ t.num }}</span>
+                      <span style="display:flex; flex-direction:column; gap:2px;">
+                        <span style="font-family:var(--font-heading); font-weight:600; font-size:12px; letter-spacing:.1em; text-transform:uppercase; line-height:1.15;">{{ t.label }}</span>
+                        <span style="font-size:12.5px; line-height:1.3; font-variant-numeric:tabular-nums;">{{ t.meta }}</span>
+                        <span style="font-size:12.5px; line-height:1.3;">{{ t.who }}</span>
+                      </span>
+                    </button>
+                  </sc-for>
+                </div>
+              </div>
+            </sc-for>
+            <sc-if value="{{ noDesk }}" hint-placeholder-val="{{ false }}">
+              <p style="margin:24px 0; font-size:15px; color:rgba(244,236,227,.74);">Nenhuma mesa neste filtro.</p>
+            </sc-if>
+          </main>
+          <aside style="flex:0 0 380px; border-left:1px solid rgba(232,149,127,.3); padding:22px 22px 0; box-sizing:border-box; display:flex; min-height:0;">
+            <div style="flex:1; min-height:0; border:1px solid #E8957F; border-bottom:0; border-radius:50% 50% 0 0 / 120px 120px 0 0; padding:6px 6px 0; display:flex;">
+              <div style="flex:1; min-height:0; border:1px solid rgba(232,149,127,.4); border-bottom:0; border-radius:50% 50% 0 0 / 114px 114px 0 0; padding:44px 22px 22px; display:flex; flex-direction:column; gap:16px; overflow:auto;">
+                <sc-if value="{{ noSel }}" hint-placeholder-val="{{ true }}">
+                  <div style="display:flex; flex-direction:column; align-items:center; gap:6px; text-align:center;">
+                    <span style="font-family:var(--font-heading); font-weight:600; font-size:12.5px; letter-spacing:.22em; text-transform:uppercase; color:#E8957F;">Para o caixa</span>
+                    <h2 style="margin:0; font-family:var(--font-heading); font-weight:400; font-size:34px; line-height:1.05;">Contas pedidas</h2>
+                    <p style="margin:0; font-size:13.5px; line-height:1.5; color:rgba(244,236,227,.76); text-wrap:pretty;">Em ordem de espera. Clique numa conta ou numa mesa para ver a comanda.</p>
+                  </div>
+                  <div style="display:flex; align-items:center; gap:12px; color:#E8957F;"><span style="flex:1; height:1px; background:rgba(232,149,127,.45);"></span><span style="font-family:var(--font-heading); font-size:18px; line-height:1;">❧</span><span style="flex:1; height:1px; background:rgba(232,149,127,.45);"></span></div>
+                  <sc-if value="{{ hasQueue }}" hint-placeholder-val="{{ true }}">
+                    <div style="display:flex; flex-direction:column; gap:8px;">
+                      <sc-for list="{{ queue }}" as="q" hint-placeholder-count="2">
+                        <button type="button" onClick="{{ q.pick }}" style="display:flex; align-items:center; gap:14px; padding:12px 14px; border:1.5px solid #F6D9CE; background:#F4ECE3; border-radius:2px; text-align:left; cursor:pointer; font-family:var(--font-body); color:#2A1A1C;">
+                          <span style="font-family:var(--font-heading); font-size:32px; line-height:1; color:#4A1220; width:40px; font-variant-numeric:tabular-nums;">{{ q.num }}</span>
+                          <span style="flex:1; display:flex; flex-direction:column; gap:2px;"><span style="font-size:14.5px;">{{ q.area }} · {{ q.waiter }}</span><span style="font-size:13px; color:rgba(42,26,28,.76);">{{ q.meta }}</span></span>
+                          <span style="font-family:var(--font-heading); font-size:21px; font-variant-numeric:tabular-nums; color:#4A1220;">{{ q.total }}</span>
+                        </button>
+                      </sc-for>
+                    </div>
+                  </sc-if>
+                  <sc-if value="{{ noQueue }}" hint-placeholder-val="{{ false }}">
+                    <p style="margin:0; text-align:center; font-size:14.5px; color:rgba(244,236,227,.74);">Nenhuma conta pedida agora.</p>
+                  </sc-if>
+                  <span style="flex:1;"></span>
+                  <div style="display:flex; justify-content:space-between; align-items:baseline; padding-top:14px; border-top:1px solid rgba(232,149,127,.3);">
+                    <span style="font-size:14px; color:rgba(244,236,227,.76);">Em aberto nas mesas</span>
+                    <span style="font-family:var(--font-heading); font-size:26px; font-variant-numeric:tabular-nums;">{{ openTotal }}</span>
+                  </div>
+                </sc-if>
+                <sc-if value="{{ hasSel }}" hint-placeholder-val="{{ false }}">
+                  <div style="display:flex; flex-direction:column; align-items:center; gap:2px; text-align:center; position:relative;">
+                    <span style="font-family:var(--font-heading); font-weight:600; font-size:12.5px; letter-spacing:.2em; text-transform:uppercase; color:#E8957F;">{{ sel.area }} · {{ sel.label }}</span>
+                    <h2 style="margin:0; font-family:var(--font-heading); font-weight:400; font-size:44px; line-height:1;">Mesa {{ sel.num }}</h2>
+                  </div>
+                  <div style="display:flex; align-items:center; gap:12px; color:#E8957F;"><span style="flex:1; height:1px; background:rgba(232,149,127,.45);"></span><span style="font-family:var(--font-heading); font-size:18px; line-height:1;">❧</span><span style="flex:1; height:1px; background:rgba(232,149,127,.45);"></span></div>
+                  <div style="display:grid; grid-template-columns:auto 1fr; gap:6px 16px; font-size:14.5px;">
+                    <sc-for list="{{ sel.facts }}" as="f" hint-placeholder-count="3"><span style="color:rgba(244,236,227,.68);">{{ f.k }}</span><span>{{ f.v }}</span></sc-for>
+                  </div>
+                  <sc-if value="{{ sel.hasItems }}" hint-placeholder-val="{{ false }}">
+                    <div style="display:flex; flex-direction:column; border-top:1px solid rgba(232,149,127,.3);">
+                      <sc-for list="{{ sel.items }}" as="it" hint-placeholder-count="4">
+                        <div style="display:flex; gap:10px; align-items:baseline; padding:8px 0; border-bottom:1px solid rgba(232,149,127,.16); font-size:14.5px;">
+                          <span style="font-variant-numeric:tabular-nums; color:#E8957F; width:24px;">{{ it.q }}×</span><span style="flex:1;">{{ it.name }}</span><span style="font-variant-numeric:tabular-nums;">{{ it.sub }}</span>
+                        </div>
+                      </sc-for>
+                      <div style="display:flex; justify-content:space-between; align-items:baseline; padding-top:12px;">
+                        <span style="font-family:var(--font-heading); font-weight:600; font-size:13px; letter-spacing:.2em; text-transform:uppercase; color:#E8957F;">Total</span>
+                        <span style="font-family:var(--font-heading); font-size:34px; font-variant-numeric:tabular-nums;">{{ sel.total }}</span>
+                      </div>
+                    </div>
+                  </sc-if>
+                  <sc-if value="{{ sel.note }}" hint-placeholder-val="{{ false }}">
+                    <p style="margin:0; padding:12px 14px; background:#4A1522; border:1px solid rgba(232,149,127,.5); font-size:14px; line-height:1.5;">{{ sel.note }}</p>
+                  </sc-if>
+                  <span style="flex:1;"></span>
+                  <div style="display:flex; flex-direction:column; gap:10px;">
+                    <sc-for list="{{ sel.deskActions }}" as="ac" hint-placeholder-count="1">
+                      <button type="button" class="{{ ac.cls }}" onClick="{{ ac.run }}" style="min-height:50px; font-size:16px; letter-spacing:.12em; text-transform:uppercase; border-color:rgba(232,149,127,.5); box-shadow:{{ ac.shadow }};">{{ ac.label }}</button>
+                    </sc-for>
+                    <button type="button" class="btn btn-ghost" onClick="{{ close }}" style="min-height:44px; font-size:15px;">Voltar às contas</button>
+                  </div>
+                </sc-if>
+              </div>
+            </div>
+          </aside>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ hasNotice }}" hint-placeholder-val="{{ false }}">
+    <div role="status" style="position:absolute; left:50%; top:{{ noticeTop }}; transform:translateX(-50%); max-width:86%; padding:10px 16px; background:#F4ECE3; color:#3D0F1A; border:1px solid #E8957F; outline:1px solid rgba(244,236,227,.5); outline-offset:3px; font-size:14px; line-height:1.4; text-align:center;">{{ notice }}</div>
+  </sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:390,&quot;height&quot;:844},&quot;device&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;phone&quot;,&quot;desktop&quot;],&quot;default&quot;:&quot;phone&quot;,&quot;tsType&quot;:&quot;'phone'|'desktop'&quot;},&quot;initialSelected&quot;:{&quot;editor&quot;:&quot;int&quot;,&quot;default&quot;:null,&quot;tsType&quot;:&quot;number&quot;},&quot;initialFilter&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;todas&quot;,&quot;livre&quot;,&quot;ocupada&quot;,&quot;pronto&quot;,&quot;conta&quot;,&quot;reservada&quot;],&quot;default&quot;:&quot;todas&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;brandName&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;Hospedaria&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;noMotion&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;}}">
+class Component extends DCLogic {
+  static MENU = [['Caldo verde', 24], ['Pão rústico', 12], ['Costela assada', 78], ['Risoto de cogumelos', 64], ['Vinho tinto (taça)', 28], ['Água com gás', 8], ['Torta de maçã', 26], ['Cerveja artesanal', 22]];
+  static ST = {
+    livre: { label: 'Livre', border: '1px dashed rgba(232,149,127,.55)', bg: 'transparent', fg: 'rgba(244,236,227,.82)' },
+    ocupada: { label: 'Ocupada', border: '1.5px solid #E8957F', bg: '#4A1522', fg: '#F4ECE3' },
+    pronto: { label: 'Prato pronto', border: '1.5px solid #E8957F', bg: '#E8957F', fg: '#3D0F1A' },
+    conta: { label: 'Conta pedida', border: '1.5px solid #F6D9CE', bg: '#F4ECE3', fg: '#4A1220' },
+    reservada: { label: 'Reservada', border: '3px double rgba(232,149,127,.65)', bg: 'transparent', fg: '#F6D9CE' },
+  };
+  static T = [
+    [1, 'salao', 4, 'ocupada', 3, 42, 'Ana'], [2, 'salao', 4, 'livre'], [3, 'salao', 4, 'pronto', 4, 25, 'Você'],
+    [4, 'salao', 2, 'conta', 2, 68, 'Você'], [5, 'salao', 6, 'ocupada', 5, 18, 'Bruno'], [6, 'salao', 4, 'livre'],
+    [7, 'salao', 4, 'reservada', 0, 0, null, '20:30'], [8, 'salao', 2, 'ocupada', 2, 55, 'Você'], [9, 'salao', 8, 'conta', 7, 94, 'Ana'],
+    [10, 'salao', 2, 'livre'], [11, 'varanda', 2, 'ocupada', 2, 12, 'Bruno'], [12, 'varanda', 2, 'livre'],
+    [13, 'varanda', 4, 'pronto', 3, 31, 'Bruno'], [14, 'varanda', 4, 'ocupada', 4, 37, 'Você'],
+    [15, 'varanda', 6, 'reservada', 0, 0, null, '21:00'], [16, 'varanda', 2, 'livre'],
+  ];
+  sheetRef = React.createRef();
+  state = {
+    tables: Component.T.map(([id, area, seats, status, guests, min, waiter, res]) => ({ id, area, seats, status, guests: guests || 0, min: min || 0, waiter: waiter || null, res: res || null })),
+    sel: this.props.initialSelected ?? null,
+    filter: this.props.initialFilter || 'todas',
+    area: 'salao', mine: false, notice: null,
+  };
+  componentDidUpdate(pp, ps) {
+    if (pp.initialSelected !== this.props.initialSelected) this.setState({ sel: this.props.initialSelected ?? null });
+    if (pp.initialFilter !== this.props.initialFilter) this.setState({ filter: this.props.initialFilter || 'todas' });
+    if (ps.sel == null && this.state.sel != null && this.sheetRef.current && !this.props.noMotion) {
+      const el = this.sheetRef.current;
+      el.style.transition = 'none'; el.style.transform = 'translateY(24px)'; el.style.opacity = '0';
+      requestAnimationFrame(() => requestAnimationFrame(() => { el.style.transition = 'transform 260ms ease, opacity 260ms ease'; el.style.transform = 'none'; el.style.opacity = '1'; }));
+    }
+  }
+  componentWillUnmount() { clearTimeout(this._nt); }
+  money(n) { return 'R$ ' + n.toFixed(2).replace('.', ','); }
+  items(t) {
+    if (!['ocupada', 'pronto', 'conta'].includes(t.status)) return [];
+    const M = Component.MENU, out = [], n = 2 + (t.id % 4);
+    for (let k = 0; k < n; k++) {
+      const [name, p] = M[(t.id * 3 + k * 5) % M.length];
+      if (out.some(o => o.name === name)) continue;
+      const q = 1 + ((t.id + k) % Math.max(1, Math.min(3, t.guests)));
+      out.push({ name, q, sub: this.money(q * p), v: q * p });
+    }
+    return out;
+  }
+  update(id, patch, notice) {
+    this.setState(s => ({ tables: s.tables.map(t => t.id === id ? { ...t, ...patch } : t), notice }));
+    clearTimeout(this._nt); this._nt = setTimeout(() => this.setState({ notice: null }), 2600);
+  }
+  renderVals() {
+    const st = this.state, S = Component.ST;
+    const dev = this.props.device || 'phone';
+    const brand = this.props.brandName || 'Hospedaria';
+    const areaName = { salao: 'Salão', varanda: 'Varanda' };
+    const pick = id => () => this.setState({ sel: id });
+    const counts = { todas: st.tables.length };
+    Object.keys(S).forEach(k => counts[k] = st.tables.filter(t => t.status === k).length);
+    const chipKeys = dev === 'phone' ? ['todas', 'pronto', 'conta', 'ocupada', 'livre', 'reservada'] : ['todas', 'conta', 'pronto', 'ocupada', 'livre', 'reservada'];
+    const chips = chipKeys.map(k => {
+      const on = st.filter === k;
+      return { label: k === 'todas' ? 'Todas' : S[k].label, count: counts[k], pick: () => this.setState({ filter: k }),
+        bd: on ? '#E8957F' : 'rgba(232,149,127,.3)', bg: on ? '#4A1522' : 'transparent',
+        swBorder: k === 'todas' ? '1px solid #F4ECE3' : S[k].border.replace('3px double', '3px double'), swBg: k === 'todas' ? 'transparent' : S[k].bg };
+    });
+    const meta = t => t.status === 'livre' ? t.seats + ' lugares' : t.status === 'reservada' ? 'às ' + t.res : t.guests + ' pess. · ' + t.min + ' min';
+    const passes = t => st.filter === 'todas' || t.status === st.filter;
+    const phoneTables = st.tables.filter(t => t.area === st.area && passes(t) && (!st.mine || t.waiter === 'Você'))
+      .map(t => ({ num: t.id, label: S[t.status].label, meta: meta(t), mine: t.waiter === 'Você', pick: pick(t.id), border: S[t.status].border, bg: S[t.status].bg, fg: S[t.status].fg }));
+    const deskGroups = ['salao', 'varanda'].map(a => {
+      const all = st.tables.filter(t => t.area === a);
+      const occ = all.filter(t => ['ocupada', 'pronto', 'conta'].includes(t.status)).length;
+      const tables = all.filter(passes).map(t => ({ num: t.id, label: S[t.status].label, meta: meta(t),
+        who: t.waiter ? (t.waiter === 'Você' ? 'Carlos' : t.waiter) : (t.status === 'reservada' ? t.seats + ' lugares' : ' '),
+        pick: pick(t.id), border: S[t.status].border, bg: S[t.status].bg, fg: S[t.status].fg,
+        ring: st.sel === t.id ? '0 0 0 4px #3D0F1A, 0 0 0 5.5px #F6D9CE' : 'none' }));
+      return { label: areaName[a], summary: occ + ' de ' + all.length + ' ocupadas', tables };
+    }).filter(g => g.tables.length);
+    const areaOpts = ['salao', 'varanda'].map(a => ({ label: areaName[a], count: st.tables.filter(t => t.area === a).length, pick: () => this.setState({ area: a }),
+      bg: st.area === a ? '#E8957F' : 'transparent', fg: st.area === a ? '#3D0F1A' : '#F6D9CE' }));
+    const tSel = st.tables.find(t => t.id === st.sel);
+    let sel = null;
+    if (tSel) {
+      const its = this.items(tSel), tot = its.reduce((a, b) => a + b.v, 0);
+      const wName = tSel.waiter === 'Você' ? (dev === 'phone' ? 'Você' : 'Carlos') : tSel.waiter;
+      const facts = [];
+      if (tSel.status === 'livre') facts.push({ k: 'Lugares', v: String(tSel.seats) });
+      else if (tSel.status === 'reservada') facts.push({ k: 'Reserva', v: 'às ' + tSel.res }, { k: 'Lugares', v: String(tSel.seats) });
+      else facts.push({ k: 'Pessoas', v: String(tSel.guests) }, { k: 'Aberta há', v: tSel.min + ' min' }, { k: 'Garçom', v: wName });
+      const primary = { cls: 'btn btn-primary btn-block', shadow: 'inset 0 0 0 3px #3D0F1A, inset 0 0 0 4px rgba(232,149,127,.45)' };
+      const second = { cls: 'btn btn-secondary btn-block', shadow: 'none' };
+      const id = tSel.id, n = 'Mesa ' + id;
+      const A = {
+        abrir: { ...primary, label: 'Abrir mesa', run: () => this.update(id, { status: 'ocupada', guests: Math.min(2, tSel.seats), min: 0, waiter: dev === 'phone' ? 'Você' : 'Ana' }, n + ' aberta') },
+        pedido: { ...primary, label: 'Lançar pedido', run: () => this.update(id, {}, 'Protótipo — abriria o cardápio da ' + n) },
+        conta: { ...second, label: 'Pedir a conta', run: () => this.update(id, { status: 'conta' }, 'Conta da ' + n + ' enviada ao caixa') },
+        servido: { ...primary, label: 'Marcar como servido', run: () => this.update(id, { status: 'ocupada' }, n + ': prato servido') },
+        reabrir: { ...second, label: 'Cancelar pedido de conta', run: () => this.update(id, { status: 'ocupada' }, 'Conta da ' + n + ' cancelada') },
+        fechar: { ...primary, label: 'Fechar conta · ' + this.money(tot), run: () => { this.update(id, { status: 'livre', guests: 0, min: 0, waiter: null }, 'Conta da ' + n + ' fechada'); this.setState({ sel: null }); } },
+      };
+      const byPhone = { livre: ['abrir'], reservada: ['abrir'], ocupada: ['pedido', 'conta'], pronto: ['servido', 'pedido'], conta: ['reabrir'] };
+      const byDesk = { livre: ['abrir'], reservada: ['abrir'], ocupada: ['fechar'], pronto: ['fechar'], conta: ['fechar'] };
+      const notes = {
+        conta: dev === 'phone' ? 'A conta já está com o caixa. Ele fecha e libera a mesa.' : null,
+        pronto: 'A cozinha avisou que há prato pronto para esta mesa.',
+        reservada: 'Reservada para as ' + tSel.res + '. Abra quando os clientes chegarem.',
+      };
+      sel = { num: id, area: areaName[tSel.area], label: S[tSel.status].label, facts, items: its, hasItems: its.length > 0, total: this.money(tot),
+        note: notes[tSel.status] || null, actions: byPhone[tSel.status].map(k => A[k]), deskActions: byDesk[tSel.status].map(k => A[k]) };
+    }
+    const queue = st.tables.filter(t => t.status === 'conta').sort((a, b) => b.min - a.min).map(t => ({
+      num: t.id, area: areaName[t.area], waiter: t.waiter === 'Você' ? 'Carlos' : t.waiter, meta: t.guests + ' pessoas · há ' + t.min + ' min',
+      total: this.money(this.items(t).reduce((a, b) => a + b.v, 0)), pick: pick(t.id) }));
+    const openTotal = st.tables.reduce((a, t) => a + this.items(t).reduce((x, y) => x + y.v, 0), 0);
+    return {
+      brandName: brand, brandInitial: brand.charAt(0), clock: '20:14',
+      isPhone: dev === 'phone', isDesk: dev !== 'phone',
+      chips, areaOpts, areaTitle: areaName[st.area] + (st.filter === 'todas' ? '' : ' · ' + S[st.filter].label),
+      mine: st.mine, mineBox: st.mine ? '#E8957F' : 'transparent', toggleMine: () => this.setState(s => ({ mine: !s.mine })),
+      phoneTables, hasPhoneTables: phoneTables.length > 0, noPhoneTables: phoneTables.length === 0,
+      deskGroups, noDesk: deskGroups.length === 0,
+      sel, hasSel: !!sel, noSel: !sel, close: () => this.setState({ sel: null }), sheetRef: this.sheetRef,
+      queue, hasQueue: queue.length > 0, noQueue: queue.length === 0, openTotal: this.money(openTotal),
+      notice: st.notice, hasNotice: !!st.notice, noticeTop: dev === 'phone' ? '150px' : '96px',
+    };
+  }
+}
+</script>
+</body>
+</html>

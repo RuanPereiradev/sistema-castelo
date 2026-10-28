@@ -10,6 +10,8 @@ import { DiningRoomPage } from './features/dining-room/DiningRoomPage';
 import { CashierPage } from './features/cashier/CashierPage';
 import { KitchenPage } from './features/kitchen/KitchenPage';
 import { CustomerTablePage } from './features/customer-table/CustomerTablePage';
+import { SelfServicePage } from './features/self-service/SelfServicePage';
+import { AdminPage } from './pages/AdminPage';
 import { currentSession, type Session } from './features/auth/session';
 import { destinationsFor, type Destination } from './features/auth/destinations';
 import { logout } from './features/auth/authApi';
@@ -83,6 +85,17 @@ async function requiredDestinationLoader(roles: readonly Destination[]): Promise
   return session;
 }
 
+async function requiredAdminLoader(): Promise<Session> {
+  const session = currentSession();
+  if (!session) {
+    throw new Response('Unauthorized', { status: 401 });
+  }
+  if (!session.user.roles.includes('ADMIN')) {
+    throw new Response('Forbidden', { status: 403 });
+  }
+  return session;
+}
+
 export const router = createBrowserRouter([
   {
     path: '/',
@@ -113,6 +126,16 @@ export const router = createBrowserRouter([
         path: 'cozinha',
         element: <KitchenPage />,
         loader: () => requiredDestinationLoader(['KITCHEN']),
+      },
+      {
+        path: 'self-service',
+        element: <SelfServicePage />,
+        loader: () => requiredDestinationLoader(['WAITER']),
+      },
+      {
+        path: 'admin',
+        element: <AdminPage />,
+        loader: requiredAdminLoader,
       },
       {
         path: '*',
