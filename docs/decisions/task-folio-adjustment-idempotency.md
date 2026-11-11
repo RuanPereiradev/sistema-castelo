@@ -15,7 +15,7 @@
 | Branch | `task/folio-adjustment-idempotency` (worktree `../castel-adjust-idem`) |
 | Rodada atual | 1 |
 | Build | `./mvnw clean verify` passa (ArchUnit incluído) |
-| Testes | 2135, 0 falhas; nenhum novo nesta rodada (ver ponto em aberto #1) |
+| Testes | 2154, 0 falhas; 19 novos da idempotência do ajuste (15 de domínio em `FolioChargeTest`, 4 de integração em `FolioHttpIntegrationTest`) |
 
 ---
 
@@ -31,7 +31,7 @@ O pagamento já tem a chave. O Ruan mandou seguir com a correção em 2026-11-11
 
 | # | Rodada | Decisão | Status |
 |---|---|---|---|
-| 1 | 1 | DEV: a migration desta task é a **V16**. A V15 está reservada para a `task/no-preparation-items`, que precisa entrar na `main` antes desta, senão o Flyway recusa a V15 fora de ordem | implementado |
+| 1 | 1 | DEV: a migration desta task é a **V16**. A V15 está reservada para a `task/no-preparation-items`, que precisa entrar na `main` antes desta, senão o Flyway recusa a V15 fora de ordem | implementado — registrada em `docs/MIGRATIONS.md` pela `task/no-preparation-items`, que entra antes; numeração aprovada pelo Ruan em 2026-11-11 (hotel em V17/V18) |
 | 2 | 1 | DEV: a chave é **obrigatória**, como no pagamento. Ausente, em branco ou com mais de 100 caracteres depois do trim → 422 `INVALID_IDEMPOTENCY_KEY`. O cabeçalho é lido como opcional na rota e quem recusa é o domínio, pelo mesmo motivo da decisão #19 da task 1.3 (cabeçalho obrigatório ausente cairia no catch-all como 500). A chave é validada antes de carregar o folio, como no pagamento: chave inválida em folio inexistente é 422, não 404 | implementado |
 | 3 | 1 | DEV: "mesmo conteúdo" é o corpo inteiro: `amount`, `description` e `reason`, os dois textos comparados depois do trim, como são gravados. O pagamento compara o corpo inteiro (`method` e `amount`) e não compara quem recebeu; aqui também não se compara quem autorizou. Conteúdo diferente → 409 `IDEMPOTENCY_KEY_REUSED`, mesmo que o conteúdo novo seja inválido (o pagamento faz igual: a repetição é reconhecida antes de qualquer outra regra) | implementado |
 | 4 | 1 | DEV: a repetição é reconhecida antes de qualquer outra regra, **inclusive com o folio fechado** (decisão #5 da task 1.3), e não grava nada. A resposta é a mesma da primeira vez no formato: 201 com o folio como está agora, contendo o ajuste uma vez só. A rota de ajuste devolve o folio, não o lançamento, e isso não muda nesta task | implementado |
@@ -50,7 +50,7 @@ Valores de status: `pendente` · `implementado` · `revertida pela #n`
 - [x] Mesma chave com conteúdo diferente é recusada, como no pagamento
 - [x] `.http` com caminho feliz e cenários negativos
 - [x] Migration V16 com a chave e a unicidade em `charge`
-- [ ] Testes densos da regra: retry não duplica, conteúdo diferente recusado, ajuste sem chave recusado (ver ponto em aberto #1)
+- [x] Testes densos da regra: retry não duplica, conteúdo diferente recusado, ajuste sem chave recusado — escritos pelo agente de testes a partir das decisões #2–#5 (`FolioChargeTest.AdjustmentIdempotency` e quatro casos em `FolioHttpIntegrationTest`)
 - [x] Front: o caixa manda a chave no ajuste — feito na `task/fe4-cashier-folios` (PR #44), decisão #24 da FE4
 
 ---
@@ -73,5 +73,4 @@ Rota: `POST /api/billing/folios/{folioId}/adjustments`, `ADMIN`, cabeçalho `Ide
 
 | # | Pergunta | Desde a rodada |
 |---|---|---|
-| 1 | Os testes novos da regra (retry não duplica, conteúdo diferente, sem chave, chave de outro folio) não foram escritos por mim: a instrução do agente de implementação proíbe escrever teste de unidade da própria implementação. Ficam para o agente de testes, a partir deste log | 1 |
 | 2 | ~~O front não manda a chave~~ — resolvido pela decisão #24 da FE4 (PR #44). **O #44 precisa entrar junto ou antes desta task**, senão o ajuste do caixa recebe 422 | 1 |
