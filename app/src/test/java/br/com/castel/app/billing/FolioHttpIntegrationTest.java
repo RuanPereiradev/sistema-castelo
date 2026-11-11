@@ -111,11 +111,11 @@ class FolioHttpIntegrationTest extends AbstractIntegrationTest {
         assertThat(reversal.get("reversalOf").asString()).isEqualTo(tabCharge.value().toString());
         assertThat(reversal.get("reason").asString()).isEqualTo("Posted on the wrong room");
 
-        assertThat(send(post(folioPath + "/adjustments", frontDeskToken, adjustment("-50.00")), 403)
+        assertThat(send(adjust(folioPath, frontDeskToken, "-50.00"), 403)
                 .get("code").asString()).isEqualTo("ACCESS_DENIED");
         send(get(folioPath, waiterToken), 403);
 
-        JsonNode adjusted = send(post(folioPath + "/adjustments", adminToken, adjustment("-50.00")), 201);
+        JsonNode adjusted = send(adjust(folioPath, adminToken, "-50.00"), 201);
 
         assertThat(adjusted.get("totalCharges").asString()).isEqualTo("150.00");
         assertThat(adjusted.get("totalPayments").asString()).isEqualTo("150.00");
@@ -266,9 +266,9 @@ class FolioHttpIntegrationTest extends AbstractIntegrationTest {
         String adminToken = accessTokenFor(createUser(Role.ADMIN));
         FolioId folioId = folioFacade.openTabFolio(FolioOwner.tab(UUID.randomUUID()));
         String folioPath = FOLIOS + "/" + folioId.value();
-        send(post(folioPath + "/adjustments", adminToken, adjustment("9999999999.99")), 201);
+        send(adjust(folioPath, adminToken, "9999999999.99"), 201);
 
-        assertThat(send(post(folioPath + "/adjustments", adminToken, adjustment("9999999999.99")), 422)
+        assertThat(send(adjust(folioPath, adminToken, "9999999999.99"), 422)
                         .get("code").asString())
                 .isEqualTo("MONEY_OUT_OF_RANGE");
 
@@ -342,6 +342,11 @@ class FolioHttpIntegrationTest extends AbstractIntegrationTest {
     private HttpRequest.Builder pay(String folioPath, String token, String method, String amount, String key) {
         return post(folioPath + "/payments", token, "{\"method\":\"%s\",\"amount\":\"%s\"}".formatted(method, amount))
                 .header("Idempotency-Key", key);
+    }
+
+    private HttpRequest.Builder adjust(String folioPath, String token, String amount) {
+        return post(folioPath + "/adjustments", token, adjustment(amount))
+                .header("Idempotency-Key", UUID.randomUUID().toString());
     }
 
     private HttpRequest.Builder get(String path, String token) {

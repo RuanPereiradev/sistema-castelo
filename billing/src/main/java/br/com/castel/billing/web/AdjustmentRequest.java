@@ -3,6 +3,7 @@ package br.com.castel.billing.web;
 /**
  * Body of {@code POST /api/billing/folios/{folioId}/adjustments}. The amount is a decimal string,
  * negative for a discount. No bean validation: every field is refused by the domain with its code.
+ * The idempotency key travels in the {@code Idempotency-Key} header.
  */
 public class AdjustmentRequest {
 

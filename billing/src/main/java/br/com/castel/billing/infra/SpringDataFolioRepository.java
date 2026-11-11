@@ -43,4 +43,9 @@ interface SpringDataFolioRepository extends JpaRepository<Folio, UUID> {
     @QueryHints(@QueryHint(name = "org.hibernate.flushMode", value = "COMMIT"))
     @Query("select f.id from Folio f join f.payments p where p.idempotencyKey = :idempotencyKey")
     Optional<UUID> findFolioIdByPaymentIdempotencyKey(@Param("idempotencyKey") String idempotencyKey);
+
+    @QueryHints(@QueryHint(name = "org.hibernate.flushMode", value = "COMMIT"))
+    @Query("select f.id from Folio f join treat(f.charges as AdjustmentCharge) a "
+            + "where a.idempotencyKey = :idempotencyKey")
+    Optional<UUID> findFolioIdByAdjustmentIdempotencyKey(@Param("idempotencyKey") String idempotencyKey);
 }

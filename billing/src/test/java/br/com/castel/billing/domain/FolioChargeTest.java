@@ -13,6 +13,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import br.com.castel.billing.api.ChargeId;
 import br.com.castel.sharedkernel.Money;
+import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -147,7 +148,7 @@ class FolioChargeTest {
             Folio folio = stayFolio();
 
             AdjustmentCharge adjustment =
-                    folio.postAdjustment(money("-20.00"), "Desconto", "Chuveiro quebrado", ADMIN);
+                    folio.postAdjustment(money("-20.00"), "Desconto", "Chuveiro quebrado", UUID.randomUUID().toString(), ADMIN);
 
             assertThat(adjustment.authorizedBy()).contains(ADMIN);
             assertThat(adjustment.reason()).contains("Chuveiro quebrado");
@@ -175,7 +176,7 @@ class FolioChargeTest {
             Folio folio = stayFolio();
 
             assertRejectedWith(
-                    () -> folio.postAdjustment(money("-5.00"), " ", "Motivo", ADMIN), INVALID_CHARGE_DESCRIPTION);
+                    () -> folio.postAdjustment(money("-5.00"), " ", "Motivo", UUID.randomUUID().toString(), ADMIN), INVALID_CHARGE_DESCRIPTION);
         }
 
         @Test
@@ -183,14 +184,14 @@ class FolioChargeTest {
             Folio folio = stayFolio();
 
             assertRejectedWith(
-                    () -> folio.postAdjustment(money("-5.00"), "Desconto", "  ", ADMIN), INVALID_CHARGE_REASON);
+                    () -> folio.postAdjustment(money("-5.00"), "Desconto", "  ", UUID.randomUUID().toString(), ADMIN), INVALID_CHARGE_REASON);
         }
 
         @Test
         void shouldAcceptAnAdjustmentReasonOfExactly500Characters() {
             Folio folio = stayFolio();
 
-            AdjustmentCharge adjustment = folio.postAdjustment(money("-5.00"), "Desconto", "x".repeat(500), ADMIN);
+            AdjustmentCharge adjustment = folio.postAdjustment(money("-5.00"), "Desconto", "x".repeat(500), UUID.randomUUID().toString(), ADMIN);
 
             assertThat(adjustment.reason()).hasValueSatisfying(reason -> assertThat(reason).hasSize(500));
         }
@@ -200,7 +201,7 @@ class FolioChargeTest {
             Folio folio = stayFolio();
 
             assertRejectedWith(
-                    () -> folio.postAdjustment(money("-5.00"), "Desconto", "x".repeat(501), ADMIN),
+                    () -> folio.postAdjustment(money("-5.00"), "Desconto", "x".repeat(501), UUID.randomUUID().toString(), ADMIN),
                     INVALID_CHARGE_REASON);
         }
     }

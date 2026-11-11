@@ -31,6 +31,9 @@ public interface FolioRepository {
     /** The folio holding a payment under this idempotency key, already trimmed. */
     Optional<FolioId> findPaymentByIdempotencyKey(String idempotencyKey);
 
+    /** The folio holding an adjustment under this idempotency key, already trimmed. */
+    Optional<FolioId> findAdjustmentByIdempotencyKey(String idempotencyKey);
+
     /**
      * Writes the folio and its new charges and payments at once.
      *
@@ -39,7 +42,8 @@ public interface FolioRepository {
      *
      * @throws FolioAlreadyOpenedForOwnerException if another folio of the same owner was written first
      * @throws FolioReferenceAlreadyInUseException if another open stay took the reference code first
-     * @throws IdempotencyKeyReusedException if another folio took the idempotency key first
+     * @throws IdempotencyKeyReusedException if another folio took the idempotency key of a payment or
+     *     of an adjustment first
      * @throws ChargeAlreadyReversedException if another reversal of the same charge was written first
      */
     Folio save(Folio folio);

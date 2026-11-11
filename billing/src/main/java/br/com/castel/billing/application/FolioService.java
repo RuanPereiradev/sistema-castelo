@@ -11,6 +11,7 @@ import br.com.castel.billing.api.FolioView;
 import br.com.castel.billing.api.PaymentId;
 import br.com.castel.billing.api.PaymentMethod;
 import br.com.castel.billing.api.ReceivedPaymentView;
+import br.com.castel.billing.domain.AdjustmentCharge;
 import br.com.castel.billing.domain.CashDrawerAssignment;
 import br.com.castel.billing.domain.CashDrawerSessionId;
 import br.com.castel.billing.domain.CashDrawerSessionNotOpenException;
@@ -41,7 +42,7 @@ import org.springframework.transaction.annotation.Transactional;
  * The operator comes from {@link AuditorAware} and the moment from the {@link Clock}.
  *
  * <p>The rules about the set of folios — one per owner, one open stay per reference code, an
- * idempotency key held by one folio — are checked here to answer a readable code, and held by the
+ * idempotency key held by one folio, of a payment or of an adjustment — are checked here to answer a readable code, and held by the
  * database against a race; the repository translates a lost race into the same code.
  *
  * <p>Every payment passes through {@link #registerPayment}, which is where the cash drawer comes in
@@ -221,7 +222,7 @@ public class FolioService implements FolioFacade {
     public ReceivedPayment registerPayment(FolioId folioId, PaymentMethod method, Money amount, String idempotencyKey) {
         String key = Payment.requireValidIdempotencyKey(idempotencyKey);
         Folio folio = loadForUpdate(folioId);
-        rejectKeyHeldByAnother(key, folio);
+        rejectKeyHeldByAnother(folios.findPaymentByIdempotencyKey(key), folio);
         CashDrawerAssignment cashDrawer = CashDrawerAssignment.of(
                 cashDrawerSessions.findOpenForKeyShare(folio.propertyId()),
                 settings.asBoolean(CASH_DRAWER_REQUIRED_SETTING));
@@ -245,11 +246,21 @@ public class FolioService implements FolioFacade {
         return saveReadable(folio);
     }
 
-    /** The authenticated user authorizes the adjustment; the route guarantees an {@code ADMIN}. */
+    /**
+     * Writes an adjustment, or answers the folio with the one already written under the key when this
+     * is a retry, as {@link #registerPayment} does. The key is checked against other folios here; a
+     * retry on the same folio is recognised by the folio itself. The authenticated user authorizes the
+     * adjustment; the route guarantees an {@code ADMIN}.
+     *
+     * @throws IdempotencyKeyReusedException if another folio holds the key
+     */
     @Transactional
-    public Folio postAdjustment(FolioId folioId, Money amount, String description, String reason) {
+    public Folio postAdjustment(
+            FolioId folioId, Money amount, String description, String reason, String idempotencyKey) {
+        String key = AdjustmentCharge.requireValidIdempotencyKey(idempotencyKey);
         Folio folio = loadForUpdate(folioId);
-        folio.postAdjustment(amount, description, reason, auditorAware.currentAuditorId());
+        rejectKeyHeldByAnother(folios.findAdjustmentByIdempotencyKey(key), folio);
+        folio.postAdjustment(amount, description, reason, key, auditorAware.currentAuditorId());
         return saveReadable(folio);
     }
 
@@ -321,9 +332,11 @@ public class FolioService implements FolioFacade {
         }
     }
 
-    /** An idempotency key belongs to one folio (decision #16); the same folio decides a retry itself. */
-    private void rejectKeyHeldByAnother(String key, Folio folio) {
-        Optional<FolioId> holder = folios.findPaymentByIdempotencyKey(key);
+    /**
+     * An idempotency key belongs to one folio (decision #16), the key of a payment and the key of an
+     * adjustment alike; the same folio decides a retry itself.
+     */
+    private static void rejectKeyHeldByAnother(Optional<FolioId> holder, Folio folio) {
         if (holder.filter(other -> !other.equals(folio.id())).isPresent()) {
             throw new IdempotencyKeyReusedException("The idempotency key was used on another folio");
         }

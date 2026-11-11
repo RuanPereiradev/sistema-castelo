@@ -35,7 +35,10 @@ import org.springframework.web.bind.annotation.RestController;
 @PreAuthorize("hasAnyRole('ADMIN', 'FRONT_DESK')")
 public class FolioController {
 
-    /** Header of the key the front generates per payment attempt (decision #5 of task 1.3). */
+    /**
+     * Header of the key the front generates per payment attempt (decision #5 of task 1.3), and per
+     * adjustment attempt (task folio-adjustment-idempotency).
+     */
     static final String IDEMPOTENCY_KEY_HEADER = "Idempotency-Key";
 
     private final FolioService folios;
@@ -91,13 +94,24 @@ public class FolioController {
                 folios.refundPayment(FolioId.of(folioId), PaymentId.of(paymentId), request.getReason()));
     }
 
+    /**
+     * The key follows the payment's (decision #2 of task folio-adjustment-idempotency): required, and
+     * read as an optional header so the domain refuses its absence with its own code. A retry answers
+     * the folio with the adjustment written once.
+     */
     @PostMapping("/{folioId}/adjustments")
     @PreAuthorize("hasRole('ADMIN')")
     @ResponseStatus(HttpStatus.CREATED)
     public FolioResponse postAdjustment(
-            @PathVariable("folioId") String folioId, @RequestBody AdjustmentRequest request) {
+            @PathVariable("folioId") String folioId,
+            @RequestHeader(name = IDEMPOTENCY_KEY_HEADER, required = false) String idempotencyKey,
+            @RequestBody AdjustmentRequest request) {
         return FolioResponse.from(folios.postAdjustment(
-                FolioId.of(folioId), Money.of(request.getAmount()), request.getDescription(), request.getReason()));
+                FolioId.of(folioId),
+                Money.of(request.getAmount()),
+                request.getDescription(),
+                request.getReason(),
+                idempotencyKey));
     }
 
     @PostMapping("/{folioId}/charges/{chargeId}/reversal")

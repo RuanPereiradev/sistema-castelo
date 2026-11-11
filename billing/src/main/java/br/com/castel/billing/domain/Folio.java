@@ -184,21 +184,48 @@ public class Folio extends AuditedEntity {
     /**
      * Writes a correction, up or down, authorized by an {@code ADMIN}.
      *
+     * <p>A retry is recognised as the payment's is, before any other rule and even on a closed folio:
+     * a key this folio already holds with the same amount, description and reason answers the
+     * adjustment already written, and writes nothing.
+     *
+     * @return the new adjustment, or the one already written under this key
+     * @throws InvalidIdempotencyKeyException if the key is blank or longer than 100 characters
+     * @throws IdempotencyKeyReusedException if this folio holds the key with another amount,
+     *     description or reason
      * @throws FolioClosedException if the folio is closed
      * @throws InvalidChargeAmountException if the amount is missing or zero
      * @throws InvalidChargeDescriptionException if the description is blank or longer than 255
      * @throws InvalidChargeReasonException if the reason is blank or longer than 500
      */
-    public AdjustmentCharge postAdjustment(Money amount, String description, String reason, UUID authorizedBy) {
+    public AdjustmentCharge postAdjustment(
+            Money amount, String description, String reason, String idempotencyKey, UUID authorizedBy) {
         Objects.requireNonNull(authorizedBy, "authorizedBy");
+        String key = AdjustmentCharge.requireValidIdempotencyKey(idempotencyKey);
+        Optional<AdjustmentCharge> earlier = adjustmentWithKey(key);
+        if (earlier.isPresent()) {
+            return replay(earlier.get(), amount, description, reason);
+        }
         requireOpen();
         if (amount == null || amount.isZero()) {
             throw new InvalidChargeAmountException("An adjustment must be different from zero");
         }
         AdjustmentCharge adjustment =
-                AdjustmentCharge.of(amount, validDescription(description), validReason(reason), authorizedBy);
+                AdjustmentCharge.of(amount, validDescription(description), validReason(reason), authorizedBy, key);
         charges.add(adjustment);
         return adjustment;
+    }
+
+    /** The adjustment this folio wrote under the key, trimmed; how a retry is recognised. */
+    public Optional<AdjustmentCharge> adjustmentWithKey(String idempotencyKey) {
+        if (idempotencyKey == null) {
+            return Optional.empty();
+        }
+        String key = idempotencyKey.trim();
+        return charges.stream()
+                .filter(AdjustmentCharge.class::isInstance)
+                .map(AdjustmentCharge.class::cast)
+                .filter(adjustment -> adjustment.hasIdempotencyKey(key))
+                .findFirst();
     }
 
     /**
@@ -433,6 +460,15 @@ public class Folio extends AuditedEntity {
         if (!earlier.matches(method, amount)) {
             throw new IdempotencyKeyReusedException(
                     "The idempotency key was used by a payment of another method or amount");
+        }
+        return earlier;
+    }
+
+    private static AdjustmentCharge replay(
+            AdjustmentCharge earlier, Money amount, String description, String reason) {
+        if (!earlier.matches(amount, description, reason)) {
+            throw new IdempotencyKeyReusedException(
+                    "The idempotency key was used by an adjustment of another amount, description or reason");
         }
         return earlier;
     }
