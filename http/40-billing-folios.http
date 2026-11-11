@@ -37,6 +37,8 @@ Content-Type: application/json
     client.global.set("key5", "k-" + suffix + "-5");
     client.global.set("key6", "k-" + suffix + "-6");
     client.global.set("key7", "k-" + suffix + "-7");
+    client.global.set("adjustmentKey1", "a-" + suffix + "-1");
+    client.global.set("adjustmentKey2", "a-" + suffix + "-2");
 %}
 
 
@@ -344,6 +346,7 @@ Idempotency-Key: {{key4}}
 POST {{host}}/api/billing/folios/{{stayFolioId}}/adjustments
 Authorization: Bearer {{accessToken}}
 Content-Type: application/json
+Idempotency-Key: {{adjustmentKey1}}
 
 {
   "amount": "-20.00",
@@ -356,6 +359,29 @@ Content-Type: application/json
         client.assert(response.status === 201, "esperado 201, recebido " + response.status);
         client.assert(response.body.balance === "0.00", "saldo deveria ser 0.00, veio " + response.body.balance);
         client.assert(response.body.totalCharges === "280.00", "total de lancamentos deveria ser 280.00");
+    });
+%}
+
+
+### 15b. Repete o mesmo ajuste (retry depois de falha de rede): nao lanca de novo
+POST {{host}}/api/billing/folios/{{stayFolioId}}/adjustments
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+Idempotency-Key: {{adjustmentKey1}}
+
+{
+  "amount": "-20.00",
+  "description": "Desconto de cortesia",
+  "reason": "Reclamacao do hospede"
+}
+
+> {%
+    client.test("repeticao devolve o folio com o ajuste uma vez so", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+        client.assert(response.body.balance === "0.00", "saldo continua 0.00, veio " + response.body.balance);
+        client.assert(response.body.totalCharges === "280.00", "total continua 280.00, veio " + response.body.totalCharges);
+        const adjustments = response.body.charges.filter(function(charge) { return charge.type === "ADJUSTMENT"; });
+        client.assert(adjustments.length === 1, "deveria haver um ajuste so, ha " + adjustments.length);
     });
 %}
 
@@ -775,6 +801,7 @@ Content-Type: application/json
 POST {{host}}/api/billing/folios/{{otherFolioId}}/adjustments
 Authorization: Bearer {{accessToken}}
 Content-Type: application/json
+Idempotency-Key: {{adjustmentKey2}}
 
 {
   "amount": "0.00",
@@ -794,6 +821,7 @@ Content-Type: application/json
 POST {{host}}/api/billing/folios/{{otherFolioId}}/adjustments
 Authorization: Bearer {{accessToken}}
 Content-Type: application/json
+Idempotency-Key: {{adjustmentKey2}}
 
 {
   "amount": "-5.00",
@@ -971,6 +999,7 @@ GET {{host}}/api/billing/folios/{{otherFolioId}}
 POST {{host}}/api/billing/folios/{{otherFolioId}}/adjustments
 Authorization: Bearer {{frontDeskToken}}
 Content-Type: application/json
+Idempotency-Key: {{adjustmentKey2}}
 
 {
   "amount": "-100.00",
@@ -1052,5 +1081,133 @@ Authorization: Bearer {{waiterToken}}
     client.test("garcom nao lista folios: 403 ACCESS_DENIED", function() {
         client.assert(response.status === 403, "esperado 403, recebido " + response.status);
         client.assert(response.body.code === "ACCESS_DENIED", "code deveria ser ACCESS_DENIED");
+    });
+%}
+
+
+### ------------------------------------------------------------------
+### Ajuste com Idempotency-Key (task folio-adjustment-idempotency)
+### Mesma regra do pagamento: chave obrigatoria, unica entre todos os folios,
+### repeticao reconhecida antes de qualquer outra regra, mesmo com o folio fechado.
+### ------------------------------------------------------------------
+
+
+### 58. Repete o ajuste do cenario 15 com o folio STAY ja fechado: devolve o folio, sem lancar
+POST {{host}}/api/billing/folios/{{stayFolioId}}/adjustments
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+Idempotency-Key: {{adjustmentKey1}}
+
+{
+  "amount": "-20.00",
+  "description": "Desconto de cortesia",
+  "reason": "Reclamacao do hospede"
+}
+
+> {%
+    client.test("repeticao vale com o folio fechado", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+        client.assert(response.body.status === "CLOSED", "folio continua CLOSED");
+        client.assert(response.body.charges.length === 4, "diaria, consumo, estorno e um ajuste so");
+    });
+%}
+
+
+### 59. Mesma chave, outro valor, mesmo folio -> 409 IDEMPOTENCY_KEY_REUSED
+POST {{host}}/api/billing/folios/{{stayFolioId}}/adjustments
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+Idempotency-Key: {{adjustmentKey1}}
+
+{
+  "amount": "-25.00",
+  "description": "Desconto de cortesia",
+  "reason": "Reclamacao do hospede"
+}
+
+> {%
+    client.test("chave reusada com outro valor retorna 409", function() {
+        client.assert(response.status === 409, "esperado 409, recebido " + response.status);
+        client.assert(response.body.code === "IDEMPOTENCY_KEY_REUSED", "code deveria ser IDEMPOTENCY_KEY_REUSED");
+    });
+%}
+
+
+### 60. Mesma chave, mesmo valor, outro motivo -> 409 IDEMPOTENCY_KEY_REUSED
+POST {{host}}/api/billing/folios/{{stayFolioId}}/adjustments
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+Idempotency-Key: {{adjustmentKey1}}
+
+{
+  "amount": "-20.00",
+  "description": "Desconto de cortesia",
+  "reason": "Outro motivo"
+}
+
+> {%
+    client.test("chave reusada com outro motivo retorna 409", function() {
+        client.assert(response.status === 409, "esperado 409, recebido " + response.status);
+        client.assert(response.body.code === "IDEMPOTENCY_KEY_REUSED", "code deveria ser IDEMPOTENCY_KEY_REUSED");
+    });
+%}
+
+
+### 61. Chave de ajuste de outro folio -> 409 IDEMPOTENCY_KEY_REUSED
+POST {{host}}/api/billing/folios/{{otherFolioId}}/adjustments
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+Idempotency-Key: {{adjustmentKey1}}
+
+{
+  "amount": "-20.00",
+  "description": "Desconto de cortesia",
+  "reason": "Reclamacao do hospede"
+}
+
+> {%
+    client.test("chave de outro folio retorna 409", function() {
+        client.assert(response.status === 409, "esperado 409, recebido " + response.status);
+        client.assert(response.body.code === "IDEMPOTENCY_KEY_REUSED", "code deveria ser IDEMPOTENCY_KEY_REUSED");
+    });
+%}
+
+
+### 62. Ajuste sem Idempotency-Key -> 422 INVALID_IDEMPOTENCY_KEY
+POST {{host}}/api/billing/folios/{{otherFolioId}}/adjustments
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "amount": "-5.00",
+  "description": "Desconto",
+  "reason": "Teste"
+}
+
+> {%
+    client.test("ajuste sem chave retorna 422", function() {
+        client.assert(response.status === 422, "esperado 422, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_IDEMPOTENCY_KEY", "code deveria ser INVALID_IDEMPOTENCY_KEY");
+    });
+%}
+
+
+### 63. Chave ja usada por um pagamento: o ajuste tem espaco de chaves proprio -> 201
+POST {{host}}/api/billing/folios/{{otherFolioId}}/adjustments
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+Idempotency-Key: {{key1}}
+
+{
+  "amount": "-1.00",
+  "description": "Desconto",
+  "reason": "Chave igual a de um pagamento"
+}
+
+> {%
+    client.test("a chave de um pagamento nao bloqueia um ajuste", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+        const adjustments = response.body.charges.filter(function(charge) { return charge.type === "ADJUSTMENT"; });
+        client.assert(adjustments.length === 1, "deveria haver um ajuste, ha " + adjustments.length);
     });
 %}
