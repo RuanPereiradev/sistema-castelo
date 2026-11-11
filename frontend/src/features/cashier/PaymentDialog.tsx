@@ -1,3 +1,4 @@
+import { randomId } from '../../lib/randomId';
 import { useEffect, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuthorizedRequest } from '../../lib/useAuthorizedRequest';
@@ -24,7 +25,7 @@ interface Props {
 const COUNTER_METHODS: readonly PaymentMethod[] = ['CASH', 'PIX', 'CREDIT_CARD', 'DEBIT_CARD'];
 
 function newAttemptKey(): string {
-  return crypto.randomUUID();
+  return randomId();
 }
 
 /** The balance as the operator types it, comma for the cents; empty when nothing is owed. */
