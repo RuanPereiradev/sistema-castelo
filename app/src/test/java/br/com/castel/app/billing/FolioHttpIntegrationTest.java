@@ -184,6 +184,76 @@ class FolioHttpIntegrationTest extends AbstractIntegrationTest {
         assertThat(paymentsUnder(key)).isEqualTo(1);
     }
 
+    /** Decision 4 of task folio-adjustment-idempotency. */
+    @Test
+    void shouldPostARetriedAdjustmentOnceEvenAfterTheFolioCloses() {
+        String adminToken = accessTokenFor(createUser(Role.ADMIN));
+        FolioId folioId = folioFacade.openTabFolio(FolioOwner.tab(UUID.randomUUID()));
+        folioFacade.post(folioId, new ChargeRequest(
+                Money.of("100.00"), "Restaurant - tab 8", ChargeSource.tab(UUID.randomUUID())));
+        String folioPath = FOLIOS + "/" + folioId.value();
+        String key = uniqueKey();
+        send(adjust(folioPath, adminToken, "-100.00", key), 201);
+
+        JsonNode retry = send(adjust(folioPath, adminToken, "-100.00", key), 201);
+
+        assertThat(adjustmentsIn(retry)).isEqualTo(1);
+        assertThat(retry.get("balance").asString()).isEqualTo("0.00");
+        assertThat(adjustmentsUnder(key)).isEqualTo(1);
+
+        folioFacade.close(folioId);
+        JsonNode retryAfterClosing = send(adjust(folioPath, adminToken, "-100.00", key), 201);
+
+        assertThat(retryAfterClosing.get("status").asString()).isEqualTo("CLOSED");
+        assertThat(adjustmentsIn(retryAfterClosing)).isEqualTo(1);
+        assertThat(adjustmentsUnder(key)).isEqualTo(1);
+    }
+
+    /** Decision 5 of task folio-adjustment-idempotency: the key is unique across folios. */
+    @Test
+    void shouldRefuseAnAdjustmentKeyAlreadyUsedOnAnotherFolio() {
+        String adminToken = accessTokenFor(createUser(Role.ADMIN));
+        String firstPath = FOLIOS + "/" + folioFacade.openTabFolio(FolioOwner.tab(UUID.randomUUID())).value();
+        FolioId secondFolio = folioFacade.openTabFolio(FolioOwner.tab(UUID.randomUUID()));
+        String key = uniqueKey();
+        send(adjust(firstPath, adminToken, "-10.00", key), 201);
+
+        JsonNode refused = send(adjust(FOLIOS + "/" + secondFolio.value(), adminToken, "-10.00", key), 409);
+
+        assertThat(refused.get("code").asString()).isEqualTo("IDEMPOTENCY_KEY_REUSED");
+        assertThat(folioFacade.findById(secondFolio).charges()).isEmpty();
+        assertThat(adjustmentsUnder(key)).isEqualTo(1);
+    }
+
+    /** Decision 5 of task folio-adjustment-idempotency: adjustment and payment keys are separate spaces. */
+    @Test
+    void shouldNotCollideAnAdjustmentKeyWithTheSameStringUsedBeforeByAPayment() {
+        String adminToken = accessTokenFor(createUser(Role.ADMIN));
+        FolioId folioId = folioFacade.openTabFolio(FolioOwner.tab(UUID.randomUUID()));
+        folioFacade.post(folioId, new ChargeRequest(
+                Money.of("100.00"), "Restaurant - tab 9", ChargeSource.tab(UUID.randomUUID())));
+        String folioPath = FOLIOS + "/" + folioId.value();
+        String key = uniqueKey();
+        send(pay(folioPath, adminToken, "PIX", "30.00", key), 201);
+
+        JsonNode adjusted = send(adjust(folioPath, adminToken, "-10.00", key), 201);
+
+        assertThat(adjusted.get("balance").asString()).isEqualTo("60.00");
+        assertThat(paymentsUnder(key)).isEqualTo(1);
+        assertThat(adjustmentsUnder(key)).isEqualTo(1);
+    }
+
+    /** Decision 2 of task folio-adjustment-idempotency: the key is checked before the folio is loaded. */
+    @Test
+    void shouldRefuseAnAdjustmentWithoutKeyBeforeLookingUpTheFolio() {
+        String adminToken = accessTokenFor(createUser(Role.ADMIN));
+
+        JsonNode refused = send(
+                post(FOLIOS + "/" + UUID.randomUUID() + "/adjustments", adminToken, adjustment("-10.00")), 422);
+
+        assertThat(refused.get("code").asString()).isEqualTo("INVALID_IDEMPOTENCY_KEY");
+    }
+
     @Test
     void shouldFindOnlyAnOpenStayByItsCodeAndFreeTheOldCodeOnARoomChange() {
         String oldCode = uniqueCode();
@@ -325,6 +395,16 @@ class FolioHttpIntegrationTest extends AbstractIntegrationTest {
         return jdbcTemplate.queryForObject("select count(*) from payment where idempotency_key = ?", Integer.class, key);
     }
 
+    private int adjustmentsUnder(String key) {
+        return jdbcTemplate.queryForObject("select count(*) from charge where idempotency_key = ?", Integer.class, key);
+    }
+
+    private static long adjustmentsIn(JsonNode folio) {
+        return folio.get("charges").valueStream()
+                .filter(charge -> charge.get("type").asString().equals("ADJUSTMENT"))
+                .count();
+    }
+
     private static String uniqueCode() {
         return "R" + UUID.randomUUID().toString().substring(0, 8);
     }
@@ -345,8 +425,11 @@ class FolioHttpIntegrationTest extends AbstractIntegrationTest {
     }
 
     private HttpRequest.Builder adjust(String folioPath, String token, String amount) {
-        return post(folioPath + "/adjustments", token, adjustment(amount))
-                .header("Idempotency-Key", UUID.randomUUID().toString());
+        return adjust(folioPath, token, amount, UUID.randomUUID().toString());
+    }
+
+    private HttpRequest.Builder adjust(String folioPath, String token, String amount, String key) {
+        return post(folioPath + "/adjustments", token, adjustment(amount)).header("Idempotency-Key", key);
     }
 
     private HttpRequest.Builder get(String path, String token) {
