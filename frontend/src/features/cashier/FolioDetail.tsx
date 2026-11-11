@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { randomId } from '../../lib/randomId';
 import { useQueryClient } from '@tanstack/react-query';
 import { useCurrentUser } from '../auth/useCurrentUser';
 import { useAuthorizedRequest } from '../../lib/useAuthorizedRequest';
@@ -247,6 +248,9 @@ function FolioActionDialog({
   const [description, setDescription] = useState('');
   const [amount, setAmount] = useState('');
   const [discount, setDiscount] = useState(true);
+  // One key per adjustment attempt (decision #24): kept across retries, renewed when the content changes.
+  const [adjustmentKey, setAdjustmentKey] = useState(randomId);
+  useEffect(() => setAdjustmentKey(randomId()), [amount, description, reason, discount]);
   const [working, setWorking] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -322,7 +326,7 @@ function FolioActionDialog({
           onCancel={onCancel}
           onConfirm={() =>
             void run(
-              () => postFolioAdjustment(apiCall, folio.id, signedAmount, description.trim(), reason.trim()),
+              () => postFolioAdjustment(apiCall, folio.id, signedAmount, description.trim(), reason.trim(), adjustmentKey),
               CASHIER.notice.adjustmentPosted,
             )
           }

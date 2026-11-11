@@ -123,17 +123,22 @@ export function receiveFolioPayment(
   });
 }
 
-/** `ADMIN` only. A negative amount is a discount. The route takes no idempotency key (gap L2). */
+/**
+ * `ADMIN` only. A negative amount is a discount. The key belongs to the operator's attempt, as in
+ * the payment (decision #24): a retry sends the same one and the adjustment is posted once.
+ */
 export function postFolioAdjustment(
   apiCall: ApiCall,
   folioId: string,
   amount: string,
   description: string,
   reason: string,
+  idempotencyKey: string,
 ): Promise<Folio> {
   return apiCall<Folio>(`/billing/folios/${folioId}/adjustments`, {
     method: 'POST',
     body: { amount, description, reason },
+    headers: { 'Idempotency-Key': idempotencyKey },
   });
 }
 
