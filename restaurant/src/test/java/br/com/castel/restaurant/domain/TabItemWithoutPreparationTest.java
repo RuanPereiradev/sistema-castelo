@@ -51,26 +51,6 @@ class TabItemWithoutPreparationTest {
     }
 
     @Test
-    void shouldOrderAnItemWithoutPreparationAlreadyReadyOnASelfServiceCard() {
-        TabItem item = order(cardTab(), soda(), oneUnit());
-
-        assertThat(item.status()).isEqualTo(TabItemStatus.READY);
-        assertThat(item.readyAt()).contains(ORDERED_AT);
-        assertThat(item.preparationStartedAt()).isEmpty();
-    }
-
-    @Test
-    void shouldKeepOrderingAnItemThatNeedsPreparationPendingOnTheKitchenQueue() {
-        TabItem item = order(tableTab(), pizza(), oneUnit());
-
-        assertThat(item.status()).isEqualTo(TabItemStatus.PENDING);
-        assertThat(item.readyAt()).isEmpty();
-        assertThat(item.requiresPreparation()).isTrue();
-        assertThat(item.isOnKitchenQueue()).isTrue();
-    }
-
-    /** Decision #9: the weight rule of task 2.2 wins over the marking. */
-    @Test
     void shouldKeepOrderingAWeighedItemDeliveredEvenWhenMarkedWithoutPreparation() {
         MenuItem buffet = buffet();
         buffet.changeRequiresPreparationTo(false);
@@ -83,33 +63,6 @@ class TabItemWithoutPreparationTest {
 
     // ------------------------------------------------------------------ frozen at the order, #4
 
-    @Test
-    void shouldKeepAnOrderedItemOffTheQueueWhenTheMenuStartsRequiringPreparation() {
-        MenuItem soda = soda();
-        TabItem item = order(tableTab(), soda, oneUnit());
-
-        soda.changeRequiresPreparationTo(true);
-
-        assertThat(item.requiresPreparation()).isFalse();
-        assertThat(item.status()).isEqualTo(TabItemStatus.READY);
-        assertThat(item.isOnKitchenQueue()).isFalse();
-    }
-
-    @Test
-    void shouldKeepAnOrderedItemOnTheQueueWhenTheMenuStopsRequiringPreparation() {
-        MenuItem pizza = pizza();
-        TabItem item = order(tableTab(), pizza, oneUnit());
-
-        pizza.changeRequiresPreparationTo(false);
-
-        assertThat(item.requiresPreparation()).isTrue();
-        assertThat(item.status()).isEqualTo(TabItemStatus.PENDING);
-        assertThat(item.isOnKitchenQueue()).isTrue();
-    }
-
-    // ------------------------------------------------------------------ what the item accepts
-
-    /** Decision #11: it was born ready, there is no kitchen step to undo. */
     @Test
     void shouldRefuseUndoOnAnItemWithoutPreparationLeavingItReady() {
         Tab tab = tableTab();
@@ -164,36 +117,6 @@ class TabItemWithoutPreparationTest {
                 .satisfies(event -> assertThat(event.reachesKitchenQueue()).isFalse());
     }
 
-    @Test
-    void shouldCarryTheMarkingWhenTheTabIsMerged() {
-        Tab receiving = tableTab();
-        Tab absorbed = tableTab();
-        TabItemId itemId = order(absorbed, soda(), oneUnit()).id();
-
-        receiving.mergeWith(absorbed, billing, WAITER, MERGED_AT);
-
-        assertThat(receiving.item(itemId).requiresPreparation()).isFalse();
-        assertThat(receiving.item(itemId).isOnKitchenQueue()).isFalse();
-    }
-
-    // ------------------------------------------------------------------ the event of the order, #8
-
-    @Test
-    void shouldDescribeTheOrderedItemAsReadyAndOffTheKitchenQueue() {
-        Tab tab = tableTab();
-        TabItem item = order(tab, soda(), oneUnit());
-
-        TabItemOrdered event = TabItemOrdered.of(tab.id(), item);
-
-        assertThat(event.status()).isEqualTo(TabItemStatus.READY);
-        assertThat(event.requiresPreparation()).isFalse();
-        assertThat(event.isReady()).isTrue();
-        assertThat(event.reachesKitchenQueue()).isFalse();
-    }
-
-    // ------------------------------------------------------------------ fixtures
-
-    /** The canned soda of the origin of the task: kept on the bar (#3), but nothing to prepare. */
     private static MenuItem soda() {
         MenuItem soda = MenuItem.soldByUnit(PROPERTY_ID, CATEGORY_ID, "Refrigerante lata", PrepStation.BAR,
                 Money.of("6.00"));

@@ -482,7 +482,8 @@ public class Tab extends AuditedEntity {
      * @param at the moment of the undoing, for the event only
      * @throws TabItemNotFoundException if the tab has no such item
      * @throws TabItemAlreadyCancelledException if the item was cancelled
-     * @throws InvalidTabItemTransitionException if the item is {@code PENDING} or {@code DELIVERED}
+     * @throws InvalidTabItemTransitionException if the item is {@code PENDING} or {@code DELIVERED},
+     *         or does not require preparation
      */
     public TabItemStatusChanged undoItemStatus(TabItemId itemId, Instant at) {
         Objects.requireNonNull(at, "at");

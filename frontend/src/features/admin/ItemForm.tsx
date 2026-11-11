@@ -191,9 +191,8 @@ export function ItemForm({ item, categories, onSuccess, onCancel }: ItemFormProp
             onChange={(e) => setFormData({ ...formData, requiresPreparation: e.target.checked })}
             disabled={isLoading}
           />
-          <label htmlFor="requiresPreparation" title={ADMIN.itemRequiresPreparationHint}>
-            {ADMIN.itemRequiresPreparation}
-          </label>
+          <label htmlFor="requiresPreparation">{ADMIN.itemRequiresPreparation}</label>
+          <small className="form-hint">{ADMIN.itemRequiresPreparationHint}</small>
         </div>
       </div>
 

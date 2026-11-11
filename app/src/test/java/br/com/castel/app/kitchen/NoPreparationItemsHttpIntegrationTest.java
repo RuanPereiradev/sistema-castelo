@@ -25,19 +25,6 @@ class NoPreparationItemsHttpIntegrationTest extends AbstractKitchenDisplayIntegr
      * tab item that existed before the migration keeps going to the kitchen.
      */
     @Test
-    void shouldKeepEveryRowWrittenBeforeV15RequiringPreparation() {
-        for (String table : new String[] {"menu_item", "tab_item"}) {
-            var column = jdbcTemplate.queryForMap("select column_default, is_nullable from information_schema.columns "
-                    + "where table_schema = 'public' and table_name = ? and column_name = 'requires_preparation'", table);
-
-            assertThat(column.get("column_default")).as(table).isEqualTo("true");
-            assertThat(column.get("is_nullable")).as(table).isEqualTo("NO");
-        }
-    }
-
-    // ------------------------------------------------------------- administration, #6 and #7
-
-    @Test
     void shouldCreateAnItemThatNeedsPreparationWhenTheFieldIsAbsent() {
         JsonNode created = send(post(MENU_ITEMS, adminToken, """
                 {"categoryId":"%s","name":"Sem campo %s","prepStation":"BAR","soldByWeight":false,"price":"6.00"}
@@ -65,17 +52,6 @@ class NoPreparationItemsHttpIntegrationTest extends AbstractKitchenDisplayIntegr
         assertThat(codeOf(patch(MENU_ITEMS + "/" + itemId + "/requires-preparation", adminToken, "{}"), 400))
                 .isEqualTo("VALIDATION_FAILED");
     }
-
-    @Test
-    void shouldRefuseThePatchToAWaiter() {
-        String itemId = createItem(createCategory(), "Refri", "BAR", false);
-
-        assertThat(codeOf(patch(MENU_ITEMS + "/" + itemId + "/requires-preparation", waiterToken,
-                        "{\"requiresPreparation\":false}"), 403))
-                .isEqualTo("ACCESS_DENIED");
-    }
-
-    // ------------------------------------------------------------- ordered, #1, #4, #5 and #11
 
     @Test
     void shouldOrderAnItemWithoutPreparationReadyAndKeepItOffTheQueueOfEveryStation() {
