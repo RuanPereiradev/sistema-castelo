@@ -440,3 +440,115 @@
     width: 100%;
   }
 }
+
+/* Table QR (decisions #42–#44 of task qr-table-ordering) */
+
+.table-qr-dialog {
+  max-width: 460px;
+  max-height: 92vh;
+  overflow-y: auto;
+}
+
+.table-qr-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+}
+
+.table-qr-preview {
+  width: 240px;
+  max-width: 100%;
+  height: auto;
+  background: #fff;
+  border-radius: 4px;
+  image-rendering: pixelated;
+}
+
+.table-qr-drawing {
+  color: var(--color-text-light);
+}
+
+.table-qr-address {
+  margin: 0;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.9rem;
+  color: var(--color-text-light);
+}
+
+.table-qr-address code {
+  color: var(--color-text);
+  word-break: break-all;
+  font-size: 0.85rem;
+}
+
+.table-qr-warning {
+  margin: 0;
+  width: 100%;
+  padding: 0.75rem 1rem;
+  background-color: var(--color-error-bg);
+  color: var(--color-error-text);
+  border-left: 4px solid var(--color-danger);
+  border-radius: 4px;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+.table-qr-actions {
+  flex-wrap: wrap;
+}
+
+/* The printed card lives in `body`, outside the app, and only ever shows on paper. */
+.table-qr-print-sheet {
+  display: none;
+}
+
+@media print {
+  body.table-qr-printing > *:not(.table-qr-print-sheet) {
+    display: none !important;
+  }
+
+  body.table-qr-printing {
+    background: #fff !important;
+  }
+
+  body.table-qr-printing > .table-qr-print-sheet {
+    display: flex;
+    justify-content: center;
+    padding-top: 1.5cm;
+  }
+
+  .table-qr-card {
+    width: 10cm;
+    padding: 1cm;
+    border: 1px solid #000;
+    border-radius: 6px;
+    text-align: center;
+    color: #000;
+    background: #fff;
+    break-inside: avoid;
+  }
+
+  .table-qr-card-title {
+    margin: 0 0 0.5cm;
+    font-size: 28pt;
+    color: #000;
+  }
+
+  .table-qr-card-image {
+    display: block;
+    width: 8cm;
+    height: 8cm;
+    margin: 0 auto;
+  }
+
+  .table-qr-card-instruction {
+    margin: 0.5cm 0 0;
+    font-size: 13pt;
+    line-height: 1.4;
+    color: #000;
+  }
+}
