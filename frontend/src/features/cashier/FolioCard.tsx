@@ -1,4 +1,6 @@
+import { formatMoney, moneySign } from '../../lib/money';
 import type { Folio } from './useOpenFolios';
+import { CASHIER } from './cashierMessages';
 
 interface Props {
   readonly folio: Folio;
@@ -7,32 +9,35 @@ interface Props {
 }
 
 /**
- * Card de um folio (conta) aberta.
+ * What the operator reads to recognise a folio: the reference of a stay (the room), or the kind and
+ * the short number of a tab's folio, which the API sends with no reference (gap L3).
  */
-export function FolioCard({ folio, isSelected, onSelect }: Props) {
-  const balance = parseFloat(folio.balance);
-  const isOverdue = balance > 0;
+export function folioDisplayName(folio: Folio): string {
+  return folio.reference?.label ?? `${CASHIER.folioType[folio.type]} #${folio.id.slice(0, 8)}`;
+}
 
-  // Para compatibilidade, usa reference ou guestName
-  const displayName = folio.reference?.label || folio.guestName || `Folio ${folio.id.slice(0, 8)}`;
+/** Card de uma conta aberta. O saldo vem calculado da API e só é formatado aqui. */
+export function FolioCard({ folio, isSelected, onSelect }: Props) {
+  const sign = moneySign(folio.balance);
 
   return (
     <button
-      className={`folio-card ${isSelected ? 'selected' : ''} ${isOverdue ? 'overdue' : ''}`}
+      className={`folio-card ${isSelected ? 'selected' : ''} ${sign === 'positive' ? 'overdue' : ''}`}
       onClick={onSelect}
     >
       <div className="folio-card-header">
-        <span className="folio-guest-name">{displayName}</span>
-        <span className="folio-id">#{folio.id.slice(0, 8)}</span>
+        <span className="folio-guest-name">{folioDisplayName(folio)}</span>
+        <span className="folio-id">{CASHIER.folioType[folio.type]}</span>
       </div>
 
       <div className="folio-card-charges">
-        <span className="charge-count">{folio.charges.length} lançamentos</span>
+        <span className="charge-count">{CASHIER.chargeCount(folio.charges.length)}</span>
       </div>
 
       <div className="folio-card-balance">
-        <span className={`balance-value ${balance > 0 ? 'pending' : 'paid'}`}>
-          {folio.balance}
+        <span className={`balance-value ${sign === 'positive' ? 'pending' : 'paid'}`}>
+          {formatMoney(folio.balance)}
+          {sign === 'negative' && ` (${CASHIER.balanceCredit})`}
         </span>
       </div>
     </button>
