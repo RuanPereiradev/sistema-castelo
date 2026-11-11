@@ -141,6 +141,29 @@ class FolioConcurrencyIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
+    void shouldAcceptTheAdjustmentKeyOnOneFolioAndRefuseItOnTheOtherWhenTwoFoliosRaceForIt() throws Exception {
+        String token = tokenFor(Role.ADMIN);
+        for (int round = 0; round < ROUNDS; round++) {
+            FolioId first = tabFolioOwing("100.00");
+            FolioId second = tabFolioOwing("100.00");
+            String key = "key-" + UUID.randomUUID();
+
+            List<HttpResponse<String>> responses =
+                    runTogether(() -> adjust(token, first, key), () -> adjust(token, second, key));
+
+            assertThat(responses).extracting(HttpResponse::statusCode).containsExactlyInAnyOrder(201, 409);
+            HttpResponse<String> refused = responses.stream()
+                    .filter(response -> response.statusCode() == 409)
+                    .findFirst()
+                    .orElseThrow();
+            assertThat(jsonMapper.readTree(refused.body()).get("code").asString()).isEqualTo("IDEMPOTENCY_KEY_REUSED");
+            assertThat(jdbcTemplate.queryForObject(
+                            "select count(*) from charge where idempotency_key = ?", Integer.class, key))
+                    .isEqualTo(1);
+        }
+    }
+
+    @Test
     void shouldNeverLeaveAClosedFolioWithABalanceWhenAChargeRacesTheClosing() throws Exception {
         for (int round = 0; round < ROUNDS; round++) {
             FolioId folioId = tabFolioOwing("100.00");
@@ -249,15 +272,31 @@ class FolioConcurrencyIntegrationTest extends AbstractIntegrationTest {
         return httpClient.send(request, HttpResponse.BodyHandlers.ofString());
     }
 
+    private HttpResponse<String> adjust(String token, FolioId folioId, String key) throws Exception {
+        HttpRequest request = HttpRequest.newBuilder(
+                        URI.create("http://localhost:" + port + "/api/billing/folios/" + folioId.value() + "/adjustments"))
+                .header("Content-Type", "application/json")
+                .header("Authorization", "Bearer " + token)
+                .header("Idempotency-Key", key)
+                .POST(HttpRequest.BodyPublishers.ofString(
+                        "{\"amount\":\"-10.00\",\"description\":\"Discount\",\"reason\":\"Race\"}"))
+                .build();
+        return httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+    }
+
     private String idOf(HttpResponse<String> response) {
         JsonNode body = jsonMapper.readTree(response.body());
         return body.get("id").asString();
     }
 
     private String frontDeskToken() {
+        return tokenFor(Role.FRONT_DESK);
+    }
+
+    private String tokenFor(Role role) {
         String username = "folio_race_" + UUID.randomUUID().toString().replace("-", "").substring(0, 12);
         userRepository.save(User.create(
-                PROPERTY_ID, username, "Folio Race User", "folio-race-password", Set.of(Role.FRONT_DESK), passwordEncoder));
+                PROPERTY_ID, username, "Folio Race User", "folio-race-password", Set.of(role), passwordEncoder));
         return new JwtTokenIssuer(jwtSecret, clock).issueAccessToken(userRepository.findByUsername(username).orElseThrow());
     }
 }

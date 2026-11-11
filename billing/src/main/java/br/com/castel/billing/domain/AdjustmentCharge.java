@@ -71,7 +71,7 @@ public class AdjustmentCharge extends Charge {
     }
 
     /** The key it was written under; empty only for an adjustment older than the key. */
-    public Optional<String> idempotencyKey() {
+    Optional<String> idempotencyKey() {
         return Optional.ofNullable(idempotencyKey);
     }
 

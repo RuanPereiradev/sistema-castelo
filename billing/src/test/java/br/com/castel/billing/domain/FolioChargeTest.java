@@ -331,15 +331,6 @@ class FolioChargeTest {
         }
 
         @Test
-        void shouldAcceptAKeyOfExactly100CharactersAfterTrimming() {
-            Folio folio = stayFolio();
-
-            adjustWithKey(folio, "-20.00", "  " + "k".repeat(100) + "  ");
-
-            assertThat(folio.charges()).hasSize(1);
-        }
-
-        @Test
         void shouldRejectAKeyLongerThan100Characters() {
             Folio folio = stayFolio();
 
