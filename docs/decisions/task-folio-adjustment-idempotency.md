@@ -51,7 +51,7 @@ Valores de status: `pendente` · `implementado` · `revertida pela #n`
 - [x] `.http` com caminho feliz e cenários negativos
 - [x] Migration V16 com a chave e a unicidade em `charge`
 - [ ] Testes densos da regra: retry não duplica, conteúdo diferente recusado, ajuste sem chave recusado (ver ponto em aberto #1)
-- [ ] Front: o caixa manda a chave no ajuste (branch `task/fe4-cashier-folios`, depois do merge desta)
+- [x] Front: o caixa manda a chave no ajuste — feito na `task/fe4-cashier-folios` (PR #44), decisão #24 da FE4
 
 ---
 
@@ -74,4 +74,4 @@ Rota: `POST /api/billing/folios/{folioId}/adjustments`, `ADMIN`, cabeçalho `Ide
 | # | Pergunta | Desde a rodada |
 |---|---|---|
 | 1 | Os testes novos da regra (retry não duplica, conteúdo diferente, sem chave, chave de outro folio) não foram escritos por mim: a instrução do agente de implementação proíbe escrever teste de unidade da própria implementação. Ficam para o agente de testes, a partir deste log | 1 |
-| 2 | O `postFolioAdjustment` do front na `main` não manda a chave. Hoje nenhuma tela o chama, então nada quebra; a tela que chamar precisa mandar a chave (item do front no escopo) | 1 |
+| 2 | ~~O front não manda a chave~~ — resolvido pela decisão #24 da FE4 (PR #44). **O #44 precisa entrar junto ou antes desta task**, senão o ajuste do caixa recebe 422 | 1 |
