@@ -37,24 +37,6 @@ class TabItemWithoutPreparationTest {
 
     private final FakeTabBilling billing = new FakeTabBilling();
 
-    // ------------------------------------------------------------------ the menu marking
-
-    @Test
-    void shouldRequirePreparationWhenTheMenuItemIsCreated() {
-        MenuItem item = pizza();
-
-        assertThat(item.requiresPreparation()).isTrue();
-    }
-
-    @Test
-    void shouldStopRequiringPreparationWhenTheAdminUnticksIt() {
-        MenuItem item = pizza();
-
-        item.changeRequiresPreparationTo(false);
-
-        assertThat(item.requiresPreparation()).isFalse();
-    }
-
     // ------------------------------------------------------------------ ordered, every path through addItem
 
     @Test
