@@ -75,7 +75,7 @@ Valores de status: `pendente` · `implementado` · `revertida pela #n`
 - [x] Ajuste, estorno de lançamento, estorno de pagamento, fechar conta
 - [x] Dinheiro sem `parseFloat` em folios e pagamento
 - [x] Comandas abertas na recepção, só leitura (#17 e #26 da `task-qr-table-ordering`; aqui #19 e #20)
-- [ ] Testar no navegador contra o backend
+- [x] Testar no navegador contra o backend — teste rápido do Ruan em 2026-11-11 ("aparentemente tá em ordem"), já com as decisões #22 e #23
 
 ---
 
