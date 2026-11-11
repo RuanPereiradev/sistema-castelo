@@ -468,6 +468,18 @@ Authorization: Bearer {{kitchenToken}}
 %}
 
 
+### 25b. Cozinha nao desfaz o pronto de item sem preparo (decisao #11): nao ha passo de cozinha
+POST {{host}}/api/kitchen/items/{{cardSodaItemId}}/undo
+Authorization: Bearer {{kitchenToken}}
+
+> {%
+    client.test("desfazer recusado", function() {
+        client.assert(response.status === 409, "esperado 409, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_TAB_ITEM_TRANSITION", "code INVALID_TAB_ITEM_TRANSITION, recebido " + response.body.code);
+    });
+%}
+
+
 ### 26. Entregar de novo o refrigerante ja entregue
 POST {{host}}/api/restaurant/tabs/{{tableTabId}}/items/{{sodaItemId}}/deliver
 Authorization: Bearer {{waiterToken}}

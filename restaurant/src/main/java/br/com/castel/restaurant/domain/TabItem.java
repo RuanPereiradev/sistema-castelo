@@ -350,11 +350,12 @@ public class TabItem extends AuditedEntity {
      * without the moment it started.
      *
      * @throws TabItemAlreadyCancelledException if the item was cancelled
-     * @throws InvalidTabItemTransitionException if the item is {@code PENDING} or {@code DELIVERED}
+     * @throws InvalidTabItemTransitionException if the item is {@code PENDING} or {@code DELIVERED},
+     *         or does not require preparation: it was born ready and has no kitchen step to undo
      */
     void undoLastStep() {
         requireNotCancelled();
-        if (!status.acceptsUndo()) {
+        if (!status.acceptsUndo() || !requiresPreparation) {
             throw new InvalidTabItemTransitionException(
                     "Tab item " + id.value() + " is " + status + " and has no step to undo");
         }
