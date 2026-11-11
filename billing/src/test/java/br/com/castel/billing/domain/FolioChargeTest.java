@@ -1,6 +1,8 @@
 package br.com.castel.billing.domain;
 
 import static br.com.castel.billing.domain.FolioFixtures.ADMIN;
+import static br.com.castel.billing.domain.FolioFixtures.LATER;
+import static br.com.castel.billing.domain.FolioFixtures.OPERATOR;
 import static br.com.castel.billing.domain.FolioFixtures.adjust;
 import static br.com.castel.billing.domain.FolioFixtures.assertRejectedWith;
 import static br.com.castel.billing.domain.FolioFixtures.consumption;
@@ -17,6 +19,10 @@ import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.NullAndEmptySource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 /** Posting, adjustment and reversal of charges (invariants 9 and 11 to 18 of task 1.3). */
 class FolioChargeTest {
@@ -28,6 +34,8 @@ class FolioChargeTest {
     private static final String CHARGE_NOT_FOUND = "CHARGE_NOT_FOUND";
     private static final String CHARGE_NOT_REVERSIBLE = "CHARGE_NOT_REVERSIBLE";
     private static final String CHARGE_ALREADY_REVERSED = "CHARGE_ALREADY_REVERSED";
+    private static final String INVALID_IDEMPOTENCY_KEY = "INVALID_IDEMPOTENCY_KEY";
+    private static final String IDEMPOTENCY_KEY_REUSED = "IDEMPOTENCY_KEY_REUSED";
 
     @Nested
     @DisplayName("post (invariants 11 and 12)")
@@ -203,6 +211,139 @@ class FolioChargeTest {
             assertRejectedWith(
                     () -> folio.postAdjustment(money("-5.00"), "Desconto", "x".repeat(501), UUID.randomUUID().toString(), ADMIN),
                     INVALID_CHARGE_REASON);
+        }
+    }
+
+    /** Decisions 2 to 4 of task folio-adjustment-idempotency. */
+    @Nested
+    @DisplayName("postAdjustment idempotency")
+    class AdjustmentIdempotency {
+
+        private static final String KEY = "3c7e9a10-front-retry";
+        private static final String DESCRIPTION = "Desconto";
+        private static final String REASON = "Chuveiro quebrado";
+
+        private AdjustmentCharge adjustWithKey(Folio folio, String amount, String key) {
+            return folio.postAdjustment(money(amount), DESCRIPTION, REASON, key, ADMIN);
+        }
+
+        @Test
+        void shouldNotPostSecondAdjustmentWhenKeyIsRetried() {
+            Folio folio = stayFolio();
+            folio.post(roomNight("180.00"));
+            AdjustmentCharge original = adjustWithKey(folio, "-20.00", KEY);
+
+            AdjustmentCharge retry = adjustWithKey(folio, "-20.00", KEY);
+
+            assertThat(retry).isSameAs(original);
+            assertThat(folio.charges()).hasSize(2);
+            assertThat(folio.balance()).isEqualTo(money("160.00"));
+        }
+
+        @Test
+        void shouldAnswerTheRetriedAdjustmentEvenAfterTheFolioIsClosed() {
+            Folio folio = tabFolio();
+            folio.post(consumption("50.00"));
+            AdjustmentCharge original = adjustWithKey(folio, "-50.00", KEY);
+            folio.close(OPERATOR, LATER);
+
+            AdjustmentCharge retry = adjustWithKey(folio, "-50.00", KEY);
+
+            assertThat(retry).isSameAs(original);
+            assertThat(folio.charges()).hasSize(2);
+        }
+
+        @Test
+        void shouldCompareDescriptionAndReasonOfARetryAfterTrimming() {
+            Folio folio = stayFolio();
+            AdjustmentCharge original = adjustWithKey(folio, "-20.00", KEY);
+
+            AdjustmentCharge retry =
+                    folio.postAdjustment(money("-20.00"), "  " + DESCRIPTION + " ", " " + REASON + "  ", KEY, ADMIN);
+
+            assertThat(retry).isSameAs(original);
+            assertThat(folio.charges()).hasSize(1);
+        }
+
+        @Test
+        void shouldNotCompareWhoAuthorisedARetry() {
+            Folio folio = stayFolio();
+            AdjustmentCharge original = adjustWithKey(folio, "-20.00", KEY);
+
+            AdjustmentCharge retry = folio.postAdjustment(money("-20.00"), DESCRIPTION, REASON, KEY, UUID.randomUUID());
+
+            assertThat(retry).isSameAs(original);
+            assertThat(retry.authorizedBy()).contains(ADMIN);
+        }
+
+        @Test
+        void shouldPostTwoAdjustmentsOfTheSameContentUnderDifferentKeys() {
+            Folio folio = stayFolio();
+
+            adjustWithKey(folio, "-20.00", KEY);
+            adjustWithKey(folio, "-20.00", "another-key");
+
+            assertThat(folio.charges()).hasSize(2);
+            assertThat(folio.balance()).isEqualTo(money("-40.00"));
+        }
+
+        @ParameterizedTest(name = "amount {0}, description {1}, reason {2}")
+        @CsvSource({
+            "-25.00, Desconto, Chuveiro quebrado",
+            "-20.00, Cortesia, Chuveiro quebrado",
+            "-20.00, Desconto, Ar condicionado quebrado"
+        })
+        void shouldRejectTheSameKeyWithAnotherAmountDescriptionOrReason(String amount, String description, String reason) {
+            Folio folio = stayFolio();
+            adjustWithKey(folio, "-20.00", KEY);
+
+            assertRejectedWith(
+                    () -> folio.postAdjustment(money(amount), description, reason, KEY, ADMIN), IDEMPOTENCY_KEY_REUSED);
+            assertThat(folio.charges()).hasSize(1);
+        }
+
+        @Test
+        void shouldRejectTheSameKeyWithAnotherContentAsReusedEvenOnAClosedFolio() {
+            Folio folio = tabFolio();
+            folio.post(consumption("50.00"));
+            adjustWithKey(folio, "-50.00", KEY);
+            folio.close(OPERATOR, LATER);
+
+            assertRejectedWith(() -> adjustWithKey(folio, "-40.00", KEY), IDEMPOTENCY_KEY_REUSED);
+        }
+
+        @Test
+        void shouldRejectTheSameKeyAsReusedEvenWhenTheNewContentIsInvalid() {
+            Folio folio = stayFolio();
+            adjustWithKey(folio, "-20.00", KEY);
+
+            assertRejectedWith(() -> adjustWithKey(folio, "0.00", KEY), IDEMPOTENCY_KEY_REUSED);
+        }
+
+        @ParameterizedTest(name = "key [{0}]")
+        @NullAndEmptySource
+        @ValueSource(strings = "   ")
+        void shouldRejectAnAdjustmentWithoutKey(String key) {
+            Folio folio = stayFolio();
+
+            assertRejectedWith(() -> adjustWithKey(folio, "-20.00", key), INVALID_IDEMPOTENCY_KEY);
+            assertThat(folio.charges()).isEmpty();
+        }
+
+        @Test
+        void shouldAcceptAKeyOfExactly100CharactersAfterTrimming() {
+            Folio folio = stayFolio();
+
+            adjustWithKey(folio, "-20.00", "  " + "k".repeat(100) + "  ");
+
+            assertThat(folio.charges()).hasSize(1);
+        }
+
+        @Test
+        void shouldRejectAKeyLongerThan100Characters() {
+            Folio folio = stayFolio();
+
+            assertRejectedWith(() -> adjustWithKey(folio, "-20.00", "k".repeat(101)), INVALID_IDEMPOTENCY_KEY);
         }
     }
 
