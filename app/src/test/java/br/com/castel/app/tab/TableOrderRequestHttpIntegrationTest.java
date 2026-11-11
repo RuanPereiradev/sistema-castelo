@@ -139,6 +139,22 @@ class TableOrderRequestHttpIntegrationTest extends AbstractIntegrationTest {
         assertThat(send(get(TABS + "/" + openTabId, waiterToken), 200).get("items")).hasSize(2);
     }
 
+    /** Task no-preparation-items, #1: the confirmed request orders through the same rule as the waiter. */
+    @Test
+    void shouldOrderAnItemWithoutPreparationReadyWhenTheWaiterConfirmsTheRequest() {
+        send(authorized("/api/restaurant/menu-items/" + sodaId + "/requires-preparation", adminToken)
+                .method("PATCH", HttpRequest.BodyPublishers.ofString("{\"requiresPreparation\":false}")), 200);
+        String requestId = submit(createDiningTable("Pronto " + suffix), orderOf(sodaId, 1));
+
+        String tabId = send(post(REQUESTS + "/" + requestId + "/confirm", waiterToken, ""), 200)
+                .get("tabId").asString();
+
+        JsonNode item = send(get(TABS + "/" + tabId, waiterToken), 200).get("items").get(0);
+        assertThat(item.get("status").asString()).isEqualTo("READY");
+        assertThat(item.get("readyAt").asString()).isEqualTo(item.get("orderedAt").asString());
+        assertThat(item.get("preparationStartedAt").isNull()).isTrue();
+    }
+
     @Test
     void shouldRejectWithoutOpeningAnything() {
         JsonNode table = createDiningTable("Trote " + suffix);
