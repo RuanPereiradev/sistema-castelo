@@ -15,7 +15,7 @@
 | Branch | `task/no-preparation-items` (worktree `../castel-no-prep`) |
 | Rodada atual | 1 — implementação do backend |
 | Build | `./mvnw clean verify` passa (rodada 1, 2026-11-11): 2135 testes, 0 falhas, ArchUnit incluído; V15 aplicada no Postgres do Testcontainers. Nenhum `install`, nada aplicado no `castel_dev` |
-| Testes | o DEV não escreve teste de unidade (regra do agente de implementação): os casos ficam para o agente de teste, listados em "Pontos em aberto" |
+| Testes | agente de teste, rodada 1 (2026-11-11): 21 casos novos, 386 linhas de teste para ~200 de produção. `TabItemWithoutPreparationTest` (12, domínio), `NoPreparationItemsHttpIntegrationTest` (8, rotas e fila), um caso em `KitchenDisplayWebSocketIntegrationTest` (tópicos) e um em `TableOrderRequestHttpIntegrationTest` (QR). `./mvnw clean verify` inteiro passa: 2157 testes, 0 falhas, ArchUnit incluído. Nenhuma divergência com a especificação |
 
 ---
 
@@ -59,7 +59,7 @@ Valores de status: `pendente` · `implementado` · `revertida pela #n`
 - [x] Caixa de marcar no cadastro do item, na administração — **backend**: campo no create, rota de alteração e campo na resposta. **Front**: caixa no cadastro e coluna na lista (#13)
 - [x] Garçom vê o item como pronto para levar — **backend**: status `READY` na comanda e aviso no tópico dos prontos. **Front**: o salão já trata `READY` como "Pronto" com o botão de entregar (#13)
 - [x] `.http` com caminho feliz e cenários negativos (`http/39-restaurant-no-preparation-items.http`; não executado contra servidor, porque a 8080 e o `castel_dev` estão em uso pelo Ruan)
-- [ ] Testes no orçamento — **com o agente de teste** (o agente de implementação não escreve teste de unidade); casos em P2. Único teste tocado: `TabItemKitchenEventsTest`, uma linha, para compilar com o componente novo do evento
+- [x] Testes no orçamento — agente de teste, cobrindo os casos que estavam no P2 (ver "Testes" no Estado)
 
 ### Movido para outra task
 
@@ -104,6 +104,4 @@ Nenhum código novo. A rota nova responde os códigos que o controller do cardá
 
 ## Pontos em aberto
 
-| # | Pergunta | Desde a rodada |
-|---|---|---|
-| P2 | Casos de teste para o agente de teste: nasce `READY` com `readyAt` pelo garçom, pelo pedido do QR confirmado e no self-service; não aparece em `GET /api/kitchen/queue` nem no tópico do setor; aviso `ORDERED` no tópico dos prontos; item normal continua `PENDING` e na fila; vendido por peso continua `DELIVERED`; mudar a marcação depois não muda o item lançado; entregar o item sem preparo; transferir/juntar levam a marcação; default `true` da coluna nos itens existentes; ausente no create = `true`; `PATCH` com `WAITER` = 403 | 1 |
+Nenhum. O P2 (casos de teste) foi coberto na rodada 1 pelo agente de teste.
