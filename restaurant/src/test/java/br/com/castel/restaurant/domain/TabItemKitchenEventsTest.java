@@ -77,7 +77,7 @@ class TabItemKitchenEventsTest {
         Tab tab = tableTab();
         TabItem item = order(tab, pizza(), oneUnit());
         TabItemStatusChanged event = new TabItemStatusChanged(tab.id(), item.id(), PrepStation.PIZZA, from, to,
-                ORDERED_AT);
+                true, ORDERED_AT);
 
         assertThat(event.touchesReady()).isEqualTo(expected);
     }

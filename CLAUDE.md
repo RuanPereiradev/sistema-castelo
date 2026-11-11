@@ -86,6 +86,7 @@ aqui, **pergunte antes de nomear**.
 | Janela de horário | `AvailabilityWindow` |
 | Taxa de serviço | `serviceCharge` |
 | Vendido por peso | `soldByWeight` / `pricePerKilo` |
+| Precisa de preparo | `requiresPreparation` |
 | Transferir itens | `transferItemsTo()` |
 | Juntar comandas | `mergeWith()` |
 | Comanda absorvida na junção | `mergedTab` / `mergedIntoTabId` |

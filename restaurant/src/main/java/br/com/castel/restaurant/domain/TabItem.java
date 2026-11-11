@@ -44,7 +44,8 @@ import org.hibernate.annotations.FetchMode;
  *
  * <p>The moments of the kitchen display ({@code preparation_started_at}, {@code ready_at},
  * {@code delivered_at}) are written by its transitions (task 3.5); an item sold by weight is born
- * delivered (decision #9). The columns of the transfer between tabs (task 3.6) point at the last
+ * delivered (decision #9), and an item that needs no preparation is born ready, off the kitchen
+ * display (decisions #1 and #4 of task no-preparation-items). The columns of the transfer between tabs (task 3.6) point at the last
  * tab the item came from; {@code TabItemTransfer} keeps every hop.
  *
  * <p>Updated column by column ({@code @DynamicUpdate}, decision D9 of task 3.2): moving the item to a
@@ -109,6 +110,10 @@ public class TabItem extends AuditedEntity {
     @Enumerated(EnumType.STRING)
     @Column(name = "prep_station", nullable = false, length = 20, updatable = false)
     private PrepStation prepStation;
+
+    /* Frozen from the menu: what tells an item born ready from one the kitchen marked ready. */
+    @Column(name = "requires_preparation", nullable = false, updatable = false)
+    private boolean requiresPreparation;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 20)
@@ -207,6 +212,7 @@ public class TabItem extends AuditedEntity {
         this.menuItemId = menuItem.id();
         this.itemName = menuItem.name();
         this.prepStation = menuItem.prepStation();
+        this.requiresPreparation = menuItem.requiresPreparation();
         this.serviceChargeable = serviceChargeable;
         this.orderedBy = orderedBy;
         this.orderedAt = orderedAt;
@@ -214,8 +220,10 @@ public class TabItem extends AuditedEntity {
     }
 
     /**
-     * An item sold by unit, pending for its preparation station. The line total is the unit price
-     * plus every modifier times its quantity, all times the quantity of the item.
+     * An item sold by unit, pending for its preparation station; or, when the menu says it needs no
+     * preparation, born ready at the moment of the order and never on the kitchen display (decision
+     * #1 of task no-preparation-items). The line total is the unit price plus every modifier times
+     * its quantity, all times the quantity of the item.
      *
      * <p>Receives values the {@link Tab} already validated.
      */
@@ -239,7 +247,12 @@ public class TabItem extends AuditedEntity {
                 .map(TabItemModifier::totalPerUnit)
                 .reduce(item.unitPrice, Money::plus)
                 .multiply(validQuantity);
-        item.status = TabItemStatus.PENDING;
+        if (item.requiresPreparation) {
+            item.status = TabItemStatus.PENDING;
+        } else {
+            item.status = TabItemStatus.READY;
+            item.readyAt = orderedAt;
+        }
         return item;
     }
 
@@ -374,9 +387,18 @@ public class TabItem extends AuditedEntity {
         return Optional.ofNullable(readyAt);
     }
 
-    /** Shown on the kitchen display of its station: pending, in preparation or ready (K5). */
+    /**
+     * Shown on the kitchen display of its station: pending, in preparation or ready (K5), and only
+     * when it needs preparation. An item born ready never was there (decision #4 of task
+     * no-preparation-items).
+     */
     public boolean isOnKitchenQueue() {
-        return status.isOnKitchenQueue();
+        return requiresPreparation && status.isOnKitchenQueue();
+    }
+
+    /** Whether the item goes through the kitchen display, as the menu said when it was ordered. */
+    public boolean requiresPreparation() {
+        return requiresPreparation;
     }
 
     // ------------------------------------------------------------------ reading

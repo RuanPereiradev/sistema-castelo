@@ -6,11 +6,11 @@ import java.time.Instant;
 import java.util.Objects;
 
 /**
- * An item was ordered on a tab. Published for every item, sold by weight included; whoever shows the
- * kitchen queue looks at the status and drops what is not on it.
+ * An item was ordered on a tab. Published for every item, sold by weight and needing no preparation
+ * included; whoever shows the kitchen queue asks {@link #reachesKitchenQueue()} and drops the rest.
  */
 public record TabItemOrdered(TabId tabId, TabItemId itemId, PrepStation station, TabItemStatus status,
-        Instant occurredAt) implements DomainEvent {
+        boolean requiresPreparation, Instant occurredAt) implements DomainEvent {
 
     public TabItemOrdered {
         Objects.requireNonNull(tabId, "tabId");
@@ -22,11 +22,20 @@ public record TabItemOrdered(TabId tabId, TabItemId itemId, PrepStation station,
 
     /** The item as it was just ordered; the moment is the moment of the order. */
     public static TabItemOrdered of(TabId tabId, TabItem item) {
-        return new TabItemOrdered(tabId, item.id(), item.prepStation(), item.status(), item.orderedAt());
+        return new TabItemOrdered(tabId, item.id(), item.prepStation(), item.status(), item.requiresPreparation(),
+                item.orderedAt());
     }
 
-    /** Whether the item goes to the kitchen display: an item sold by weight is born delivered. */
+    /**
+     * Whether the item goes to the kitchen display: an item sold by weight is born delivered, and an
+     * item that needs no preparation is born ready, off the display.
+     */
     public boolean reachesKitchenQueue() {
-        return status.isOnKitchenQueue();
+        return requiresPreparation && status.isOnKitchenQueue();
+    }
+
+    /** Born ready, because it needs no preparation: what the waiters are told about (K10). */
+    public boolean isReady() {
+        return status == TabItemStatus.READY;
     }
 }

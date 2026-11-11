@@ -29,9 +29,11 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
  * run in commit order, which keeps the order of the messages.
  *
  * <ul>
- *   <li>{@code /topic/kitchen/{station}}: every change of an item on the queue of the station (K8)
- *   <li>{@code /topic/restaurant/ready-items}: an item entering or leaving {@code READY}, every
- *       cancellation, and an item that moved while {@code READY}, for the waiters (K10)
+ *   <li>{@code /topic/kitchen/{station}}: every change of an item on the queue of the station (K8);
+ *       never an item that needs no preparation, which is never on it
+ *   <li>{@code /topic/restaurant/ready-items}: an item entering or leaving {@code READY}, an item
+ *       born ready because it needs no preparation, every cancellation, and an item that moved while
+ *       {@code READY}, for the waiters (K10)
  * </ul>
  *
  * <p>A failure reading the ticket <b>fails the request</b> (review, round 3): it propagates out of the
@@ -61,23 +63,37 @@ public class KitchenDisplayBroadcaster {
         this.messaging = messaging;
     }
 
-    /** An item sold by weight is born delivered and never reaches the queue (decision #9). */
+    /**
+     * An item sold by weight is born delivered and never reaches the queue (decision #9). An item
+     * that needs no preparation is born ready: it skips the queue and goes straight to the waiters,
+     * as {@code ORDERED} (decision #8 of task no-preparation-items).
+     */
     @TransactionalEventListener(phase = TransactionPhase.BEFORE_COMMIT)
     public void onItemOrdered(TabItemOrdered event) {
-        if (!event.reachesKitchenQueue()) {
+        if (!event.reachesKitchenQueue() && !event.isReady()) {
             return;
         }
         sendAfterCommit(event.itemId(), ticket -> {
             KitchenDisplayMessage message = KitchenDisplayMessage.ordered(event.occurredAt(), ticket);
-            messaging.convertAndSend(kitchenTopicOf(event.station()), message);
+            if (event.reachesKitchenQueue()) {
+                messaging.convertAndSend(kitchenTopicOf(event.station()), message);
+            }
+            if (event.isReady()) {
+                messaging.convertAndSend(READY_ITEMS_TOPIC, message);
+            }
         });
     }
 
     @TransactionalEventListener(phase = TransactionPhase.BEFORE_COMMIT)
     public void onItemStatusChanged(TabItemStatusChanged event) {
+        if (!event.reachesKitchenQueue() && !event.touchesReady()) {
+            return;
+        }
         sendAfterCommit(event.itemId(), ticket -> {
             KitchenDisplayMessage message = KitchenDisplayMessage.statusChanged(event.occurredAt(), ticket);
-            messaging.convertAndSend(kitchenTopicOf(event.station()), message);
+            if (event.reachesKitchenQueue()) {
+                messaging.convertAndSend(kitchenTopicOf(event.station()), message);
+            }
             if (event.touchesReady()) {
                 messaging.convertAndSend(READY_ITEMS_TOPIC, message);
             }
@@ -88,7 +104,9 @@ public class KitchenDisplayBroadcaster {
     public void onItemCancelled(TabItemCancelled event) {
         sendAfterCommit(event.itemId(), ticket -> {
             KitchenDisplayMessage message = KitchenDisplayMessage.cancelled(event.occurredAt(), ticket, event.reason());
-            messaging.convertAndSend(kitchenTopicOf(event.station()), message);
+            if (event.reachesKitchenQueue()) {
+                messaging.convertAndSend(kitchenTopicOf(event.station()), message);
+            }
             messaging.convertAndSend(READY_ITEMS_TOPIC, message);
         });
     }
@@ -96,16 +114,19 @@ public class KitchenDisplayBroadcaster {
     /**
      * An item that moved to another tab (task 3.6): the ticket is pushed again, now under the table
      * of the tab it arrived on. An item already delivered — a plate sold by weight among them — is
-     * not on any queue and generates nothing.
+     * not on any queue and generates nothing. An item born ready because it needs no preparation is
+     * told to the waiters alone.
      */
     @TransactionalEventListener(phase = TransactionPhase.BEFORE_COMMIT)
     public void onItemTransferred(TabItemTransferred event) {
-        if (!event.reachesKitchenQueue()) {
+        if (!event.reachesKitchenQueue() && !event.isReady()) {
             return;
         }
         sendAfterCommit(event.itemId(), ticket -> {
             KitchenDisplayMessage message = KitchenDisplayMessage.transferred(event.occurredAt(), ticket);
-            messaging.convertAndSend(kitchenTopicOf(event.station()), message);
+            if (event.reachesKitchenQueue()) {
+                messaging.convertAndSend(kitchenTopicOf(event.station()), message);
+            }
             if (event.isReady()) {
                 messaging.convertAndSend(READY_ITEMS_TOPIC, message);
             }

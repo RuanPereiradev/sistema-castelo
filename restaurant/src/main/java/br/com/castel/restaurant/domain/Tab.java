@@ -493,7 +493,8 @@ public class Tab extends AuditedEntity {
     }
 
     private TabItemStatusChanged changeOf(TabItem item, TabItemStatus from, Instant at) {
-        return new TabItemStatusChanged(id, item.id(), item.prepStation(), from, item.status(), at);
+        return new TabItemStatusChanged(id, item.id(), item.prepStation(), from, item.status(),
+                item.requiresPreparation(), at);
     }
 
     // ------------------------------------------------------------------ guards
