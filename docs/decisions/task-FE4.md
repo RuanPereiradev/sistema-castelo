@@ -60,6 +60,8 @@ Revisão do caixa contra `billing/web` (2026-10-19):
 | 18 | 2 | DEV: o ajuste tem seletor "Desconto" / "Acréscimo"; o operador digita o valor sem sinal e o desconto ganha um `-` na frente, por troca de texto (na API, negativo é desconto) | implementado |
 | 19 | 2 | DEV: as comandas abertas (#17 da `task-qr-table-ordering`) ficam numa aba "Comandas" ao lado de "Contas", só leitura: lista em `GET /api/restaurant/tabs` (`OPEN` e `CLOSING`) e detalhe em `GET /api/restaurant/tabs/{tabId}`, relidos a cada 5 s pelos hooks do salão. Sem aviso por pedido e sem botão de escrita | implementado |
 | 20 | 2 | DEV: o "total parcial" da comanda é o campo `total` da API (subtotal mais a taxa de serviço, viva enquanto `OPEN` e congelada em `CLOSING`); o detalhe mostra também `subtotal` e `serviceCharge`, como vieram. Itens cancelados não aparecem na lista de itens | implementado |
+| 21 | 2 | Folio `STAY` com crédito (hóspede pagou a mais) só fecha com o gerente: a recepção vê a recusa `FOLIO_BALANCE_NOT_ZERO` e chama o `ADMIN`, que estorna o pagamento ou lança ajuste. Nada muda no backend (Ruan, 2026-11-11). Responde o ponto em aberto #2 | revertida pela #22 |
+| 22 | 2 | O caixa é só do restaurante: lista e detalhe mostram apenas folios `TAB`; os `STAY` (hóspede) ficam fora da tela, sem rótulo de tipo. Saem "Estornar lançamento" e "Fechar conta", que a API só aceita em `STAY` (`FOLIO_OWNED_BY_TAB`); a comanda continua fechando pelo salão. Ficam receber pagamento e, para `ADMIN`, ajuste e estorno de pagamento. O código de `STAY` sai do front e volta do histórico quando o hotel chegar (Ruan, 2026-11-11: "não quero nada de hóspede aqui, apenas parte de restaurante") | implementado — revê as partes de `STAY` da #13 e da #14 |
 
 Valores de status: `pendente` · `implementado` · `revertida pela #n`
 
@@ -88,7 +90,7 @@ Consumido, não criado aqui: `docs/task-2.4-cash-drawer.md` §5 e §6,
 | # | Pergunta | Rodada |
 |---|---|---|
 | 1 | Recarregar a página logo depois de fechar o turno perde o resumo do fechamento (#9). Uma rota do último turno fechado resolveria — vale pedir? | 1 |
-| 2 | Folio `STAY` com crédito (pagou a mais): a recepção não estorna pagamento nem lança ajuste (só `ADMIN`), e fechar exige saldo zero. Hoje a recepção não fecha essa conta sem o gerente. É isso mesmo? | 2 |
+| 2 | Folio `STAY` com crédito (pagou a mais): a recepção não estorna pagamento nem lança ajuste (só `ADMIN`), e fechar exige saldo zero. Hoje a recepção não fecha essa conta sem o gerente. É isso mesmo? — **respondido pela #21** | 2 |
 
 ## Lacunas de API
 

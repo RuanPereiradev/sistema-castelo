@@ -68,13 +68,17 @@ export interface ReceivedPayment {
 export const OPEN_FOLIOS_KEY = ['open-folios'] as const;
 export const folioKey = (folioId: string) => ['folio', folioId] as const;
 
-/** `GET /api/billing/folios?status=OPEN` (PR #37): stay and tab, the oldest first. */
+/**
+ * `GET /api/billing/folios?status=OPEN` (PR #37), the oldest first. The cashier is the restaurant's
+ * only (decision #22): the route also answers stay folios, which this screen leaves out.
+ */
 export function useOpenFolios() {
   const apiCall = useAuthorizedRequest();
 
   return useQuery({
     queryKey: OPEN_FOLIOS_KEY,
     queryFn: () => apiCall<readonly Folio[]>('/billing/folios?status=OPEN', { method: 'GET' }),
+    select: (folios: readonly Folio[]) => folios.filter((folio) => folio.type === 'TAB'),
     refetchInterval: 10000,
     staleTime: 5000,
   });
@@ -133,19 +137,6 @@ export function postFolioAdjustment(
   });
 }
 
-/** `ADMIN` and `FRONT_DESK`. Refused on a tab's folio with `FOLIO_OWNED_BY_TAB`. */
-export function reverseFolioCharge(
-  apiCall: ApiCall,
-  folioId: string,
-  chargeId: string,
-  reason: string,
-): Promise<Folio> {
-  return apiCall<Folio>(`/billing/folios/${folioId}/charges/${chargeId}/reversal`, {
-    method: 'POST',
-    body: { reason },
-  });
-}
-
 /** `ADMIN` only. */
 export function refundFolioPayment(
   apiCall: ApiCall,
@@ -157,9 +148,4 @@ export function refundFolioPayment(
     method: 'POST',
     body: { reason },
   });
-}
-
-/** `ADMIN` and `FRONT_DESK`, with a zero balance. Refused on a tab's folio with `FOLIO_OWNED_BY_TAB`. */
-export function closeFolio(apiCall: ApiCall, folioId: string): Promise<Folio> {
-  return apiCall<Folio>(`/billing/folios/${folioId}/close`, { method: 'POST' });
 }

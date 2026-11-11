@@ -4,13 +4,10 @@ import { useCurrentUser } from '../auth/useCurrentUser';
 import { useAuthorizedRequest } from '../../lib/useAuthorizedRequest';
 import { formatMoney, moneySign } from '../../lib/money';
 import {
-  closeFolio,
   postFolioAdjustment,
   refundFolioPayment,
   rereadFolio,
-  reverseFolioCharge,
   useFolio,
-  type ChargeResponse,
   type Folio,
   type PaymentResponse,
 } from './useOpenFolios';
@@ -25,19 +22,11 @@ interface Props {
   readonly folioId: string;
 }
 
-type FolioAction =
-  | { readonly kind: 'reverse'; readonly charge: ChargeResponse }
-  | { readonly kind: 'refund'; readonly payment: PaymentResponse }
-  | { readonly kind: 'adjust' }
-  | { readonly kind: 'close' };
-
 /**
- * A charge the domain takes back: a room night or a tab charge, not yet reversed. An adjustment and
- * a reversal are not (decision #14). The backend still decides, with its own codes.
+ * Only a tab's folio reaches this screen (decision #22): reversing a charge and closing are the
+ * stay folio's, refused here with `FOLIO_OWNED_BY_TAB`, so they are not offered.
  */
-function offersReversal(charge: ChargeResponse): boolean {
-  return charge.type !== 'ADJUSTMENT' && charge.reversalOf === null && charge.reversedBy === null;
-}
+type FolioAction = { readonly kind: 'refund'; readonly payment: PaymentResponse } | { readonly kind: 'adjust' };
 
 /**
  * Detalhe de uma conta: lançamentos, pagamentos, os totais da API e as ações que o perfil alcança
@@ -75,7 +64,6 @@ function FolioView({ folio }: { readonly folio: Folio }) {
   const [notice, setNotice] = useState<string | null>(null);
 
   const isOpen = folio.status === 'OPEN';
-  const isCounterFolio = folio.type === 'STAY';
   const canOperate = isAdmin || isFrontDesk;
   const sign = moneySign(folio.balance);
   const displayName = folioDisplayName(folio);
@@ -96,16 +84,14 @@ function FolioView({ folio }: { readonly folio: Folio }) {
         <div>
           <h3>{displayName}</h3>
           <p className="folio-reference">
-            {CASHIER.folioType[folio.type]}
-            {folio.reference && ` · ${folio.reference.code}`}
-            {` · ${CASHIER.folioNumber} #${folio.id.slice(0, 8)}`}
+            {CASHIER.folioNumber} #{folio.id.slice(0, 8)}
           </p>
         </div>
         <span className={`folio-status ${folio.status.toLowerCase()}`}>{CASHIER.folioStatus[folio.status]}</span>
       </div>
 
       {notice && <p className="notice-message">{notice}</p>}
-      {folio.type === 'TAB' && <p className="closing-instruction">{CASHIER.tabFolioNote}</p>}
+      <p className="closing-instruction">{CASHIER.tabFolioNote}</p>
 
       <div className="folio-charges">
         <h4>{CASHIER.charges}</h4>
@@ -118,7 +104,6 @@ function FolioView({ folio }: { readonly folio: Folio }) {
                 <th>{CASHIER.folioColumns.description}</th>
                 <th>{CASHIER.folioColumns.amount}</th>
                 <th>{CASHIER.folioColumns.type}</th>
-                <th>{CASHIER.folioColumns.actions}</th>
               </tr>
             </thead>
             <tbody>
@@ -135,13 +120,6 @@ function FolioView({ folio }: { readonly folio: Folio }) {
                       {charge.reversalOf !== null && ` · ${CASHIER.reversalOfLine}`}
                       {charge.reversedBy !== null && ` · ${CASHIER.reversedLine}`}
                     </span>
-                  </td>
-                  <td>
-                    {isOpen && isCounterFolio && canOperate && offersReversal(charge) && (
-                      <button className="btn btn-secondary" onClick={() => start({ kind: 'reverse', charge })}>
-                        {CASHIER.reverseCharge}
-                      </button>
-                    )}
                   </td>
                 </tr>
               ))}
@@ -225,11 +203,6 @@ function FolioView({ folio }: { readonly folio: Folio }) {
               {CASHIER.postAdjustment}
             </button>
           )}
-          {isCounterFolio && (
-            <button className="btn btn-secondary" onClick={() => start({ kind: 'close' })}>
-              {CASHIER.closeFolio}
-            </button>
-          )}
         </div>
       )}
 
@@ -248,7 +221,6 @@ function FolioView({ folio }: { readonly folio: Folio }) {
         <FolioActionDialog
           key={action.kind}
           folio={folio}
-          displayName={displayName}
           action={action}
           onCancel={() => setAction(null)}
           onDone={done}
@@ -260,13 +232,11 @@ function FolioView({ folio }: { readonly folio: Folio }) {
 
 function FolioActionDialog({
   folio,
-  displayName,
   action,
   onCancel,
   onDone,
 }: {
   readonly folio: Folio;
-  readonly displayName: string;
   readonly action: FolioAction;
   readonly onCancel: () => void;
   readonly onDone: (notice: string) => void;
@@ -312,28 +282,6 @@ function FolioActionDialog({
   );
 
   switch (action.kind) {
-    case 'reverse':
-      return (
-        <CashierDialog
-          title={CASHIER.reverseChargeTitle}
-          message={CASHIER.reverseChargeMessage(action.charge.description, formatMoney(action.charge.amount))}
-          error={error}
-          working={working}
-          canConfirm={reason.trim() !== ''}
-          confirmLabel={CASHIER.reverseCharge}
-          isDanger
-          onCancel={onCancel}
-          onConfirm={() =>
-            void run(
-              () => reverseFolioCharge(apiCall, folio.id, action.charge.id, reason.trim()),
-              CASHIER.notice.chargeReversed,
-            )
-          }
-        >
-          {reasonField}
-        </CashierDialog>
-      );
-
     case 'refund':
       return (
         <CashierDialog
@@ -357,21 +305,6 @@ function FolioActionDialog({
         >
           {reasonField}
         </CashierDialog>
-      );
-
-    case 'close':
-      return (
-        <CashierDialog
-          title={CASHIER.closeFolioTitle}
-          message={CASHIER.closeFolioMessage(displayName)}
-          error={error}
-          working={working}
-          canConfirm
-          confirmLabel={CASHIER.closeFolio}
-          isDanger
-          onCancel={onCancel}
-          onConfirm={() => void run(() => closeFolio(apiCall, folio.id), CASHIER.notice.folioClosed)}
-        />
       );
 
     case 'adjust': {

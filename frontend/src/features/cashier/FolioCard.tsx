@@ -9,11 +9,11 @@ interface Props {
 }
 
 /**
- * What the operator reads to recognise a folio: the reference of a stay (the room), or the kind and
- * the short number of a tab's folio, which the API sends with no reference (gap L3).
+ * What the operator reads to recognise a tab's folio: the API sends it with no reference, so the
+ * short number is all there is (gap L3).
  */
 export function folioDisplayName(folio: Folio): string {
-  return folio.reference?.label ?? `${CASHIER.folioType[folio.type]} #${folio.id.slice(0, 8)}`;
+  return folio.reference?.label ?? CASHIER.tabFolioName(folio.id.slice(0, 8));
 }
 
 /** Card de uma conta aberta. O saldo vem calculado da API e só é formatado aqui. */
@@ -27,7 +27,6 @@ export function FolioCard({ folio, isSelected, onSelect }: Props) {
     >
       <div className="folio-card-header">
         <span className="folio-guest-name">{folioDisplayName(folio)}</span>
-        <span className="folio-id">{CASHIER.folioType[folio.type]}</span>
       </div>
 
       <div className="folio-card-charges">

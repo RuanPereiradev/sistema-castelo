@@ -55,10 +55,7 @@ export const CASHIER = {
   openFolios: 'Contas em aberto',
   noFolios: 'Nenhuma conta aberta',
   folioNumber: 'Folio',
-  folioType: {
-    STAY: 'Estadia',
-    TAB: 'Comanda',
-  } as Readonly<Record<'STAY' | 'TAB', string>>,
+  tabFolioName: (shortId: string) => `Comanda #${shortId}`,
   chargeCount: (count: number) => (count === 1 ? '1 lançamento' : `${count} lançamentos`),
   charges: 'Lançamentos',
   payments: 'Pagamentos',
@@ -68,7 +65,7 @@ export const CASHIER = {
   totalPayments: 'Total pago',
   balance: 'Saldo',
   balanceCredit: 'crédito do hóspede',
-  tabFolioNote: 'Esta conta é de uma comanda: o estorno e o fechamento são feitos pela comanda.',
+  tabFolioNote: 'Esta conta fecha junto com a comanda, pelo salão.',
   chooseFolio: 'Escolha uma conta para ver os lançamentos e os pagamentos.',
   folioColumns: {
     description: 'Descrição',
@@ -85,9 +82,7 @@ export const CASHIER = {
   // Actions
   receivePayment: 'Receber pagamento',
   postAdjustment: 'Lançar ajuste',
-  reverseCharge: 'Estornar',
   refundPayment: 'Estornar',
-  closeFolio: 'Fechar conta',
   cancel: 'Cancelar',
   amountToReceive: 'Valor a receber',
   paymentMethodLabel: 'Forma de pagamento',
@@ -95,15 +90,9 @@ export const CASHIER = {
   reasonLabel: 'Motivo',
   reasonPlaceholder: 'Escreva o motivo, até 500 caracteres',
 
-  reverseChargeTitle: 'Estornar o lançamento?',
-  reverseChargeMessage: (description: string, amount: string) =>
-    `O lançamento "${description}" (${amount}) ganha um estorno do mesmo valor. O original continua na conta e o estorno não se desfaz.`,
   refundPaymentTitle: 'Estornar o pagamento?',
   refundPaymentMessage: (method: string, amount: string) =>
     `O pagamento em ${method} de ${amount} fica estornado e volta para o saldo da conta. Não se desfaz.`,
-  closeFolioTitle: 'Fechar a conta?',
-  closeFolioMessage: (name: string) =>
-    `A conta ${name} será fechada e não recebe mais lançamento nem pagamento. Só fecha com o saldo zerado.`,
   adjustmentTitle: 'Lançar ajuste',
   adjustmentMessage: 'O ajuste entra como um lançamento na conta e não se apaga; para corrigir, lance outro ajuste.',
   adjustmentKind: {
@@ -209,9 +198,7 @@ export const CASHIER = {
   notice: {
     paymentReceived: 'Pagamento recebido',
     adjustmentPosted: 'Ajuste lançado',
-    chargeReversed: 'Lançamento estornado',
     paymentRefunded: 'Pagamento estornado',
-    folioClosed: 'Conta fechada',
     dropRegistered: 'Sangria registrada',
     supplyRegistered: 'Suprimento registrado',
   },
