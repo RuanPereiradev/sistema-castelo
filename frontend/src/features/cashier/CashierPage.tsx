@@ -7,7 +7,7 @@ import { OpenTabs } from './OpenTabs';
 import { CASHIER } from './cashierMessages';
 import '../../styles/cashier.css';
 
-type ScreenTab = 'cash' | 'folios' | 'restaurant-tabs';
+type ScreenTab = 'cash' | 'folios';
 
 /**
  * Tela de Caixa (FRONT_DESK e ADMIN): turno de caixa com fechamento cego, contas abertas e, só para
@@ -20,7 +20,6 @@ export function CashierPage() {
   const screenTabs: readonly { readonly id: ScreenTab; readonly label: string }[] = [
     { id: 'cash', label: CASHIER.cashDrawerTabLabel },
     { id: 'folios', label: CASHIER.foliosTabLabel },
-    { id: 'restaurant-tabs', label: CASHIER.restaurantTabsLabel },
   ];
 
   return (
@@ -40,9 +39,16 @@ export function CashierPage() {
       <div className="cashier-content">
         {activeTab === 'cash' && <CashDrawerSessionComponent />}
         {activeTab === 'folios' && (
-          <FoliosView selectedFolioId={selectedFolioId} onSelectFolio={setSelectedFolioId} />
+          // Contas e comandas na mesma vista (decision #23): the open tabs stay read-only.
+          <div className="cashier-side-by-side">
+            <div>
+              <FoliosView selectedFolioId={selectedFolioId} onSelectFolio={setSelectedFolioId} />
+            </div>
+            <div>
+              <OpenTabs />
+            </div>
+          </div>
         )}
-        {activeTab === 'restaurant-tabs' && <OpenTabs />}
       </div>
     </div>
   );

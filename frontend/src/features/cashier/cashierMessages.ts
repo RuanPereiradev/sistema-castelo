@@ -139,8 +139,7 @@ export const CASHIER = {
 
   // Tabs of the screen
   cashDrawerTabLabel: 'Turno',
-  foliosTabLabel: 'Contas',
-  restaurantTabsLabel: 'Comandas',
+  foliosTabLabel: 'Contas e comandas',
 
   // Messages
   loadingSessions: 'Carregando turno…',
