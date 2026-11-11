@@ -38,8 +38,9 @@ Cada task já tem seu número atribuído em `docs/schema-banco-de-dados.md`
 | V13 | `V13__table_order_request.sql` | qr-table-ordering | altera `dining_table` (`ordering_token`); `table_order_request`, `table_order_request_line`, `table_order_request_line_modifier` |
 | V14 | `V14__table_payment_request.sql` | qr-table-payment | altera `tab` (`ck_tab_closing`) e `tab_item` (reserva e pagamento); `table_payment_request`, `table_payment_request_item` |
 | V15 | `V15__menu_item_requires_preparation.sql` | no-preparation-items | altera `menu_item` e `tab_item` (`requires_preparation`) |
-| V16 | `V16__hotel_inventory.sql` | 1.1 | `room_type`, `room`, `rate_plan` |
-| V17 | `V17__reservation.sql` | 2.1 | `guest`, `daily_inventory`, `reservation`, `reservation_child`, `room_night` |
+| V16 | `V16__charge_adjustment_idempotency.sql` | folio-adjustment-idempotency | altera `charge` (`idempotency_key`, `uk_charge_idempotency`) |
+| V17 | `V17__hotel_inventory.sql` | 1.1 | `room_type`, `room`, `rate_plan` |
+| V18 | `V18__reservation.sql` | 2.1 | `guest`, `daily_inventory`, `reservation`, `reservation_child`, `room_night` |
 
 Renumerada em 2026-09-24 (decisão #5 da task 1.2): o restaurante é construído
 antes do hotel, e a versão segue a ordem de execução. Com o hotel no meio, o
@@ -69,9 +70,10 @@ Renumerada uma sexta vez em 2026-10-22 (task qr-table-payment, decisão #24, apr
 pelo Ruan): o pagamento pelo celular da mesa ganhou a V14. O hotel desce para
 V15/V16. Mesma regra de merge: a V14 entra na `main` antes de qualquer task de hotel.
 
-Renumerada uma sétima vez em 2026-11-11 (task no-preparation-items, decisão #10, **aguarda
-aprovação do Ruan**): o item que não precisa de preparo ganhou a V15. O hotel desce para
-V16/V17. Mesma regra de merge: a V15 entra na `main` antes de qualquer task de hotel.
+Renumerada uma sétima vez em 2026-11-11 (aprovado pelo Ruan): o item que não precisa de
+preparo ganhou a V15 (task no-preparation-items) e a chave de idempotência do ajuste do folio
+ganhou a V16 (task folio-adjustment-idempotency). O hotel desce para V17/V18. Mesma regra de
+merge: a V15 entra na `main` antes da V16, e as duas antes de qualquer task de hotel.
 
 **Ordem de merge da F1:** mesma regra da 3.6 — a V12 entra na `main` antes de qualquer
 task de hotel.
