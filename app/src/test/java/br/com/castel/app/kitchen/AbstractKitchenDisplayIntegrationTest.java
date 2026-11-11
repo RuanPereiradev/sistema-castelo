@@ -83,6 +83,14 @@ abstract class AbstractKitchenDisplayIntegrationTest extends AbstractIntegration
                 """.formatted(categoryId, name, suffix, prepStation, soldByWeight)), 201).get("id").asString();
     }
 
+    /** A unit item the admin unticked "Precisa de preparo" for (task no-preparation-items). */
+    String createItemWithoutPreparation(String categoryId, String name, String prepStation) {
+        return send(post("/api/restaurant/menu-items", adminToken, """
+                {"categoryId":"%s","name":"%s %s","prepStation":"%s","soldByWeight":false,"price":"6.00",
+                 "requiresPreparation":false}
+                """.formatted(categoryId, name, suffix, prepStation)), 201).get("id").asString();
+    }
+
     String openTabOnNewTable(String label) {
         String diningTableId = send(post("/api/restaurant/dining-tables", adminToken,
                         "{\"label\":\"%s %s\"}".formatted(label, suffix)), 201)
@@ -113,6 +121,10 @@ abstract class AbstractKitchenDisplayIntegrationTest extends AbstractIntegration
 
     HttpRequest.Builder post(String path, String token, String body) {
         return authorized(path, token).POST(HttpRequest.BodyPublishers.ofString(body));
+    }
+
+    HttpRequest.Builder patch(String path, String token, String body) {
+        return authorized(path, token).method("PATCH", HttpRequest.BodyPublishers.ofString(body));
     }
 
     private HttpRequest.Builder authorized(String path, String token) {
