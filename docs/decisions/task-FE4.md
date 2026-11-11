@@ -14,7 +14,7 @@
 |---|---|
 | Branch | `task/fe4-cashier-folios` (worktree `../castel-cashier`, a partir da `main` em `0203695`); a rodada 1 foi na `feat/cancel-deliver-items` |
 | Rodada atual | 2 — folios na rota do #37, ações do folio, dinheiro sem `parseFloat` e a lista de comandas da recepção (#17 da `task-qr-table-ordering`) |
-| Build | rodada 2: em andamento |
+| Build | `npm run build` passa (rodada 2, 2026-11-11) |
 | Testes | nenhum no front (ferramenta ainda não decidida, ver `frontend/CLAUDE.md`) |
 
 O log nasceu na rodada 1. A rodada 0 é o commit `aa22ad1`, feito sem log; a revisão de
@@ -40,7 +40,7 @@ Revisão do caixa contra `billing/web` (2026-10-19):
 
 | # | Rodada | Decisão | Status |
 |---|---|---|---|
-| 1 | 1 | O caixa chega ao folio pela lista de abertos do billing, `GET /api/billing/folios?status=OPEN` — PR #37 (Ruan, 2026-10-19) | pendente (rodada 2: o #37 está na `main`) |
+| 1 | 1 | O caixa chega ao folio pela lista de abertos do billing, `GET /api/billing/folios?status=OPEN` — PR #37 (Ruan, 2026-10-19) | implementado (rodada 2) |
 | 2 | 1 | Religar começando pelo turno de caixa: não depende do #37 e é a primeira coisa do dia na recepção (Ruan, 2026-10-19) | implementado |
 | 3 | 1 | DEV: sem turno aberto, `/current` responde 404 `CASH_DRAWER_SESSION_NOT_FOUND`; a tela trata como "nenhum turno aberto" e oferece abrir, não como erro | implementado |
 | 4 | 1 | DEV: fechamento cego para todos os perfis. A tela nunca calcula nem revela a diferença antes de fechar; o resultado (esperado, contado, diferença) vem da resposta do `close`, que a API já revela com o turno `CLOSED` | implementado |
@@ -49,17 +49,17 @@ Revisão do caixa contra `billing/web` (2026-10-19):
 | 7 | 1 | DEV: sangria e suprimento geram a `Idempotency-Key` uma vez por tentativa e a reusam no retry; a chave só renova depois de um sucesso | implementado |
 | 8 | 1 | DEV: valor digitado com vírgula vira ponto antes de ir à API (`150,50` → `150.50`), por troca de caractere, sem conversão numérica. Formato inválido a API recusa com `INVALID_MONEY` | implementado |
 | 9 | 1 | DEV: o resumo do turno recém-fechado fica na tela até abrir o próximo; não sobrevive a recarregar a página (não há rota de "último turno fechado") | implementado |
-| 10 | 2 | DEV: o "Total em aberto" (soma dos saldos) sai da tela. A API não devolve esse número e somar no navegador é cálculo que o front não faz; fica a contagem de contas abertas, que não é dinheiro. Lacuna L1 | pendente |
-| 11 | 2 | DEV: o pagamento não compara valor com saldo no front. Quem recusa é o backend, com `PAYMENT_EXCEEDS_BALANCE` (só folio `TAB`: o `STAY` aceita ficar com crédito, cenário 12 do `40-billing-folios.http`). O valor vem preenchido com o saldo, como a API mandou, quando o saldo é positivo | pendente |
-| 12 | 2 | DEV: o sinal do saldo (a receber, zerado, crédito) é lido no texto da string decimal (`-` na frente; só zeros), sem conversão numérica. Serve só para a cor e para preencher o valor do pagamento | pendente |
-| 13 | 2 | DEV: as ações seguem o `@PreAuthorize` do `FolioController`. Ajuste e estorno de pagamento aparecem só para `ADMIN`; receber, estornar lançamento e fechar conta para `ADMIN` e `FRONT_DESK`. No folio `TAB` estorno de lançamento e fechar conta não aparecem (a API recusa com `FOLIO_OWNED_BY_TAB` para todo perfil); a tela diz que quem fecha é a comanda | pendente |
-| 14 | 2 | DEV: "Estornar" aparece só no lançamento que o domínio aceita estornar (não é ajuste, não é estorno, não foi estornado) e no pagamento `CONFIRMED`. A regra continua no backend: `CHARGE_NOT_REVERSIBLE`, `CHARGE_ALREADY_REVERSED` e `PAYMENT_ALREADY_REFUNDED` têm tradução | pendente |
-| 15 | 2 | DEV: ajuste, estornos e fechar conta passam por diálogo de confirmação; os estornos e o ajuste pedem o motivo no próprio diálogo. Na falha o diálogo fica aberto com a frase do erro, para o retry não perder o que foi digitado | pendente |
-| 16 | 2 | DEV: `Idempotency-Key` só no pagamento, a única rota do folio que lê o cabeçalho. Padrão do #7: gerada uma vez por tentativa, reusada no retry (também ao fechar e reabrir o diálogo sem mudar nada), renovada ao mudar valor ou forma e depois de um sucesso. O ajuste não tem chave na API: lacuna L2 | pendente |
-| 17 | 2 | DEV: depois de toda ação a tela relê o folio (`GET /folios/{id}`) e a lista de abertos; a resposta da ação não é aplicada na tela. O detalhe lê pelo id, então a conta fechada aqui ou por outra pessoa continua visível como "Fechada" até o operador escolher outra | pendente |
-| 18 | 2 | DEV: o ajuste tem seletor "Desconto" / "Acréscimo"; o operador digita o valor sem sinal e o desconto ganha um `-` na frente, por troca de texto (na API, negativo é desconto) | pendente |
-| 19 | 2 | DEV: as comandas abertas (#17 da `task-qr-table-ordering`) ficam numa aba "Comandas" ao lado de "Contas", só leitura: lista em `GET /api/restaurant/tabs` (`OPEN` e `CLOSING`) e detalhe em `GET /api/restaurant/tabs/{tabId}`, relidos a cada 5 s pelos hooks do salão. Sem aviso por pedido e sem botão de escrita | pendente |
-| 20 | 2 | DEV: o "total parcial" da comanda é o campo `total` da API (subtotal mais a taxa de serviço, viva enquanto `OPEN` e congelada em `CLOSING`); o detalhe mostra também `subtotal` e `serviceCharge`, como vieram. Itens cancelados não aparecem na lista de itens | pendente |
+| 10 | 2 | DEV: o "Total em aberto" (soma dos saldos) sai da tela. A API não devolve esse número e somar no navegador é cálculo que o front não faz; fica a contagem de contas abertas, que não é dinheiro. Lacuna L1 | implementado |
+| 11 | 2 | DEV: o pagamento não compara valor com saldo no front. Quem recusa é o backend, com `PAYMENT_EXCEEDS_BALANCE` (só folio `TAB`: o `STAY` aceita ficar com crédito, cenário 12 do `40-billing-folios.http`). O valor vem preenchido com o saldo, como a API mandou, quando o saldo é positivo | implementado |
+| 12 | 2 | DEV: o sinal do saldo (a receber, zerado, crédito) é lido no texto da string decimal (`-` na frente; só zeros), sem conversão numérica. Serve só para a cor e para preencher o valor do pagamento | implementado |
+| 13 | 2 | DEV: as ações seguem o `@PreAuthorize` do `FolioController`. Ajuste e estorno de pagamento aparecem só para `ADMIN`; receber, estornar lançamento e fechar conta para `ADMIN` e `FRONT_DESK`. No folio `TAB` estorno de lançamento e fechar conta não aparecem (a API recusa com `FOLIO_OWNED_BY_TAB` para todo perfil); a tela diz que quem fecha é a comanda | implementado |
+| 14 | 2 | DEV: "Estornar" aparece só no lançamento que o domínio aceita estornar (não é ajuste, não é estorno, não foi estornado) e no pagamento `CONFIRMED`. A regra continua no backend: `CHARGE_NOT_REVERSIBLE`, `CHARGE_ALREADY_REVERSED` e `PAYMENT_ALREADY_REFUNDED` têm tradução | implementado |
+| 15 | 2 | DEV: ajuste, estornos e fechar conta passam por diálogo de confirmação; os estornos e o ajuste pedem o motivo no próprio diálogo. Na falha o diálogo fica aberto com a frase do erro, para o retry não perder o que foi digitado | implementado |
+| 16 | 2 | DEV: `Idempotency-Key` só no pagamento, a única rota do folio que lê o cabeçalho. Padrão do #7: gerada uma vez por tentativa, reusada no retry (também ao fechar e reabrir o diálogo sem mudar nada), renovada ao mudar valor ou forma e depois de um sucesso. O ajuste não tem chave na API: lacuna L2 | implementado |
+| 17 | 2 | DEV: depois de toda ação a tela relê o folio (`GET /folios/{id}`) e a lista de abertos; a resposta da ação não é aplicada na tela. O detalhe lê pelo id, então a conta fechada aqui ou por outra pessoa continua visível como "Fechada" até o operador escolher outra | implementado |
+| 18 | 2 | DEV: o ajuste tem seletor "Desconto" / "Acréscimo"; o operador digita o valor sem sinal e o desconto ganha um `-` na frente, por troca de texto (na API, negativo é desconto) | implementado |
+| 19 | 2 | DEV: as comandas abertas (#17 da `task-qr-table-ordering`) ficam numa aba "Comandas" ao lado de "Contas", só leitura: lista em `GET /api/restaurant/tabs` (`OPEN` e `CLOSING`) e detalhe em `GET /api/restaurant/tabs/{tabId}`, relidos a cada 5 s pelos hooks do salão. Sem aviso por pedido e sem botão de escrita | implementado |
+| 20 | 2 | DEV: o "total parcial" da comanda é o campo `total` da API (subtotal mais a taxa de serviço, viva enquanto `OPEN` e congelada em `CLOSING`); o detalhe mostra também `subtotal` e `serviceCharge`, como vieram. Itens cancelados não aparecem na lista de itens | implementado |
 
 Valores de status: `pendente` · `implementado` · `revertida pela #n`
 
@@ -68,9 +68,10 @@ Valores de status: `pendente` · `implementado` · `revertida pela #n`
 ## Escopo desta task
 
 - [x] Turno: abrir, sangria, suprimento, fechamento cego para todos
-- [ ] Lista de folios na rota do #37
-- [ ] Ajuste, estorno de lançamento, estorno de pagamento, fechar conta
-- [ ] Dinheiro sem `parseFloat` em folios e pagamento
+- [x] Lista de folios na rota do #37
+- [x] Ajuste, estorno de lançamento, estorno de pagamento, fechar conta
+- [x] Dinheiro sem `parseFloat` em folios e pagamento
+- [x] Comandas abertas na recepção, só leitura (#17 e #26 da `task-qr-table-ordering`; aqui #19 e #20)
 - [ ] Testar no navegador contra o backend
 
 ---
