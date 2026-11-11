@@ -33,6 +33,8 @@ export interface MenuItem {
   readonly soldByWeight: boolean;
   readonly pricePerKilo: string | null;
   readonly serviceChargeEligible: boolean;
+  /** "Precisa de preparo": false means the item is born ready and never reaches the KDS. */
+  readonly requiresPreparation: boolean;
   readonly variants: readonly MenuItemVariant[];
   readonly modifiers: readonly MenuItemModifierOffer[];
   readonly availabilityWindows: readonly AvailabilityWindow[];
@@ -86,6 +88,7 @@ export interface CreateMenuItemRequest {
   readonly isSoldByWeight: boolean;
   readonly price: string;
   readonly serviceChargeEligible: boolean;
+  readonly requiresPreparation: boolean;
 }
 
 export function useCreateMenuItem() {
@@ -100,6 +103,24 @@ export function useCreateMenuItem() {
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: MENU_ITEMS_KEY });
+    },
+  });
+}
+
+/** `PATCH /restaurant/menu-items/{id}/requires-preparation`, `ADMIN` only. */
+export function useChangeRequiresPreparation(itemId: string) {
+  const apiCall = useAuthorizedRequest();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (requiresPreparation: boolean) =>
+      apiCall<MenuItem>(`/restaurant/menu-items/${itemId}/requires-preparation`, {
+        method: 'PATCH',
+        body: { requiresPreparation },
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: MENU_ITEMS_KEY });
+      queryClient.invalidateQueries({ queryKey: [MENU_ITEMS_KEY, itemId] });
     },
   });
 }

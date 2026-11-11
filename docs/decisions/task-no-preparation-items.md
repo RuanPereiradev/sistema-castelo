@@ -45,6 +45,7 @@ setor. Não existe item que dispense preparo. No cardápio de dev, só "Refriger
 | 9 | 1 | DEV: item vendido por peso não muda: nasce `DELIVERED` qualquer que seja a marcação (decisão #9 da 2.2). Transferir, juntar e trocar de mesa levam a marcação congelada junto com o item | implementado (DEV, aguarda Ruan) |
 | 10 | 1 | DEV: a V15 estava reservada em `docs/MIGRATIONS.md` para o hotel (1.1), que ainda não tem nenhum arquivo em nenhuma worktree ou branch. Usei a V15 como o briefing pediu e desci o hotel para V16/V17 no registro, como nas renumerações anteriores | implementado (DEV, **aguarda Ruan**) |
 | 12 | 1 | Registro de migrations aprovado (Ruan, 2026-11-11): V15 desta task, V16 da `task/folio-adjustment-idempotency`, hotel em V17/V18. Esta task entra na `main` antes daquela. Fecha a pendência de aprovação da #10 | implementado |
+| 13 | 1 | DEV (front): no cadastro do item do admin, caixa "Precisa de preparo" marcada por padrão, com dica de quando desmarcar; na criação vai no `POST`, na edição chama o `PATCH .../requires-preparation` só se mudou. A lista do cardápio ganha a coluna. O salão não muda: já mostra `READY` como "Pronto" com o botão de entregar | implementado |
 | 11 | 1 | "Desfazer" (`POST /api/kitchen/items/{itemId}/undo`) num item que não precisa de preparo é **recusado** com `INVALID_TAB_ITEM_TRANSITION` (409): ele nasceu pronto e não tem passo de cozinha para desfazer. Iniciar preparo e marcar pronto continuam como estão (Ruan, 2026-11-11, opção "recusar o desfazer"). Responde o P1 | implementado |
 
 Valores de status: `pendente` · `implementado` · `revertida pela #n`
@@ -55,8 +56,8 @@ Valores de status: `pendente` · `implementado` · `revertida pela #n`
 
 - [x] Marcação no item do cardápio de que ele não precisa de preparo (migration V15, domínio, glossário no `CLAUDE.md`)
 - [x] Lançamento de item sem preparo nasce `READY` e fica fora da fila do KDS (#1), em todo caminho que cria `TabItem`: garçom, pedido pelo QR confirmado, self-service (todos passam por `Tab.addItem`). A transferência não cria item, move o existente com a marcação congelada
-- [x] Caixa de marcar no cadastro do item, na administração — **backend**: campo no create, rota de alteração e campo na resposta. A tela fica para a task do front
-- [x] Garçom vê o item como pronto para levar — **backend**: status `READY` na comanda e aviso no tópico dos prontos. A tela fica para a task do front
+- [x] Caixa de marcar no cadastro do item, na administração — **backend**: campo no create, rota de alteração e campo na resposta. **Front**: caixa no cadastro e coluna na lista (#13)
+- [x] Garçom vê o item como pronto para levar — **backend**: status `READY` na comanda e aviso no tópico dos prontos. **Front**: o salão já trata `READY` como "Pronto" com o botão de entregar (#13)
 - [x] `.http` com caminho feliz e cenários negativos (`http/39-restaurant-no-preparation-items.http`; não executado contra servidor, porque a 8080 e o `castel_dev` estão em uso pelo Ruan)
 - [ ] Testes no orçamento — **com o agente de teste** (o agente de implementação não escreve teste de unidade); casos em P2. Único teste tocado: `TabItemKitchenEventsTest`, uma linha, para compilar com o componente novo do evento
 
