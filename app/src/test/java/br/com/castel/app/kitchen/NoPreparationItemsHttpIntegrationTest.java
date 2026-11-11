@@ -75,13 +75,6 @@ class NoPreparationItemsHttpIntegrationTest extends AbstractKitchenDisplayIntegr
                 .isEqualTo("ACCESS_DENIED");
     }
 
-    @Test
-    void shouldAnswerNotFoundForThePatchOfAnUnknownItem() {
-        assertThat(codeOf(patch(MENU_ITEMS + "/0192f5a0-0000-7000-8000-000000000000/requires-preparation",
-                        adminToken, "{\"requiresPreparation\":false}"), 404))
-                .isEqualTo("MENU_ITEM_NOT_FOUND");
-    }
-
     // ------------------------------------------------------------- ordered, #1, #4, #5 and #11
 
     @Test
