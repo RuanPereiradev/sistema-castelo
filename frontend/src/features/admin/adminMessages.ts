@@ -80,6 +80,28 @@ export const ADMIN = {
   tableActive: 'Ativa',
   tableHasOpenTab: 'Esta mesa tem comanda aberta e não pode ser desativada.',
 
+  // Table QR (decisions #15, #16 and #42–#44 of task qr-table-ordering)
+  showTableQr: 'Ver QR',
+  tableQrTitle: (label: string) => `QR da mesa ${label}`,
+  tableQrImage: (label: string) => `QR da mesa ${label}`,
+  tableQrDrawing: 'Desenhando o QR…',
+  tableQrFailed: 'Não deu para desenhar o QR. Feche e abra de novo.',
+  tableQrAddressCaption: 'Endereço que o QR abre:',
+  tableQrThisMachineOnly:
+    'Atenção: este endereço só abre neste computador. O celular do cliente não vai conseguir abrir o cardápio. Peça ao suporte para configurar o endereço público do sistema (VITE_PUBLIC_BASE_URL) antes de imprimir.',
+  tableQrNotAWebAddress:
+    'Atenção: o endereço público configurado (VITE_PUBLIC_BASE_URL) não é um endereço de internet válido; ele precisa começar com https://. O celular do cliente não vai abrir este QR.',
+  printTableQr: 'Imprimir',
+  regenerateTableQr: 'Gerar QR novo',
+  regenerateTableQrTitle: 'Gerar um QR novo para esta mesa?',
+  regenerateTableQrMessage: (label: string) =>
+    `O QR impresso da mesa ${label} para de funcionar: quem escanear o cartão antigo não abre mais o cardápio. Depois, imprima o cartão novo e troque o que está na mesa. Não há desfazer.`,
+  regenerateTableQrConfirm: 'Sim, gerar QR novo',
+  regeneratingTableQr: 'Gerando…',
+  tableQrRegenerated: 'QR novo gerado. Imprima o cartão e troque o que está na mesa.',
+  printedTableTitle: (label: string) => `Mesa ${label}`,
+  printedTableInstruction: 'Aponte a câmera do celular para ver o cardápio e fazer seu pedido.',
+
   tableCreated: 'Mesa criada com sucesso',
   tableUpdated: 'Mesa atualizada com sucesso',
   tableDeleted: 'Mesa deletada',
@@ -119,6 +141,7 @@ const ERROR_MESSAGES: Readonly<Record<string, string>> = {
   INVALID_DINING_TABLE_LABEL: 'Rótulo da mesa inválido.',
   INVALID_DINING_TABLE_SEATS: 'Quantidade de lugares inválida.',
   FORBIDDEN: 'Seu perfil não pode fazer isso.',
+  ACCESS_DENIED: 'Seu perfil não pode fazer isso.',
 };
 
 const GENERIC_FAILURE = 'Não deu certo. Tente de novo; se continuar, avise o administrador.';

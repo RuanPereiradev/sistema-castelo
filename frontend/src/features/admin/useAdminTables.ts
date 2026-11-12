@@ -7,6 +7,8 @@ export interface AdminDiningTable {
   readonly seats: number | null;
   readonly area: string | null;
   readonly isActive: boolean;
+  /** The code the table's QR carries; a new one makes the printed QR answer 404. */
+  readonly orderingToken: string;
 }
 
 export const ADMIN_DINING_TABLES_KEY = ['admin-dining-tables'] as const;
@@ -92,5 +94,23 @@ export function useActivateDiningTable(tableId: string) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ADMIN_DINING_TABLES_KEY });
     },
+  });
+}
+
+/**
+ * A new QR code for the table: the printed one stops opening the menu (decisions #15 and #24).
+ * The list is read again before the mutation settles, so the dialog shows the code the server
+ * holds, never the one in the response (decision #43).
+ */
+export function useRegenerateOrderingToken() {
+  const apiCall = useAuthorizedRequest();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (tableId: string) =>
+      apiCall<AdminDiningTable>(`/restaurant/dining-tables/${tableId}/ordering-token`, {
+        method: 'POST',
+      }),
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ADMIN_DINING_TABLES_KEY }),
   });
 }
