@@ -34,7 +34,7 @@ import org.springframework.stereotype.Repository;
 @Repository
 class JpaFolioRepository implements FolioRepository {
 
-    /** The unique constraints of the V6 that hold a rule of the domain, and the code each one answers. */
+    /** The unique constraints that hold a rule of the domain, and the code each one answers. */
     private static final Map<String, Supplier<DomainException>> RULE_BY_CONSTRAINT = Map.of(
             "uk_folio_owner",
             () -> new FolioAlreadyOpenedForOwnerException("The owner already has a folio"),
@@ -42,6 +42,8 @@ class JpaFolioRepository implements FolioRepository {
             () -> new FolioReferenceAlreadyInUseException(),
             "uk_payment_idempotency",
             () -> new IdempotencyKeyReusedException("The idempotency key was used by another payment"),
+            "uk_charge_idempotency",
+            () -> new IdempotencyKeyReusedException("The idempotency key was used by another adjustment"),
             "uk_charge_reversal",
             () -> new ChargeAlreadyReversedException("The charge was already reversed"));
 
@@ -100,6 +102,11 @@ class JpaFolioRepository implements FolioRepository {
     @Override
     public Optional<FolioId> findPaymentByIdempotencyKey(String idempotencyKey) {
         return springData.findFolioIdByPaymentIdempotencyKey(idempotencyKey).map(FolioId::new);
+    }
+
+    @Override
+    public Optional<FolioId> findAdjustmentByIdempotencyKey(String idempotencyKey) {
+        return springData.findFolioIdByAdjustmentIdempotencyKey(idempotencyKey).map(FolioId::new);
     }
 
     /**

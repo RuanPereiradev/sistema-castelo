@@ -421,6 +421,7 @@ CREATE TABLE charge (
     authorized_by          UUID,
     reason                 TEXT,
     reversal_of_charge_id  UUID          REFERENCES charge(id),
+    idempotency_key        VARCHAR(100),                        -- V16: só ajuste; os antigos com 'legacy-' || id
     created_at             TIMESTAMPTZ   NOT NULL DEFAULT now(),
     created_by             UUID,
     updated_at             TIMESTAMPTZ,
@@ -435,6 +436,13 @@ CREATE TABLE charge (
     ),
     CONSTRAINT ck_charge_reversal_reason CHECK (
         reversal_of_charge_id IS NULL OR reason IS NOT NULL
+    ),
+    CONSTRAINT uk_charge_idempotency UNIQUE (idempotency_key),
+    CONSTRAINT ck_charge_idempotency_adjustment CHECK (
+        charge_type = 'ADJUSTMENT' OR idempotency_key IS NULL
+    ),
+    CONSTRAINT ck_charge_adjustment_idempotency CHECK (
+        charge_type <> 'ADJUSTMENT' OR idempotency_key IS NOT NULL
     )
 );
 

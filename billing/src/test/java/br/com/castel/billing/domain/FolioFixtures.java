@@ -67,7 +67,8 @@ final class FolioFixtures {
     }
 
     static AdjustmentCharge adjust(Folio folio, String amount) {
-        return folio.postAdjustment(money(amount), "Cortesia da gerencia", "Reclamacao do hospede", ADMIN);
+        return folio.postAdjustment(
+                money(amount), "Cortesia da gerencia", "Reclamacao do hospede", UUID.randomUUID().toString(), ADMIN);
     }
 
     /** A folio with the given consumption posted and fully paid, then closed. */
