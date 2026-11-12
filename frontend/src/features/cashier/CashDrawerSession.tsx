@@ -1,3 +1,4 @@
+import { randomId } from '../../lib/randomId';
 import { useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuthorizedRequest } from '../../lib/useAuthorizedRequest';
@@ -168,7 +169,7 @@ function OpenSessionView({ session }: { readonly session: CashDrawerSession }) {
 }
 
 function newAttemptKey(): string {
-  return crypto.randomUUID();
+  return randomId();
 }
 
 function CashMovementForm({ sessionId }: { readonly sessionId: string }) {

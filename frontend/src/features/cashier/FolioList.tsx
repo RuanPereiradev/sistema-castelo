@@ -6,30 +6,32 @@ import '../../styles/cashier.css';
 interface Props {
   readonly folios: readonly Folio[];
   readonly isLoading: boolean;
+  readonly isError: boolean;
+  readonly onRetry: () => void;
   readonly selectedFolioId: string | null;
   readonly onSelectFolio: (folioId: string) => void;
 }
 
-/**
- * Lista de folios (contas) abertas em cards.
- */
-export function FolioList({
-  folios,
-  isLoading,
-  selectedFolioId,
-  onSelectFolio,
-}: Props) {
+/** Lista das contas abertas em cards: carregando, falha, vazia ou com contas. */
+export function FolioList({ folios, isLoading, isError, onRetry, selectedFolioId, onSelectFolio }: Props) {
   return (
     <div className="folios-section">
       <h2 className="section-title">{CASHIER.openFolios}</h2>
 
       {isLoading && <p className="loading">{CASHIER.loadingFolios}</p>}
 
-      {!isLoading && folios.length === 0 && (
-        <p className="empty-message">{CASHIER.noFolios}</p>
+      {!isLoading && isError && (
+        <>
+          <p className="error-message">{CASHIER.foliosFailed}</p>
+          <button className="btn btn-secondary" onClick={onRetry}>
+            {CASHIER.retry}
+          </button>
+        </>
       )}
 
-      {!isLoading && folios.length > 0 && (
+      {!isLoading && !isError && folios.length === 0 && <p className="empty-message">{CASHIER.noFolios}</p>}
+
+      {!isLoading && !isError && folios.length > 0 && (
         <div className="folios-grid">
           {folios.map((folio) => (
             <FolioCard

@@ -697,8 +697,29 @@
   margin: 0;
 }
 
+/* Contas e comandas na mesma vista (decision #23): one column each, list above its detail. */
+.cashier-side-by-side {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2rem;
+  align-items: start;
+}
+
+.cashier-side-by-side .folios-container {
+  grid-template-columns: 1fr;
+  height: auto;
+}
+
+.cashier-side-by-side .folio-detail-section {
+  height: auto;
+}
+
 /* Mobile */
 @media (max-width: 1024px) {
+  .cashier-side-by-side {
+    grid-template-columns: 1fr;
+  }
+
   .cashier-container {
     grid-template-columns: 1fr;
   }

@@ -20,3 +20,15 @@ export function formatWeight(grams: number): string {
   const rest = String(grams % 1000).padStart(3, '0');
   return `${kilos},${rest} kg`;
 }
+
+/**
+ * Whether a decimal string is above, at or below zero, read from its text: a leading `-` and the
+ * digits alone. For colour and labels only; comparing two amounts is still the backend's job.
+ */
+export function moneySign(value: string): 'positive' | 'zero' | 'negative' {
+  const unsigned = value.trim().replace(/^[-+]/, '');
+  if (!/[1-9]/.test(unsigned)) {
+    return 'zero';
+  }
+  return value.trim().startsWith('-') ? 'negative' : 'positive';
+}

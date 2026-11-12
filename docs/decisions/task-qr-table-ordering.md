@@ -102,7 +102,7 @@ Rodada 1 entregou o backend; nenhum item saiu da lista. "Front pendente" marca o
 - [ ] Cardápio público no celular, com pedido — backend feito (`POST .../order-requests`); front pendente
 - [x] Primeiro pedido abre a comanda da mesa (na confirmação, #8)
 - [ ] Pedido visível para garçom, caixa e cozinha — backend feito (fila, `TabItemOrdered` para o KDS, leitura de comanda para `FRONT_DESK`); front pendente
-- [ ] Lista de comandas abertas na recepção, só leitura (#17) — backend feito (#26); front pendente
+- [x] Lista de comandas abertas na recepção, só leitura (#17) — backend feito (#26); front na branch `task/fe4-cashier-folios` (decisões #19 e #20 da `task-FE4.md`)
 - [x] Fila de pedidos aguardando: confirmar, recusar, expirar em 30 min, 1 por mesa (#11, #13, #14, #15)
 - [ ] Aviso em tempo real com som no salão (#10) — backend feito (tópico); som e aviso no mapa são do front
 - [ ] Estado do pedido no celular (#12) — backend feito (`GET .../order-requests/{id}`); front pendente
