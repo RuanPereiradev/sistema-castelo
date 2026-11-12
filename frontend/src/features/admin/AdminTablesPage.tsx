@@ -7,6 +7,7 @@ import {
   type AdminDiningTable,
 } from './useAdminTables';
 import { TableForm } from './TableForm';
+import { TableQrDialog } from './TableQrDialog';
 
 type FormMode = null | 'create' | 'edit';
 
@@ -17,8 +18,11 @@ export function AdminTablesPage() {
   const [selectedTable, setSelectedTable] = useState<AdminDiningTable | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [qrTableId, setQrTableId] = useState<string | null>(null);
 
   const tables = tablesQuery.data ?? [];
+  // Read from the list, so a new code shows as soon as the list is read again (decision #43).
+  const qrTable = tables.find((table) => table.id === qrTableId) ?? null;
 
   const deactivateMutation = useDeactivateDiningTable(selectedTable?.id ?? '');
   const activateMutation = useActivateDiningTable(selectedTable?.id ?? '');
@@ -127,6 +131,9 @@ export function AdminTablesPage() {
                     />
                   </td>
                   <td className="actions-col">
+                    <button className="btn-secondary" onClick={() => setQrTableId(table.id)}>
+                      {ADMIN.showTableQr}
+                    </button>{' '}
                     <button
                       className="btn-secondary"
                       onClick={() => {
@@ -143,6 +150,8 @@ export function AdminTablesPage() {
           </table>
         </div>
       )}
+
+      {qrTable && <TableQrDialog table={qrTable} onClose={() => setQrTableId(null)} />}
     </div>
   );
 }

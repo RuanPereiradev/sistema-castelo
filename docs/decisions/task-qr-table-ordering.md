@@ -12,9 +12,9 @@
 
 | | |
 |---|---|
-| Branch | `task/qr-table-ordering` (worktree `../castel-qr-ordering`, a partir da `main` em `7cd28a1`) |
-| Rodada atual | 2 — achados da review (1–5; o 7 virou limitação) |
-| Build | Rodada 2 (2026-10-21): `./mvnw clean install` passa, ArchUnit incluído |
+| Branch | `task/fe-admin-table-qr` (worktree `../castel-admin-qr`, a partir da `main` em `0203695`), rodada 3. Backend nas rodadas 1–2: `task/qr-table-ordering` (worktree `../castel-qr-ordering`, a partir da `main` em `7cd28a1`) |
+| Rodada atual | 3 — front da administração de mesas: ver, imprimir e gerar QR novo (#15, #16). Só front: sem backend, migration nem `.http` |
+| Build | Rodada 2 (2026-10-21): `./mvnw clean install` passa, ArchUnit incluído. Rodada 3 (2026-11-11): `npm run build` passa; backend intocado |
 | Testes | 1916 no total, 0 falhas. Os 3 casos `EXPIRED` de `ResolvedIsFinal` saíram da parametrização e viraram `shouldReportExpiredWhenTheJobAlreadyStoredTheExpiry` (#37) |
 | `.http` | `http/37-restaurant-table-ordering.http`, 49 requisições, todas verdes contra um Postgres descartável (2026-10-21). Expiração preguiçosa, expiração no envio e a tarefa agendada conferidas à mão no mesmo banco |
 
@@ -84,6 +84,11 @@ Levantamento de 2026-10-20 no código da `main`:
 | 39 | 2 | DEV (review, rodada 2): o serviço trunca o relógio em microssegundos, a precisão do `timestamptz`, em toda comparação e gravação de instante (envio, leitura pública, fila, confirmar, recusar, tarefa); Java e Postgres concordam na borda dos 30 min | implementado |
 | 40 | 2 | DEV (review, rodada 2): a leitura pública da mesa (`GET /public/tables/{orderingToken}`) lê só o status da comanda ativa (`TabRepository.findActiveStatusOnDiningTable`), sem carregar a comanda e os itens. O envio continua carregando a comanda, pela assinatura de `TableOrderRequest.submit` que os testes usam | implementado |
 | 41 | 2 | DEV (review, rodada 2): a tarefa de expiração liga e desliga em `castel.restaurant.table-order-request-expiry-enabled` (padrão ligada); o perfil `test` a desliga, para nenhuma rodada cair no meio de um teste de integração | implementado |
+| 42 | 3 | DEV (front): a base da URL do QR vem de `VITE_PUBLIC_BASE_URL`, com `window.location.origin` como reserva, sem barra no fim; o QR codifica `<base>/mesa/<orderingToken>`. A URL aparece em texto sob o QR na tela, e um aviso visível sobe quando o endereço resolvido é `localhost`, `127.x`, `::1` ou `0.0.0.0`, porque o celular do cliente não abre esse endereço; outro aviso sobe quando a variável não é um endereço `http(s)://`. Os avisos não bloqueiam a impressão: em desenvolvimento imprimir com `localhost` é legítimo | implementado |
+| 43 | 3 | DEV (front): "Gerar QR novo" abre confirmação explícita dizendo que o QR impresso desta mesa para de funcionar; só no confirmar chama `POST /api/restaurant/dining-tables/{id}/ordering-token`. Depois a lista de mesas é invalidada e o QR mostrado sai da releitura, não da resposta da rota. A tela inteira já é só de `ADMIN` (`requiredAdminLoader`), o mesmo perfil da rota, então nenhum botão precisa de filtro extra; quem barra é o backend | implementado |
+| 44 | 3 | DEV (front): o cartão impresso tem "Mesa <rótulo>", o QR e uma linha de instrução para o cliente. É desenhado num portal direto no `body`, e o `@media print` esconde todos os outros filhos do `body`, então só o cartão sai no papel, sem página em branco do layout escondido. O QR do cartão é imagem (`toDataURL`), que imprime igual em todo navegador. A URL não vai no papel: é longa, ninguém digita, e o QR já a carrega | implementado |
+| 45 | 3 | DEV (front): `ACCESS_DENIED` entra no mapa de erros do admin. É o código que a rota de gerar QR responde a quem não é `ADMIN` (`http/37`, requisição 48); o mapa só conhecia `FORBIDDEN` | implementado |
+| 46 | 3 | Mesa desativada não mostra QR na administração: continua fora da lista do admin, como já é hoje; nada muda (Ruan, 2026-11-11). Responde o ponto em aberto #1 | implementado |
 
 Valores de status: `pendente` · `implementado` · `revertida pela #n`
 
@@ -101,7 +106,7 @@ Rodada 1 entregou o backend; nenhum item saiu da lista. "Front pendente" marca o
 - [x] Fila de pedidos aguardando: confirmar, recusar, expirar em 30 min, 1 por mesa (#11, #13, #14, #15)
 - [ ] Aviso em tempo real com som no salão (#10) — backend feito (tópico); som e aviso no mapa são do front
 - [ ] Estado do pedido no celular (#12) — backend feito (`GET .../order-requests/{id}`); front pendente
-- [ ] Ver, imprimir e regenerar o QR na administração de mesas (#15, #16) — backend feito (rota de regenerar); front pendente
+- [x] Ver, imprimir e regenerar o QR na administração de mesas (#15, #16) — backend na rodada 1; front na rodada 3 (#42–#45, `TableQrDialog`)
 - [x] `.http` com caminho feliz e cenários negativos (`http/37-restaurant-table-ordering.http`)
 - [x] `./mvnw clean install` passando
 - [x] Testes de unidade e de integração (agente de testes; `TableOrderRequestTest`, `DiningTableOrderingTokenTest`, `TableOrderRequestHttpIntegrationTest`)
@@ -165,4 +170,5 @@ STOMP `/topic/restaurant/table-order-requests` (`WAITER`, `ADMIN`): `{type: SUBM
 
 | # | Pergunta | Desde a rodada |
 |---|---|---|
+| 1 | Mesa desativada deve mostrar e imprimir QR na administração? Hoje a lista do admin nem traz mesa desativada (pede sem `includeInactive`), e o QR dela responde 404 (#24). Se **sim**: a lista passa a pedir `includeInactive=true` e o QR de mesa desativada aparece com aviso de que não abre até reativar. Se **não**: mesa desativada continua fora da lista, ou aparece sem os botões de QR — **respondido pela #46** | 3 |
 
