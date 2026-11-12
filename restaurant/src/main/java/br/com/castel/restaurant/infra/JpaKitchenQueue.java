@@ -44,6 +44,7 @@ class JpaKitchenQueue implements KitchenQueue {
     private static final String QUEUE_OF_STATION = TICKET_COLUMNS + """
              where t.property_id = :propertyId
                and ti.prep_station = :station
+               and ti.requires_preparation
                and ti.status in ('PENDING', 'IN_PREPARATION', 'READY')
              order by ti.ordered_at, ti.id
             """;

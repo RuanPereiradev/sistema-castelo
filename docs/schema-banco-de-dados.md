@@ -142,8 +142,10 @@ cash_drawer_session 1──N payment
 | V12 | `V12__finance_expense.sql` | F1 | `expense` + altera o `CHECK` de `cash_movement` |
 | V13 | `V13__table_order_request.sql` | qr-table-ordering | `table_order_request`, `table_order_request_line`, `table_order_request_line_modifier`; altera `dining_table` (`ordering_token`) |
 | V14 | `V14__table_payment_request.sql` | qr-table-payment | `table_payment_request`, `table_payment_request_item`; altera `tab_item` (reserva e pagamento) e `tab` (`ck_tab_closing`) |
-| V15 | `V15__hotel_inventory.sql` | 1.1 | `room_type`, `room`, `rate_plan` |
-| V16 | `V16__reservation.sql` | 2.1 | `guest`, `daily_inventory`, `reservation`, `reservation_child`, `room_night` |
+| V15 | `V15__menu_item_requires_preparation.sql` | no-preparation-items | altera `menu_item` e `tab_item` (`requires_preparation`) |
+| V16 | `V16__charge_adjustment_idempotency.sql` | folio-adjustment-idempotency | altera `charge` (`idempotency_key`, `uk_charge_idempotency`) |
+| V17 | `V17__hotel_inventory.sql` | 1.1 | `room_type`, `room`, `rate_plan` |
+| V18 | `V18__reservation.sql` | 2.1 | `guest`, `daily_inventory`, `reservation`, `reservation_child`, `room_night` |
 
 Renumerada em 2026-09-24 (decisão #5 da task 1.2): o restaurante é construído
 antes do hotel, e a versão segue a ordem de execução. Com o hotel no meio, o
@@ -160,6 +162,10 @@ para V12/V13. Mesma razão de sempre.
 Renumerada de novo em 2026-10-22 (tasks qr-table-ordering e qr-table-payment, decisões #27 e
 #24, aprovadas pelo Ruan): o pedido e o pagamento pelo celular da mesa ganham a V13
 e a V14; o hotel desce para V15/V16.
+
+Renumerada de novo em 2026-11-11 (aprovado pelo Ruan): o item que não precisa de preparo
+ganha a V15 e a chave de idempotência do ajuste do folio ganha a V16; o hotel desce para
+V17/V18.
 
 ---
 
@@ -293,6 +299,7 @@ CREATE TABLE menu_item (
     prep_station            VARCHAR(20)  NOT NULL
                             CHECK (prep_station IN ('KITCHEN','PIZZA','BAR')),
     service_charge_eligible BOOLEAN      NOT NULL DEFAULT TRUE,
+    requires_preparation    BOOLEAN      NOT NULL DEFAULT TRUE,   -- V15: "Precisa de preparo"
     is_available            BOOLEAN      NOT NULL DEFAULT TRUE,
     is_active               BOOLEAN      NOT NULL DEFAULT TRUE,
     display_order           SMALLINT     NOT NULL DEFAULT 0,
@@ -551,7 +558,7 @@ nulável: pagamento por QR code não tem operador, e a constraint
 
 ---
 
-## 8. V15 — inventário do hotel
+## 8. V17 — inventário do hotel
 
 ```sql
 CREATE TABLE room_type (
@@ -641,7 +648,7 @@ CREATE TABLE dining_table (
 
 ---
 
-## 10. V16 — reservas
+## 10. V18 — reservas
 
 ```sql
 CREATE TABLE guest (
@@ -848,6 +855,7 @@ CREATE TABLE tab_item (
     ordered_at              TIMESTAMPTZ   NOT NULL,
     preparation_started_at  TIMESTAMPTZ,
     ready_at                TIMESTAMPTZ,
+    requires_preparation    BOOLEAN       NOT NULL DEFAULT TRUE,  -- V15: congelado no lançamento
     delivered_at            TIMESTAMPTZ,
     cancelled_at            TIMESTAMPTZ,
     cancelled_by            UUID,

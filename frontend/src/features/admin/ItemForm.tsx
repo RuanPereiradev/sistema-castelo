@@ -7,6 +7,7 @@ import {
   useUpdateMenuItem,
   type CreateMenuItemRequest,
   type UpdateMenuItemRequest,
+  useChangeRequiresPreparation,
 } from './useAdminMenu';
 
 interface ItemFormProps {
@@ -20,6 +21,7 @@ export function ItemForm({ item, categories, onSuccess, onCancel }: ItemFormProp
   const isEditing = !!item;
   const createMutation = useCreateMenuItem();
   const updateMutation = useUpdateMenuItem(item?.id ?? '');
+  const preparationMutation = useChangeRequiresPreparation(item?.id ?? '');
 
   const [formData, setFormData] = useState({
     categoryId: item?.categoryId ?? (categories[0]?.id ?? ''),
@@ -29,10 +31,11 @@ export function ItemForm({ item, categories, onSuccess, onCancel }: ItemFormProp
     isSoldByWeight: item?.soldByWeight ?? false,
     price: item?.price ?? '',
     serviceChargeEligible: item?.serviceChargeEligible ?? true,
+    requiresPreparation: item?.requiresPreparation ?? true,
   });
 
   const [error, setError] = useState<string | null>(null);
-  const isLoading = createMutation.isPending || updateMutation.isPending;
+  const isLoading = createMutation.isPending || updateMutation.isPending || preparationMutation.isPending;
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -59,6 +62,9 @@ export function ItemForm({ item, categories, onSuccess, onCancel }: ItemFormProp
           price: formData.price,
         };
         await updateMutation.mutateAsync(updateReq);
+        if (formData.requiresPreparation !== item.requiresPreparation) {
+          await preparationMutation.mutateAsync(formData.requiresPreparation);
+        }
       } else {
         const createReq: CreateMenuItemRequest = {
           categoryId: formData.categoryId,
@@ -68,6 +74,7 @@ export function ItemForm({ item, categories, onSuccess, onCancel }: ItemFormProp
           isSoldByWeight: formData.isSoldByWeight,
           price: formData.price,
           serviceChargeEligible: formData.serviceChargeEligible,
+          requiresPreparation: formData.requiresPreparation,
         };
         await createMutation.mutateAsync(createReq);
       }
@@ -174,6 +181,18 @@ export function ItemForm({ item, categories, onSuccess, onCancel }: ItemFormProp
             disabled={isLoading}
           />
           <label htmlFor="serviceChargeEligible">{ADMIN.itemServiceChargeEligible}</label>
+        </div>
+
+        <div className="form-group checkbox">
+          <input
+            id="requiresPreparation"
+            type="checkbox"
+            checked={formData.requiresPreparation}
+            onChange={(e) => setFormData({ ...formData, requiresPreparation: e.target.checked })}
+            disabled={isLoading}
+          />
+          <label htmlFor="requiresPreparation">{ADMIN.itemRequiresPreparation}</label>
+          <small className="form-hint">{ADMIN.itemRequiresPreparationHint}</small>
         </div>
       </div>
 

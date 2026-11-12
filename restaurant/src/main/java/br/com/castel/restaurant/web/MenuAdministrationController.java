@@ -93,7 +93,8 @@ public class MenuAdministrationController {
                 PrepStation.valueOf(request.getPrepStation()),
                 request.isSoldByWeight(),
                 Money.of(request.getPrice()),
-                request.isServiceChargeEligible());
+                request.isServiceChargeEligible(),
+                request.isRequiresPreparation());
         return respond(menuItems.create(command));
     }
 
@@ -111,6 +112,17 @@ public class MenuAdministrationController {
     @PatchMapping("/menu-items/{menuItemId}/price")
     public MenuItemResponse changePrice(@PathVariable("menuItemId") String menuItemId, @Valid @RequestBody ChangePriceRequest request) {
         return respond(menuItems.changePrice(MenuItemId.of(menuItemId), Money.of(request.getPrice())));
+    }
+
+    /**
+     * Whether what is ordered from now on goes through the kitchen display, or is born ready on the
+     * tab. What was already ordered does not change.
+     */
+    @PatchMapping("/menu-items/{menuItemId}/requires-preparation")
+    public MenuItemResponse changeRequiresPreparation(
+            @PathVariable("menuItemId") String menuItemId, @Valid @RequestBody RequiresPreparationRequest request) {
+        return respond(menuItems.changeRequiresPreparation(
+                MenuItemId.of(menuItemId), request.getRequiresPreparation()));
     }
 
     /** The kitchen ran out. Overrides the schedule until someone puts the item back. */

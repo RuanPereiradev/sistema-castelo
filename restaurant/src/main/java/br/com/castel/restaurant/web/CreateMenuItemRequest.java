@@ -10,6 +10,10 @@ import jakarta.validation.constraints.Size;
  * <p>{@code price} travels as a decimal string ({@code "62.00"}), like every monetary value of the
  * API, so JavaScript never rounds it. It is read as a unit price, or as a price per kilo when
  * {@code soldByWeight} is true.
+ *
+ * <p>{@code requiresPreparation} absent means true, like {@code serviceChargeEligible}: an item goes
+ * to the kitchen display unless the administration clears the box (decision #6 of task
+ * no-preparation-items).
  */
 public class CreateMenuItemRequest {
 
@@ -31,6 +35,8 @@ public class CreateMenuItemRequest {
     private String price;
 
     private boolean serviceChargeEligible = true;
+
+    private boolean requiresPreparation = true;
 
     public String getCategoryId() {
         return categoryId;
@@ -86,5 +92,13 @@ public class CreateMenuItemRequest {
 
     public void setServiceChargeEligible(boolean serviceChargeEligible) {
         this.serviceChargeEligible = serviceChargeEligible;
+    }
+
+    public boolean isRequiresPreparation() {
+        return requiresPreparation;
+    }
+
+    public void setRequiresPreparation(boolean requiresPreparation) {
+        this.requiresPreparation = requiresPreparation;
     }
 }

@@ -5,9 +5,13 @@ import br.com.castel.sharedkernel.DomainEvent;
 import java.time.Instant;
 import java.util.Objects;
 
-/** The kitchen display moved an item from one status to another. Returned by the {@link Tab}. */
+/**
+ * The kitchen display moved an item from one status to another, or the waiter delivered it. Returned
+ * by the {@link Tab}.
+ */
 public record TabItemStatusChanged(TabId tabId, TabItemId itemId, PrepStation station,
-        TabItemStatus from, TabItemStatus to, Instant occurredAt) implements DomainEvent {
+        TabItemStatus from, TabItemStatus to, boolean requiresPreparation, Instant occurredAt)
+        implements DomainEvent {
 
     public TabItemStatusChanged {
         Objects.requireNonNull(tabId, "tabId");
@@ -16,6 +20,14 @@ public record TabItemStatusChanged(TabId tabId, TabItemId itemId, PrepStation st
         Objects.requireNonNull(from, "from");
         Objects.requireNonNull(to, "to");
         Objects.requireNonNull(occurredAt, "occurredAt");
+    }
+
+    /**
+     * Whether the screen of the station has to be told: never for an item that needs no preparation,
+     * which was never on it (decision #8 of task no-preparation-items).
+     */
+    public boolean reachesKitchenQueue() {
+        return requiresPreparation;
     }
 
     /** Whether the item entered or left {@code READY}: what the waiters are told about (K10). */

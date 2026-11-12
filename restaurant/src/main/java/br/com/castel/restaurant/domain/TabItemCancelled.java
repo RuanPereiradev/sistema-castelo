@@ -10,7 +10,7 @@ import java.util.Objects;
  * kitchen display can show it next to the struck-out ticket (K9).
  */
 public record TabItemCancelled(TabId tabId, TabItemId itemId, PrepStation station, String reason,
-        Instant occurredAt) implements DomainEvent {
+        boolean requiresPreparation, Instant occurredAt) implements DomainEvent {
 
     public TabItemCancelled {
         Objects.requireNonNull(tabId, "tabId");
@@ -31,6 +31,15 @@ public record TabItemCancelled(TabId tabId, TabItemId itemId, PrepStation statio
                 cancelledItem.id(),
                 cancelledItem.prepStation(),
                 cancelledItem.cancellationReason().orElseThrow(),
+                cancelledItem.requiresPreparation(),
                 cancelledItem.cancelledAt().orElseThrow());
+    }
+
+    /**
+     * Whether the screen of the station has to be told: never for an item that needs no preparation,
+     * which was never on it (decision #8 of task no-preparation-items).
+     */
+    public boolean reachesKitchenQueue() {
+        return requiresPreparation;
     }
 }

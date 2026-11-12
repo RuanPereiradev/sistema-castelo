@@ -28,6 +28,8 @@ export const ADMIN = {
   itemModifiers: 'Adicionais oferecidos',
   itemAvailabilityWindows: 'Janelas de horário',
   itemServiceChargeEligible: 'Elegível para taxa de serviço',
+  itemRequiresPreparation: 'Precisa de preparo',
+  itemRequiresPreparationHint: 'Desmarque para itens que só se pegam e levam (refrigerante, sorvete): eles já entram como prontos e não vão para a cozinha nem para o bar.',
 
   variantName: 'Nome',
   variantPrice: 'Preço',

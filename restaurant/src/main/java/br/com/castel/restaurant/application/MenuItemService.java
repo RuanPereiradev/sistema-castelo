@@ -54,6 +54,15 @@ public class MenuItemService {
                         command.price());
         item.describeAs(command.description());
         item.chargeServiceCharge(command.serviceChargeEligible());
+        item.changeRequiresPreparationTo(command.requiresPreparation());
+        return items.save(item);
+    }
+
+    /** What is ordered from now on; what was already ordered keeps what it was ordered with. */
+    @Transactional
+    public MenuItem changeRequiresPreparation(MenuItemId id, boolean requiresPreparation) {
+        MenuItem item = load(id);
+        item.changeRequiresPreparationTo(requiresPreparation);
         return items.save(item);
     }
 

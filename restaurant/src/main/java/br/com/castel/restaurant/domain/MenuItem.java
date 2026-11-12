@@ -55,6 +55,11 @@ import org.hibernate.annotations.FetchMode;
  *
  * <p>The {@link MenuItemModifier}s link the item to the {@link Modifier}s it offers. The item keeps
  * only the id of each modifier: a modifier is an aggregate of its own.
+ *
+ * <p>An item {@linkplain #requiresPreparation() requires preparation} unless the administration says
+ * otherwise: a can of soda, an ice cream. One that does not is born ready on the tab and never
+ * reaches the kitchen display, but keeps its {@link PrepStation} all the same (decisions #1 and #3 of
+ * task no-preparation-items).
  */
 @Entity
 @Table(name = "menu_item")
@@ -94,6 +99,9 @@ public class MenuItem extends AuditedEntity {
 
     @Column(name = "service_charge_eligible", nullable = false)
     private boolean serviceChargeEligible;
+
+    @Column(name = "requires_preparation", nullable = false)
+    private boolean requiresPreparation;
 
     @Column(name = "is_available", nullable = false)
     private boolean available;
@@ -145,6 +153,7 @@ public class MenuItem extends AuditedEntity {
         this.unitPrice = unitPrice;
         this.pricePerKilo = pricePerKilo;
         this.serviceChargeEligible = true;
+        this.requiresPreparation = true;
         this.available = true;
         this.active = true;
         this.displayOrder = 0;
@@ -304,6 +313,14 @@ public class MenuItem extends AuditedEntity {
 
     public void chargeServiceCharge(boolean eligible) {
         this.serviceChargeEligible = eligible;
+    }
+
+    /**
+     * Whether what is ordered from now on goes through the kitchen display. What was already ordered
+     * keeps what it was ordered with.
+     */
+    public void changeRequiresPreparationTo(boolean newRequiresPreparation) {
+        this.requiresPreparation = newRequiresPreparation;
     }
 
     /**
@@ -533,6 +550,11 @@ public class MenuItem extends AuditedEntity {
 
     public boolean serviceChargeEligible() {
         return serviceChargeEligible;
+    }
+
+    /** Whether an order of this item is prepared at its station, or is born ready on the tab. */
+    public boolean requiresPreparation() {
+        return requiresPreparation;
     }
 
     public boolean isAvailable() {

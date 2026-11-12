@@ -13,7 +13,7 @@ import java.util.Objects;
  * vanish from the queue nor stay there labelled with the table it left.
  */
 public record TabItemTransferred(TabId fromTabId, TabId toTabId, TabItemId itemId, PrepStation station,
-        TabItemStatus status, Instant occurredAt) implements DomainEvent {
+        TabItemStatus status, boolean requiresPreparation, Instant occurredAt) implements DomainEvent {
 
     public TabItemTransferred {
         Objects.requireNonNull(fromTabId, "fromTabId");
@@ -26,12 +26,16 @@ public record TabItemTransferred(TabId fromTabId, TabId toTabId, TabItemId itemI
 
     /** The item as it stands right after the move; the moment is the moment of the move. */
     static TabItemTransferred of(TabId fromTabId, TabId toTabId, TabItem item, Instant at) {
-        return new TabItemTransferred(fromTabId, toTabId, item.id(), item.prepStation(), item.status(), at);
+        return new TabItemTransferred(fromTabId, toTabId, item.id(), item.prepStation(), item.status(),
+                item.requiresPreparation(), at);
     }
 
-    /** Whether the item is on the kitchen display of its station, so the screen has to be told. */
+    /**
+     * Whether the item is on the kitchen display of its station, so the screen has to be told. An
+     * item that needs no preparation never is.
+     */
     public boolean reachesKitchenQueue() {
-        return status.isOnKitchenQueue();
+        return requiresPreparation && status.isOnKitchenQueue();
     }
 
     /** Whether the item is waiting to be picked up, which the waiters are told about too (K10). */

@@ -17,7 +17,7 @@ public interface KitchenQueue {
     /**
      * The tickets on the queue of the station — {@code PENDING}, {@code IN_PREPARATION} and
      * {@code READY} (K5) — whatever the status of their tab (F12), by the moment of the order and
-     * then by id.
+     * then by id. An item that needs no preparation is never on it, ready as it is.
      */
     List<KitchenTicket> ticketsOf(UUID propertyId, PrepStation station);
 

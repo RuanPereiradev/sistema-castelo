@@ -1,0 +1,593 @@
+### Task no-preparation-items - item do cardapio que nao precisa de preparo
+### Ambiente: selecione "dev" no IntelliJ HTTP Client, com http-client.env.json
+### + http-client.private.env.json (copie o .example). Ver http/README.md.
+###
+### Pre-requisito: aplicacao rodando no perfil "dev" com o seed habilitado
+### (usuarios admin, garcom e cozinha, e os limites de atraso do KDS em setting).
+### Rode o arquivo inteiro, em ordem: a preparacao salva os ids que os demais usam.
+### No fim, itens e comandas sao cancelados e o arquivo roda de novo.
+###
+### O aviso ao garcom em /topic/restaurant/ready-items (mensagem ORDERED) nao e
+### verificado aqui: o frame STOMP termina em NUL e o HTTP Client nao faz assert
+### confiavel dele, como no 35-kitchen-display.http.
+
+
+### ------------------------------------------------------------------
+### Preparacao: logins, cardapio, mesa e comandas
+### ------------------------------------------------------------------
+
+
+### 0. Login do admin
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{
+  "username": "{{adminUsername}}",
+  "password": "{{password}}"
+}
+
+> {%
+    client.test("login do admin retorna 200", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+    });
+    client.global.set("adminToken", response.body.accessToken);
+    client.global.set("suffix", Math.random().toString(36).substring(2, 8));
+    client.global.set("cardNumber", String(Math.floor(Math.random() * 999) + 1));
+%}
+
+
+### 1. Login do garcom
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{
+  "username": "{{waiterUsername}}",
+  "password": "{{password}}"
+}
+
+> {%
+    client.test("login do garcom retorna 200", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+    });
+    client.global.set("waiterToken", response.body.accessToken);
+%}
+
+
+### 2. Login da cozinha (usuario cozinha do seed de dev)
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{
+  "username": "cozinha",
+  "password": "{{password}}"
+}
+
+> {%
+    client.test("login da cozinha retorna 200", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+    });
+    client.global.set("kitchenToken", response.body.accessToken);
+%}
+
+
+### 3. Cria a categoria
+POST {{host}}/api/restaurant/menu-categories
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "name": "Sem preparo {{suffix}}",
+  "displayOrder": 1
+}
+
+> {%
+    client.test("categoria criada", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+    });
+    client.global.set("categoryId", response.body.id);
+%}
+
+
+### ------------------------------------------------------------------
+### Caminho feliz
+### ------------------------------------------------------------------
+
+
+### 4. Refrigerante sem preparo, setor BAR (o setor continua obrigatorio, decisao #3)
+POST {{host}}/api/restaurant/menu-items
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "categoryId": "{{categoryId}}",
+  "name": "Refrigerante lata {{suffix}}",
+  "prepStation": "BAR",
+  "soldByWeight": false,
+  "price": "6.00",
+  "requiresPreparation": false
+}
+
+> {%
+    client.test("refrigerante criado sem preparo", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+        client.assert(response.body.requiresPreparation === false, "requiresPreparation false");
+        client.assert(response.body.prepStation === "BAR", "setor BAR mantido");
+    });
+    client.global.set("sodaId", response.body.id);
+%}
+
+
+### 5. Caipirinha sem o campo: precisa de preparo (ausente = true, decisao #6)
+POST {{host}}/api/restaurant/menu-items
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "categoryId": "{{categoryId}}",
+  "name": "Caipirinha {{suffix}}",
+  "prepStation": "BAR",
+  "soldByWeight": false,
+  "price": "18.00"
+}
+
+> {%
+    client.test("caipirinha criada precisando de preparo", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+        client.assert(response.body.requiresPreparation === true, "requiresPreparation true por padrao");
+    });
+    client.global.set("caipirinhaId", response.body.id);
+%}
+
+
+### 6. A leitura do item traz a marcacao
+GET {{host}}/api/restaurant/menu-items/{{sodaId}}
+Authorization: Bearer {{adminToken}}
+
+> {%
+    client.test("leitura com requiresPreparation", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        client.assert(response.body.requiresPreparation === false, "requiresPreparation false");
+    });
+%}
+
+
+### 7. Cria a mesa
+POST {{host}}/api/restaurant/dining-tables
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "label": "Sem preparo {{suffix}}"
+}
+
+> {%
+    client.test("mesa criada", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+    });
+    client.global.set("diningTableId", response.body.id);
+%}
+
+
+### 8. Abre a comanda na mesa
+POST {{host}}/api/restaurant/tabs
+Authorization: Bearer {{waiterToken}}
+Content-Type: application/json
+
+{
+  "origin": "TABLE_SERVICE",
+  "diningTableId": "{{diningTableId}}"
+}
+
+> {%
+    client.test("comanda aberta", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+    });
+    client.global.set("tableTabId", response.body.id);
+%}
+
+
+### 9. Garcom lanca o refrigerante: nasce READY, com readyAt e sem inicio de preparo
+POST {{host}}/api/restaurant/tabs/{{tableTabId}}/items
+Authorization: Bearer {{waiterToken}}
+Content-Type: application/json
+
+{
+  "menuItemId": "{{sodaId}}",
+  "quantity": 2
+}
+
+> {%
+    client.test("refrigerante nasce pronto", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+        var item = response.body.items[response.body.items.length - 1];
+        client.assert(item.status === "READY", "status READY, recebido " + item.status);
+        client.assert(item.readyAt, "readyAt gravado");
+        client.assert(item.preparationStartedAt === null, "sem preparationStartedAt");
+    });
+    client.global.set("sodaItemId", response.body.items[response.body.items.length - 1].id);
+%}
+
+
+### 10. Garcom lanca a caipirinha: item normal continua PENDING
+POST {{host}}/api/restaurant/tabs/{{tableTabId}}/items
+Authorization: Bearer {{waiterToken}}
+Content-Type: application/json
+
+{
+  "menuItemId": "{{caipirinhaId}}"
+}
+
+> {%
+    client.test("caipirinha nasce pendente", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+        var item = response.body.items[response.body.items.length - 1];
+        client.assert(item.status === "PENDING", "status PENDING, recebido " + item.status);
+    });
+    client.global.set("caipirinhaItemId", response.body.items[response.body.items.length - 1].id);
+%}
+
+
+### 11. Fila do bar: tem a caipirinha, nao tem o refrigerante
+GET {{host}}/api/kitchen/queue?station=BAR
+Authorization: Bearer {{kitchenToken}}
+
+> {%
+    function hasItem(queue, id) { return queue.items.some(function(ticket) { return ticket.itemId === id; }); }
+    client.test("fila BAR sem o item sem preparo", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        client.assert(hasItem(response.body, client.global.get("caipirinhaItemId")), "caipirinha na fila");
+        client.assert(!hasItem(response.body, client.global.get("sodaItemId")), "refrigerante fora da fila");
+    });
+%}
+
+
+### 12. Nenhum outro setor tem o refrigerante
+GET {{host}}/api/kitchen/queue?station=KITCHEN
+Authorization: Bearer {{kitchenToken}}
+
+> {%
+    function hasItem(queue, id) { return queue.items.some(function(ticket) { return ticket.itemId === id; }); }
+    client.test("fila KITCHEN sem o refrigerante", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        client.assert(!hasItem(response.body, client.global.get("sodaItemId")), "refrigerante fora da fila");
+    });
+%}
+
+
+### 13. Garcom entrega o refrigerante
+POST {{host}}/api/restaurant/tabs/{{tableTabId}}/items/{{sodaItemId}}/deliver
+Authorization: Bearer {{waiterToken}}
+
+> {%
+    client.test("refrigerante entregue", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        var soda = response.body.items.filter(function(item) { return item.id === client.global.get("sodaItemId"); })[0];
+        client.assert(soda.status === "DELIVERED" && soda.deliveredAt, "DELIVERED com deliveredAt");
+    });
+%}
+
+
+### 14. Admin volta a exigir preparo do refrigerante
+PATCH {{host}}/api/restaurant/menu-items/{{sodaId}}/requires-preparation
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "requiresPreparation": true
+}
+
+> {%
+    client.test("marcacao alterada para true", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        client.assert(response.body.requiresPreparation === true, "requiresPreparation true");
+    });
+%}
+
+
+### 15. Lancado agora, o refrigerante vai para a fila do bar como PENDING
+POST {{host}}/api/restaurant/tabs/{{tableTabId}}/items
+Authorization: Bearer {{waiterToken}}
+Content-Type: application/json
+
+{
+  "menuItemId": "{{sodaId}}"
+}
+
+> {%
+    client.test("refrigerante com preparo nasce pendente", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+        var item = response.body.items[response.body.items.length - 1];
+        client.assert(item.status === "PENDING", "status PENDING, recebido " + item.status);
+    });
+    client.global.set("preparedSodaItemId", response.body.items[response.body.items.length - 1].id);
+%}
+
+
+### 16. Admin tira o preparo de novo
+PATCH {{host}}/api/restaurant/menu-items/{{sodaId}}/requires-preparation
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "requiresPreparation": false
+}
+
+> {%
+    client.test("marcacao alterada para false", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        client.assert(response.body.requiresPreparation === false, "requiresPreparation false");
+    });
+%}
+
+
+### 17. O que ja foi lancado nao muda: o refrigerante do passo 15 continua na fila do bar
+GET {{host}}/api/kitchen/queue?station=BAR
+Authorization: Bearer {{kitchenToken}}
+
+> {%
+    function hasItem(queue, id) { return queue.items.some(function(ticket) { return ticket.itemId === id; }); }
+    client.test("item ja lancado continua na fila", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        client.assert(hasItem(response.body, client.global.get("preparedSodaItemId")), "refrigerante do passo 15 na fila");
+    });
+%}
+
+
+### 18. Self-service: abre a comanda no cartao
+POST {{host}}/api/restaurant/tabs
+Authorization: Bearer {{waiterToken}}
+Content-Type: application/json
+
+{
+  "origin": "SELF_SERVICE",
+  "cardNumber": {{cardNumber}}
+}
+
+> {%
+    client.test("comanda do cartao aberta", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+    });
+    client.global.set("cardTabId", response.body.id);
+%}
+
+
+### 19. Self-service: o refrigerante tambem nasce READY
+POST {{host}}/api/restaurant/tabs/{{cardTabId}}/items
+Authorization: Bearer {{waiterToken}}
+Content-Type: application/json
+
+{
+  "menuItemId": "{{sodaId}}"
+}
+
+> {%
+    client.test("refrigerante no cartao nasce pronto", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+        client.assert(response.body.items[0].status === "READY", "status READY, recebido " + response.body.items[0].status);
+    });
+    client.global.set("cardSodaItemId", response.body.items[0].id);
+%}
+
+
+### ------------------------------------------------------------------
+### Cenarios negativos
+### ------------------------------------------------------------------
+
+
+### 20. Garcom alterando a marcacao
+PATCH {{host}}/api/restaurant/menu-items/{{sodaId}}/requires-preparation
+Authorization: Bearer {{waiterToken}}
+Content-Type: application/json
+
+{
+  "requiresPreparation": true
+}
+
+> {%
+    client.test("garcom barrado", function() {
+        client.assert(response.status === 403, "esperado 403, recebido " + response.status);
+        client.assert(response.body.code === "ACCESS_DENIED", "code ACCESS_DENIED, recebido " + response.body.code);
+    });
+%}
+
+
+### 21. Cozinha alterando a marcacao
+PATCH {{host}}/api/restaurant/menu-items/{{sodaId}}/requires-preparation
+Authorization: Bearer {{kitchenToken}}
+Content-Type: application/json
+
+{
+  "requiresPreparation": true
+}
+
+> {%
+    client.test("cozinha barrada", function() {
+        client.assert(response.status === 403, "esperado 403, recebido " + response.status);
+        client.assert(response.body.code === "ACCESS_DENIED", "code ACCESS_DENIED, recebido " + response.body.code);
+    });
+%}
+
+
+### 22. Alterar sem token
+PATCH {{host}}/api/restaurant/menu-items/{{sodaId}}/requires-preparation
+Content-Type: application/json
+
+{
+  "requiresPreparation": true
+}
+
+> {%
+    client.test("sem token", function() {
+        client.assert(response.status === 401, "esperado 401, recebido " + response.status);
+        client.assert(response.body.code === "AUTHENTICATION_REQUIRED", "code AUTHENTICATION_REQUIRED, recebido " + response.body.code);
+    });
+%}
+
+
+### 23. Alterar sem o campo: recusado, nunca lido como false
+PATCH {{host}}/api/restaurant/menu-items/{{sodaId}}/requires-preparation
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{}
+
+> {%
+    client.test("campo obrigatorio", function() {
+        client.assert(response.status === 400, "esperado 400, recebido " + response.status);
+        client.assert(response.body.code === "VALIDATION_FAILED", "code VALIDATION_FAILED, recebido " + response.body.code);
+    });
+%}
+
+
+### 24. Alterar item inexistente
+PATCH {{host}}/api/restaurant/menu-items/0192f5a0-0000-7000-8000-000000000000/requires-preparation
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "requiresPreparation": false
+}
+
+> {%
+    client.test("item nao encontrado", function() {
+        client.assert(response.status === 404, "esperado 404, recebido " + response.status);
+        client.assert(response.body.code === "MENU_ITEM_NOT_FOUND", "code MENU_ITEM_NOT_FOUND, recebido " + response.body.code);
+    });
+%}
+
+
+### 25. Cozinha nao marca pronto o que ja nasceu pronto
+POST {{host}}/api/kitchen/items/{{cardSodaItemId}}/ready
+Authorization: Bearer {{kitchenToken}}
+
+> {%
+    client.test("transicao recusada", function() {
+        client.assert(response.status === 409, "esperado 409, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_TAB_ITEM_TRANSITION", "code INVALID_TAB_ITEM_TRANSITION, recebido " + response.body.code);
+    });
+%}
+
+
+### 25b. Cozinha nao desfaz o pronto de item sem preparo (decisao #11): nao ha passo de cozinha
+POST {{host}}/api/kitchen/items/{{cardSodaItemId}}/undo
+Authorization: Bearer {{kitchenToken}}
+
+> {%
+    client.test("desfazer recusado", function() {
+        client.assert(response.status === 409, "esperado 409, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_TAB_ITEM_TRANSITION", "code INVALID_TAB_ITEM_TRANSITION, recebido " + response.body.code);
+    });
+%}
+
+
+### 26. Entregar de novo o refrigerante ja entregue
+POST {{host}}/api/restaurant/tabs/{{tableTabId}}/items/{{sodaItemId}}/deliver
+Authorization: Bearer {{waiterToken}}
+
+> {%
+    client.test("entrega repetida recusada", function() {
+        client.assert(response.status === 409, "esperado 409, recebido " + response.status);
+        client.assert(response.body.code === "INVALID_TAB_ITEM_TRANSITION", "code INVALID_TAB_ITEM_TRANSITION, recebido " + response.body.code);
+    });
+%}
+
+
+### ------------------------------------------------------------------
+### Limpeza: cancela itens e comandas para o arquivo rodar de novo
+### ------------------------------------------------------------------
+
+
+### 27. Cancela o refrigerante entregue
+POST {{host}}/api/restaurant/tabs/{{tableTabId}}/items/{{sodaItemId}}/cancel
+Authorization: Bearer {{waiterToken}}
+Content-Type: application/json
+
+{
+  "reason": "limpeza do teste"
+}
+
+> {%
+    client.test("refrigerante cancelado", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+    });
+%}
+
+
+### 28. Cancela a caipirinha
+POST {{host}}/api/restaurant/tabs/{{tableTabId}}/items/{{caipirinhaItemId}}/cancel
+Authorization: Bearer {{waiterToken}}
+Content-Type: application/json
+
+{
+  "reason": "limpeza do teste"
+}
+
+> {%
+    client.test("caipirinha cancelada", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+    });
+%}
+
+
+### 29. Cancela o refrigerante do passo 15
+POST {{host}}/api/restaurant/tabs/{{tableTabId}}/items/{{preparedSodaItemId}}/cancel
+Authorization: Bearer {{waiterToken}}
+Content-Type: application/json
+
+{
+  "reason": "limpeza do teste"
+}
+
+> {%
+    client.test("refrigerante do passo 15 cancelado", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+    });
+%}
+
+
+### 30. Cancela a comanda da mesa
+POST {{host}}/api/restaurant/tabs/{{tableTabId}}/cancel
+Authorization: Bearer {{waiterToken}}
+Content-Type: application/json
+
+{
+  "reason": "limpeza do teste"
+}
+
+> {%
+    client.test("comanda da mesa cancelada", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+    });
+%}
+
+
+### 31. Cancela o refrigerante do cartao
+POST {{host}}/api/restaurant/tabs/{{cardTabId}}/items/{{cardSodaItemId}}/cancel
+Authorization: Bearer {{waiterToken}}
+Content-Type: application/json
+
+{
+  "reason": "limpeza do teste"
+}
+
+> {%
+    client.test("refrigerante do cartao cancelado", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+    });
+%}
+
+
+### 32. Cancela a comanda do cartao
+POST {{host}}/api/restaurant/tabs/{{cardTabId}}/cancel
+Authorization: Bearer {{waiterToken}}
+Content-Type: application/json
+
+{
+  "reason": "limpeza do teste"
+}
+
+> {%
+    client.test("comanda do cartao cancelada", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+    });
+%}

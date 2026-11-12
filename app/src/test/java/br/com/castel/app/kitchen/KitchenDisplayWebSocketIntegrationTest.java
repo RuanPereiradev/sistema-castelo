@@ -158,6 +158,33 @@ class KitchenDisplayWebSocketIntegrationTest extends AbstractKitchenDisplayInteg
     }
 
     /**
+     * Task no-preparation-items, #8: the item born ready is announced to the waiters as ORDERED and
+     * never reaches the topic of its station. The bar topic is read through a beer ordered right after:
+     * the broker keeps the publish order, so a wrongly sent soda would arrive first.
+     */
+    @Test
+    void shouldAnnounceAnItemWithoutPreparationOnlyToTheWaiters() throws Exception {
+        String categoryId = createCategory();
+        String sodaId = createItemWithoutPreparation(categoryId, "Refri", "BAR");
+        String beerId = createItem(categoryId, "Chopp", "BAR", false);
+        String tabId = openTabOnNewTable("Avisa");
+        BlockingQueue<JsonNode> readyTopic = client.connect(waiterToken).subscribe("/topic/restaurant/ready-items");
+        BlockingQueue<JsonNode> barTopic = client.connect(kitchenToken).subscribe("/topic/kitchen/BAR");
+
+        String soda = order(tabId, sodaId);
+        String beer = order(tabId, beerId);
+
+        JsonNode announced = readyTopic.poll(MESSAGE_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+        assertThat(announced).isNotNull();
+        assertThat(announced.get("type").asString()).isEqualTo("ORDERED");
+        assertThat(announced.get("item").get("itemId").asString()).isEqualTo(soda);
+        assertThat(announced.get("item").get("status").asString()).isEqualTo("READY");
+        JsonNode firstOnTheBar = barTopic.poll(MESSAGE_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+        assertThat(firstOnTheBar).isNotNull();
+        assertThat(firstOnTheBar.get("item").get("itemId").asString()).isEqualTo(beer);
+    }
+
+    /**
      * Task 3.6: an item that changed tab is pushed again, to the topic of its own station, carrying
      * the table it is on now. Without the message the dish would sit on the screen under the table
      * it left, and the kitchen would walk it to the wrong place.

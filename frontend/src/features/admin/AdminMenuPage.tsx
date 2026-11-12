@@ -110,6 +110,7 @@ export function AdminMenuPage() {
                 <th>{ADMIN.itemName}</th>
                 <th>{ADMIN.itemPrice}</th>
                 <th>{ADMIN.itemPrepStation}</th>
+                <th>{ADMIN.itemRequiresPreparation}</th>
                 <th>{ADMIN.itemActive}</th>
                 <th>{ADMIN.itemAvailable}</th>
                 <th className="actions-col">{ADMIN.editItem}</th>
@@ -121,6 +122,7 @@ export function AdminMenuPage() {
                   <td>{item.name}</td>
                   <td>{item.price}</td>
                   <td>{item.prepStation}</td>
+                  <td className="center">{item.requiresPreparation ? '✓' : '✗'}</td>
                   <td className="center">
                     {item.isActive ? '✓' : '✗'}
                   </td>
