@@ -2,7 +2,7 @@
  * Every Portuguese string of the self-service screen lives here, never in a component.
  */
 export const SELF_SERVICE = {
-  brand: 'Hospedaria',
+  brand: 'Castelo Encantado',
   title: 'Balança',
   cardNumber: 'Número do cartão',
   cardHint: 'De 1 a 999',

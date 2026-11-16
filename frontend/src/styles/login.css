@@ -201,11 +201,6 @@ body,
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--salmon-veil);
-  font-family: var(--font-heading);
-  font-weight: 400;
-  font-size: 42px;
-  line-height: 1;
 }
 
 .iluminura-brand {
@@ -267,19 +262,9 @@ body,
 
 /* The monogram shield: a square whose bottom corners round into a point. */
 .portal-shield {
-  width: 44px;
-  height: 52px;
-  border: 1.5px solid var(--salmon);
-  border-radius: 3px 3px 50% 50% / 3px 3px 44% 44%;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-family: var(--font-heading);
-  font-weight: 400;
-  font-size: 30px;
-  line-height: 1;
-  color: var(--salmon);
-  padding-bottom: 5px;
 }
 
 .portal-brand {

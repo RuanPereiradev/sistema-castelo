@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { formatMoney } from '../../lib/money';
+import { bareTableLabel } from '../../lib/tableLabel';
 import { DINING_ROOM, describeConfirmPixError, describeError } from './diningRoomMessages';
 import { ConfirmDialog } from './ConfirmDialog';
 import {
@@ -97,10 +98,10 @@ function PixCard({
   const error = confirm.error ? describeConfirmPixError(confirm.error) : rejectError;
 
   return (
-    <article className="dr-request dr-request-pix" aria-label={`Pix · ${DINING_ROOM.table} ${request.diningTableLabel}`}>
+    <article className="dr-request dr-request-pix" aria-label={`Pix · ${DINING_ROOM.table} ${bareTableLabel(request.diningTableLabel)}`}>
       <div className="dr-request-top">
         <span className="dr-request-table">
-          {DINING_ROOM.table} {request.diningTableLabel}
+          {DINING_ROOM.table} {bareTableLabel(request.diningTableLabel)}
         </span>
         <span className={minutesLeft <= 5 ? 'dr-request-expiry is-urgent' : 'dr-request-expiry'}>
           {TEXT.expiresIn(minutesLeft)} · {TEXT.expiresAt(clockOf(request.expiresAt))}

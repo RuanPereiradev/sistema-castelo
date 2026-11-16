@@ -54,20 +54,10 @@
 }
 
 .dr-brand-mark {
-  width: 36px;
-  height: 43px;
   flex: none;
-  box-sizing: border-box;
-  border: 1.5px solid var(--color-accent);
-  border-radius: 3px 3px 50% 50% / 3px 3px 44% 44%;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding-bottom: 4px;
-  font-family: var(--font-heading);
-  font-size: 24px;
-  line-height: 1;
-  color: var(--color-accent);
 }
 
 .dr-header-title {

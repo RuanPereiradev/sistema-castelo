@@ -1,4 +1,5 @@
 import { ApiError, NetworkError } from '../../lib/problemDetail';
+import { bareTableLabel } from '../../lib/tableLabel';
 
 /**
  * Every Portuguese string of the customer's phone at the table lives here, never
@@ -6,8 +7,8 @@ import { ApiError, NetworkError } from '../../lib/problemDetail';
  * the stable `code` the API answers on failure into what the customer should do.
  */
 export const CUSTOMER = {
-  brand: 'Hospedaria',
-  documentTitle: (table: string) => `Hospedaria · Mesa ${table}`,
+  brand: 'Castelo Encantado',
+  documentTitle: (table: string) => `Castelo Encantado · Mesa ${bareTableLabel(table)}`,
   table: 'Mesa',
   back: 'Voltar',
   retry: 'Tentar de novo',

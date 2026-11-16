@@ -1,0 +1,224 @@
+### Task cashier-close-tabs - o caixa (perfil ADMIN) fecha comanda e cobra
+### Ambiente: "dev" no IntelliJ HTTP Client (ver http/README.md).
+### Pre-requisito: perfil "dev" com seed. Rode o arquivo inteiro, em ordem.
+###
+### O que prova:
+###   - ADMIN pede a conta, recebe o pagamento e fecha, igual ao garcom
+###   - FRONT_DESK segue recusado nestas rotas (G4): 403
+###   - pagar sem Idempotency-Key e recusado pelo dominio
+
+
+### 0. Login do admin (o caixa)
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{ "username": "{{adminUsername}}", "password": "{{password}}" }
+
+> {%
+    client.test("login do admin retorna 200", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+    });
+    client.global.set("adminToken", response.body.accessToken);
+    client.global.set("suffix", Math.random().toString(36).substring(2, 8));
+    client.global.set("cardNumber", String(Math.floor(Math.random() * 999) + 1));
+%}
+
+
+### 1. Login da recepcao
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{ "username": "{{frontDeskUsername}}", "password": "{{password}}" }
+
+> {%
+    client.test("login da recepcao retorna 200", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+    });
+    client.global.set("frontDeskToken", response.body.accessToken);
+%}
+
+
+### 2. Turno de caixa (201 se abriu agora; 409 se ja havia um aberto)
+POST {{host}}/api/billing/cash-sessions
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{ "openingFloat": "50.00" }
+
+> {%
+    client.test("turno aberto ou ja existente", function() {
+        client.assert(response.status === 201 || response.status === 409, "recebido " + response.status);
+    });
+%}
+
+
+### 3. Categoria
+POST {{host}}/api/restaurant/menu-categories
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{ "name": "Caixa {{suffix}}", "displayOrder": 1 }
+
+> {%
+    client.test("categoria criada", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+    });
+    client.global.set("categoryId", response.body.id);
+%}
+
+
+### 4. Item de 20,00 (sem preparo, para a comanda seguir direto)
+POST {{host}}/api/restaurant/menu-items
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "categoryId": "{{categoryId}}",
+  "name": "Agua {{suffix}}",
+  "prepStation": "BAR",
+  "soldByWeight": false,
+  "price": "20.00"
+}
+
+> {%
+    client.test("item criado", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+    });
+    client.global.set("itemId", response.body.id);
+%}
+
+
+### 5. Abre uma comanda de self-service
+POST {{host}}/api/restaurant/tabs
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{ "origin": "SELF_SERVICE", "cardNumber": {{cardNumber}} }
+
+> {%
+    client.test("comanda aberta", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+    });
+    client.global.set("tabId", response.body.id);
+%}
+
+
+### 6. Lanca o item (o admin lanca)
+POST {{host}}/api/restaurant/tabs/{{tabId}}/items
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{ "menuItemId": "{{itemId}}" }
+
+> {%
+    client.test("item lancado", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+    });
+%}
+
+
+### ------------------------------------------------------------------
+### Negativos
+### ------------------------------------------------------------------
+
+
+### 7. Recepcao nao pede a conta: 403
+POST {{host}}/api/restaurant/tabs/{{tabId}}/closing
+Authorization: Bearer {{frontDeskToken}}
+
+> {%
+    client.test("recepcao recusada no fechamento", function() {
+        client.assert(response.status === 403, "esperado 403, recebido " + response.status);
+    });
+%}
+
+
+### ------------------------------------------------------------------
+### Caminho feliz: o caixa fecha e cobra
+### ------------------------------------------------------------------
+
+
+### 8. Admin pede a conta
+POST {{host}}/api/restaurant/tabs/{{tabId}}/closing
+Authorization: Bearer {{adminToken}}
+
+> {%
+    client.test("conta pedida", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        client.assert(response.body.status === "CLOSING", "esperado CLOSING, recebido " + response.body.status);
+    });
+    client.global.set("billTotal", response.body.total);
+%}
+
+
+### 9. Recepcao nao recebe pagamento: 403
+POST {{host}}/api/restaurant/tabs/{{tabId}}/payments
+Authorization: Bearer {{frontDeskToken}}
+Idempotency-Key: cashier-{{suffix}}-denied
+Content-Type: application/json
+
+{ "method": "CASH", "amount": "{{billTotal}}" }
+
+> {%
+    client.test("recepcao recusada no pagamento", function() {
+        client.assert(response.status === 403, "esperado 403, recebido " + response.status);
+    });
+%}
+
+
+### 10. Pagamento sem Idempotency-Key e recusado pelo dominio
+POST {{host}}/api/restaurant/tabs/{{tabId}}/payments
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{ "method": "CASH", "amount": "{{billTotal}}" }
+
+> {%
+    client.test("sem chave de idempotencia", function() {
+        client.assert(response.status >= 400 && response.status < 500, "esperado 4xx, recebido " + response.status);
+        client.assert(response.body.code !== undefined, "erro deveria carregar code");
+    });
+%}
+
+
+### 11. Admin recebe o pagamento total
+POST {{host}}/api/restaurant/tabs/{{tabId}}/payments
+Authorization: Bearer {{adminToken}}
+Idempotency-Key: cashier-{{suffix}}-pay
+Content-Type: application/json
+
+{ "method": "CASH", "amount": "{{billTotal}}" }
+
+> {%
+    client.test("pagamento recebido, saldo zerado", function() {
+        client.assert(response.status === 201, "esperado 201, recebido " + response.status);
+        client.assert(response.body.bill.balance === "0.00", "saldo " + response.body.bill.balance);
+    });
+%}
+
+
+### 12. Admin fecha a comanda
+POST {{host}}/api/restaurant/tabs/{{tabId}}/close
+Authorization: Bearer {{adminToken}}
+
+> {%
+    client.test("comanda fechada", function() {
+        client.assert(response.status === 200, "esperado 200, recebido " + response.status);
+        client.assert(response.body.status === "CLOSED", "esperado CLOSED, recebido " + response.body.status);
+    });
+%}
+
+
+### 13. Lancar item em comanda fechada e recusado
+POST {{host}}/api/restaurant/tabs/{{tabId}}/items
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{ "menuItemId": "{{itemId}}" }
+
+> {%
+    client.test("comanda fechada nao recebe item", function() {
+        client.assert(response.status === 409 || response.status === 422, "recebido " + response.status);
+        client.assert(response.body.code !== undefined, "erro deveria carregar code");
+    });
+%}

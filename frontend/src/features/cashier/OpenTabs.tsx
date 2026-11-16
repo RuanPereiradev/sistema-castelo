@@ -1,7 +1,12 @@
 import { useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import { useCurrentUser } from '../auth/useCurrentUser';
+import { describeError } from '../dining-room/diningRoomMessages';
+import { PaymentModal } from '../dining-room/PaymentModal';
+import { useStartClosing } from '../dining-room/useTabActions';
 import { formatMoney, formatWeight } from '../../lib/money';
-import { useActiveTabs, type TabSummary } from '../dining-room/useActiveTabs';
-import { activeItems, useTab, type Tab } from '../dining-room/useTab';
+import { ACTIVE_TABS_KEY, useActiveTabs, type TabSummary } from '../dining-room/useActiveTabs';
+import { activeItems, tabKey, useTab, type Tab } from '../dining-room/useTab';
 import { CASHIER } from './cashierMessages';
 import '../../styles/cashier.css';
 
@@ -24,13 +29,14 @@ function tabName(tab: Pick<TabSummary, 'diningTableLabel' | 'cardNumber'>): stri
 export function OpenTabs() {
   const { data: tabs, isLoading, isError, refetch } = useActiveTabs();
   const [selectedTabId, setSelectedTabId] = useState<string | null>(null);
+  const { isAdmin } = useCurrentUser();
 
   return (
     <div className="folios-container">
       <div className="folios-list-section">
         <div className="folios-section">
           <h2 className="section-title">{TEXT.title}</h2>
-          <p className="closing-instruction">{TEXT.readOnlyNote}</p>
+          {!isAdmin && <p className="closing-instruction">{TEXT.readOnlyNote}</p>}
 
           {isLoading && <p className="loading">{TEXT.loading}</p>}
 
@@ -106,8 +112,35 @@ function TabDetail({ tabId }: { readonly tabId: string }) {
   return <TabView tab={tab} />;
 }
 
+/**
+ * The cashier, who signs in as ADMIN, charges and closes like the waiter (task cashier-close-tabs).
+ * FRONT_DESK keeps reading only: the backend refuses it on these routes, so no button is shown.
+ */
 function TabView({ tab }: { readonly tab: Tab }) {
   const items = activeItems(tab);
+  const { isAdmin } = useCurrentUser();
+  const queryClient = useQueryClient();
+  const startClosing = useStartClosing(tab.id);
+  const [paying, setPaying] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
+
+  async function refresh(): Promise<void> {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ACTIVE_TABS_KEY }),
+      queryClient.invalidateQueries({ queryKey: tabKey(tab.id) }),
+    ]);
+  }
+
+  async function handleRequestBill() {
+    try {
+      await startClosing.mutateAsync();
+      setNotice(TEXT.billRequested);
+    } catch (error) {
+      setNotice(describeError(error));
+    } finally {
+      await refresh();
+    }
+  }
 
   return (
     <div className="folio-detail-section">
@@ -174,6 +207,39 @@ function TabView({ tab }: { readonly tab: Tab }) {
           <span>{formatMoney(tab.total)}</span>
         </div>
       </div>
+
+      {isAdmin && (
+        <div className="folio-actions">
+          {tab.status === 'OPEN' && (
+            <button
+              className="btn btn-primary"
+              disabled={items.length === 0 || startClosing.isPending}
+              onClick={() => void handleRequestBill()}
+            >
+              {TEXT.requestBill}
+            </button>
+          )}
+          {tab.status === 'CLOSING' && (
+            <button className="btn btn-primary" onClick={() => setPaying(true)}>
+              {TEXT.receivePayment}
+            </button>
+          )}
+          {notice && <p className="closing-instruction">{notice}</p>}
+        </div>
+      )}
+
+      <PaymentModal
+        isOpen={paying}
+        tab={tab}
+        balance={tab.total}
+        onClose={() => setPaying(false)}
+        onPaymentProcessed={() => {
+          setPaying(false);
+          setNotice(TEXT.paymentProcessed);
+          void refresh();
+        }}
+        onError={setNotice}
+      />
     </div>
   );
 }

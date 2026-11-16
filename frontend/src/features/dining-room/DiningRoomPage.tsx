@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { currentSession } from '../auth/session';
+import { UserMenu } from '../auth/UserMenu';
 import { DINING_ROOM, describeError } from './diningRoomMessages';
 import { useDiningTables, type DiningTable } from './useDiningTables';
 import { tabsByTable, useActiveTabs, type TabSummary } from './useActiveTabs';
@@ -16,33 +16,10 @@ import { TableOrderRequestsSheet } from './TableOrderRequestsSheet';
 import { requestsByTable, useNewRequestChime, useTableOrderRequests } from './useTableOrderRequests';
 import { useTablePaymentRequests } from './useTablePaymentRequests';
 import '../../styles/dining-room-portal.css';
+import { bareTableLabel } from '../../lib/tableLabel';
+import { BrandCrest } from '../../lib/BrandCrest';
 
 type StatusFilter = TableStatus | 'all';
-
-interface Area {
-  readonly key: string;
-  readonly label: string;
-}
-
-/** Tables without an area share one group, listed last. */
-function areaOf(table: DiningTable): Area {
-  return table.area
-    ? { key: table.area, label: table.area }
-    : { key: '', label: DINING_ROOM.noArea };
-}
-
-function areasOf(tables: readonly DiningTable[]): readonly Area[] {
-  const byKey = new Map<string, Area>();
-  for (const table of tables) {
-    const area = areaOf(table);
-    byKey.set(area.key, area);
-  }
-  return [...byKey.values()].sort((a, b) => {
-    if (a.key === '') return 1;
-    if (b.key === '') return -1;
-    return a.label.localeCompare(b.label, 'pt-BR');
-  });
-}
 
 function clockOf(now: number): string {
   return new Date(now).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
@@ -81,7 +58,6 @@ export function DiningRoomPage() {
 
   const [selectedTableId, setSelectedTableId] = useState<string | null>(null);
   const [filter, setFilter] = useState<StatusFilter>('all');
-  const [areaKey, setAreaKey] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   /** The phone-requests sheet: closed, every table, or one table's id. */
   const [requestsFor, setRequestsFor] = useState<'all' | string | null>(null);
@@ -106,10 +82,7 @@ export function DiningRoomPage() {
     return byTable;
   }, [paymentsQuery.data]);
   const pendingRequestCount = (requestsQuery.data?.length ?? 0) + (paymentsQuery.data?.length ?? 0);
-  const areas = useMemo(() => areasOf(tables), [tables]);
-  const currentArea = areas.find((area) => area.key === areaKey) ?? areas[0] ?? null;
 
-  const userInitial = (currentSession()?.user.fullName ?? '?').trim().charAt(0).toUpperCase();
 
   if (tablesQuery.isPending || tabsQuery.isPending) {
     return (
@@ -156,28 +129,29 @@ export function DiningRoomPage() {
   }
 
   const visibleTables = tables.filter((table) => {
-    if (currentArea && areaOf(table).key !== currentArea.key) return false;
     if (filter !== 'all' && statusOf(tabByTable.get(table.id)) !== filter) return false;
     return true;
   });
 
   const selectedTable = tables.find((table) => table.id === selectedTableId) ?? null;
   const sectionTitle =
-    (currentArea?.label ?? DINING_ROOM.allTables) +
+    DINING_ROOM.title +
     (filter === 'all' ? '' : ` · ${statusLabel(filter)}`);
 
   return (
     <div className="dining-room-portal">
       <header className="dr-header">
         <div className="dr-header-top">
-          <div className="dr-brand-mark" aria-hidden="true">{DINING_ROOM.brand.charAt(0)}</div>
+          <div className="dr-brand-mark" aria-hidden="true">
+            <BrandCrest size={44} />
+          </div>
           <div className="dr-header-title">
             <div className="dr-brand-info">
               {DINING_ROOM.brand} · {clockOf(now)}
             </div>
             <h1 className="dr-page-title">{DINING_ROOM.title}</h1>
           </div>
-          <div className="dr-avatar" aria-hidden="true">{userInitial}</div>
+          <UserMenu avatarClassName="dr-avatar" />
         </div>
 
         <button
@@ -189,27 +163,6 @@ export function DiningRoomPage() {
             ? DINING_ROOM.orderRequests.openWithCount(pendingRequestCount)
             : DINING_ROOM.orderRequests.open}
         </button>
-
-        {areas.length > 1 && (
-          <div
-            className="dr-area-filters"
-            style={{ gridTemplateColumns: `repeat(${areas.length}, 1fr)` }}
-          >
-            {areas.map((area) => (
-              <button
-                key={area.key}
-                type="button"
-                className={`dr-area-btn ${currentArea?.key === area.key ? 'active' : ''}`}
-                onClick={() => {
-                  setAreaKey(area.key);
-                  setFilter('all');
-                }}
-              >
-                {area.label} · {tables.filter((t) => areaOf(t).key === area.key).length}
-              </button>
-            ))}
-          </div>
-        )}
       </header>
 
       <div className="dr-chips">
@@ -249,7 +202,7 @@ export function DiningRoomPage() {
                   type="button"
                   className={`dr-table-btn ${statusClass(status)} ${waiting > 0 ? 'has-request' : ''}`}
                   onClick={() => setSelectedTableId(table.id)}
-                  aria-label={`${DINING_ROOM.table} ${table.label}, ${statusLabel(status)}${waiting > 0 ? `, ${badge}` : ''}`}
+                  aria-label={`${DINING_ROOM.table} ${bareTableLabel(table.label)}, ${statusLabel(status)}${waiting > 0 ? `, ${badge}` : ''}`}
                 >
                   {waiting > 0 && (
                     <span className="dr-table-request-badge" aria-hidden="true">
@@ -272,7 +225,6 @@ export function DiningRoomPage() {
         <TableSheet
           key={selectedTable.id}
           table={selectedTable}
-          areaLabel={areaOf(selectedTable).label}
           summary={tabByTable.get(selectedTable.id)}
           now={now}
           pendingRequestCount={requestByTable.get(selectedTable.id)?.length ?? 0}

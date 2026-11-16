@@ -2,6 +2,7 @@ import { useId, useState, type FormEvent, type ReactNode } from 'react';
 import { CUSTOMER } from './customerMessages';
 import { MAXIMUM_CUSTOMER_NAME_LENGTH } from './customerIdentity';
 import { BrandShield, HederaRule } from './CustomerChrome';
+import { bareTableLabel } from '../../lib/tableLabel';
 
 /** The double frame with the Romanesque arch: entrance, loading and invalid QR share it. */
 export function ArchFrame({ children }: { readonly children: ReactNode }) {
@@ -56,7 +57,7 @@ export function WelcomeScreen({
       <div className="ct-welcome-table">
         <span className="ct-eyebrow">{CUSTOMER.welcome.youAreAt}</span>
         <h1 className="ct-welcome-title">
-          {CUSTOMER.table} {tableLabel}
+          {CUSTOMER.table} {bareTableLabel(tableLabel)}
         </h1>
         <p className="ct-lead">{CUSTOMER.welcome.intro}</p>
       </div>

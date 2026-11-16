@@ -1,4 +1,5 @@
 import { ApiError, NetworkError } from '../../lib/problemDetail';
+import { bareTableLabel } from '../../lib/tableLabel';
 
 /**
  * Every Portuguese string of the dining room lives here, never in a component.
@@ -6,7 +7,7 @@ import { ApiError, NetworkError } from '../../lib/problemDetail';
  * `code` the API answers on failure into what the waiter should do next.
  */
 export const DINING_ROOM = {
-  brand: 'Hospedaria',
+  brand: 'Castelo Encantado',
   title: 'Mesas',
   loadingTables: 'Carregando as mesas…',
   loadingTab: 'Carregando a comanda…',
@@ -16,7 +17,6 @@ export const DINING_ROOM = {
   tabFailed: 'Não deu para carregar a comanda.',
   tabVanished: 'Esta comanda acabou de ser fechada ou movida por outra pessoa.',
   retry: 'Tentar de novo',
-  noArea: 'Sem área',
   allTables: 'Todas',
   table: 'Mesa',
   seats: 'lugares',
@@ -67,23 +67,23 @@ export const DINING_ROOM = {
     CANCELLED: 'Cancelado',
   } as Readonly<Record<string, string>>,
   notice: {
-    tableOpened: (label: string) => `Mesa ${label} aberta`,
-    billSent: (label: string) => `Conta da mesa ${label} enviada ao caixa`,
-    billCancelled: (label: string) => `Pedido de conta da mesa ${label} cancelado`,
-    tabCancelled: (label: string) => `Comanda da mesa ${label} cancelada`,
+    tableOpened: (label: string) => `Mesa ${bareTableLabel(label)} aberta`,
+    billSent: (label: string) => `Conta da mesa ${bareTableLabel(label)} enviada ao caixa`,
+    billCancelled: (label: string) => `Pedido de conta da mesa ${bareTableLabel(label)} cancelado`,
+    tabCancelled: (label: string) => `Comanda da mesa ${bareTableLabel(label)} cancelada`,
     itemAdded: (name: string) => `${name} lançado`,
     itemCancelled: 'Item cancelado',
     itemDelivered: 'Item entregue',
     itemsTransferred: 'Itens transferidos',
     tabsMerged: 'Comandas juntadas',
-    tableMoved: (label: string) => `Comanda movida para a mesa ${label}`,
-    requestConfirmed: (label: string) => `Pedido da mesa ${label} confirmado e lançado`,
-    requestRejected: (label: string) => `Pedido da mesa ${label} recusado`,
-    pixConfirmed: (label: string) => `Pix da mesa ${label} confirmado`,
-    pixRejected: (label: string) => `Pix da mesa ${label} recusado`,
+    tableMoved: (label: string) => `Comanda movida para a mesa ${bareTableLabel(label)}`,
+    requestConfirmed: (label: string) => `Pedido da mesa ${bareTableLabel(label)} confirmado e lançado`,
+    requestRejected: (label: string) => `Pedido da mesa ${bareTableLabel(label)} recusado`,
+    pixConfirmed: (label: string) => `Pix da mesa ${bareTableLabel(label)} confirmado`,
+    pixRejected: (label: string) => `Pix da mesa ${bareTableLabel(label)} recusado`,
     pixRefunded: (customer: string) => `Pix de ${customer} estornado`,
     paymentProcessed: 'Pagamento recebido',
-    tabClosed: (label: string) => `Comanda da mesa ${label} fechada`,
+    tabClosed: (label: string) => `Comanda da mesa ${bareTableLabel(label)} fechada`,
   },
   payment: {
     title: 'Receber pagamento',
@@ -138,7 +138,7 @@ export const DINING_ROOM = {
     rejecting: 'Recusando…',
     rejectTitle: 'Recusar o pedido?',
     rejectMessage: (label: string, customer: string) =>
-      `O pedido de ${customer} na mesa ${label} sai da fila e nada é lançado. Avise o cliente; não há desfazer.`,
+      `O pedido de ${customer} na mesa ${bareTableLabel(label)} sai da fila e nada é lançado. Avise o cliente; não há desfazer.`,
     rejectConfirm: 'Recusar pedido',
     keep: 'Voltar',
     ordersSection: 'Pedidos',
@@ -152,7 +152,7 @@ export const DINING_ROOM = {
     pixHint: 'Confira o comprovante no celular do cliente antes de confirmar.',
     rejectPixTitle: 'Recusar o Pix?',
     rejectPixMessage: (label: string, customer: string) =>
-      `O Pix de ${customer} na mesa ${label} é recusado e os itens voltam para a conta. Use quando o comprovante não confere.`,
+      `O Pix de ${customer} na mesa ${bareTableLabel(label)} é recusado e os itens voltam para a conta. Use quando o comprovante não confere.`,
     rejectPixConfirm: 'Recusar Pix',
   },
   paidByPhone: {

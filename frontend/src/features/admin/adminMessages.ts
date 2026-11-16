@@ -1,3 +1,4 @@
+import { bareTableLabel } from '../../lib/tableLabel';
 /**
  * Every Portuguese string of the admin section lives here, never in a component.
  */
@@ -82,8 +83,8 @@ export const ADMIN = {
 
   // Table QR (decisions #15, #16 and #42–#44 of task qr-table-ordering)
   showTableQr: 'Ver QR',
-  tableQrTitle: (label: string) => `QR da mesa ${label}`,
-  tableQrImage: (label: string) => `QR da mesa ${label}`,
+  tableQrTitle: (label: string) => `QR da mesa ${bareTableLabel(label)}`,
+  tableQrImage: (label: string) => `QR da mesa ${bareTableLabel(label)}`,
   tableQrDrawing: 'Desenhando o QR…',
   tableQrFailed: 'Não deu para desenhar o QR. Feche e abra de novo.',
   tableQrAddressCaption: 'Endereço que o QR abre:',
@@ -95,11 +96,11 @@ export const ADMIN = {
   regenerateTableQr: 'Gerar QR novo',
   regenerateTableQrTitle: 'Gerar um QR novo para esta mesa?',
   regenerateTableQrMessage: (label: string) =>
-    `O QR impresso da mesa ${label} para de funcionar: quem escanear o cartão antigo não abre mais o cardápio. Depois, imprima o cartão novo e troque o que está na mesa. Não há desfazer.`,
+    `O QR impresso da mesa ${bareTableLabel(label)} para de funcionar: quem escanear o cartão antigo não abre mais o cardápio. Depois, imprima o cartão novo e troque o que está na mesa. Não há desfazer.`,
   regenerateTableQrConfirm: 'Sim, gerar QR novo',
   regeneratingTableQr: 'Gerando…',
   tableQrRegenerated: 'QR novo gerado. Imprima o cartão e troque o que está na mesa.',
-  printedTableTitle: (label: string) => `Mesa ${label}`,
+  printedTableTitle: (label: string) => `Mesa ${bareTableLabel(label)}`,
   printedTableInstruction: 'Aponte a câmera do celular para ver o cardápio e fazer seu pedido.',
 
   tableCreated: 'Mesa criada com sucesso',

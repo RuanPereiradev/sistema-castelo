@@ -1,14 +1,16 @@
 import type { ReactNode } from 'react';
 import { CUSTOMER } from './customerMessages';
 import { BackIcon, BillIcon, MenuIcon, MinusIcon, OrdersIcon, PlusIcon } from './customerIcons';
+import { bareTableLabel } from '../../lib/tableLabel';
+import { BrandCrest } from '../../lib/BrandCrest';
 
 export type CustomerScreen = 'welcome' | 'menu' | 'cart' | 'orders' | 'bill' | 'pix' | 'receipt';
 
 /** The shield with the brand's initial, the design's mark. */
 export function BrandShield({ large = false }: { readonly large?: boolean }) {
   return (
-    <div className={large ? 'ct-shield ct-shield-large' : 'ct-shield'} aria-hidden="true">
-      {CUSTOMER.brand.charAt(0)}
+    <div className="ct-shield" aria-hidden="true">
+      <BrandCrest size={large ? 56 : 42} />
     </div>
   );
 }
@@ -48,7 +50,7 @@ export function CustomerHeader({
       </div>
       <div className="ct-table-badge">
         <span className="ct-table-badge-label">{CUSTOMER.table}</span>
-        <span className="ct-table-badge-value">{tableLabel}</span>
+        <span className="ct-table-badge-value">{bareTableLabel(tableLabel)}</span>
       </div>
     </header>
   );
