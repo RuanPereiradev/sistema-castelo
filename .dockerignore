@@ -1,0 +1,13 @@
+# Build context of the backend and nginx images is the repository root.
+.git
+.idea
+**/target
+**/node_modules
+frontend/dist
+design
+brag-output
+docs
+http
+*.zip
+.claude
+.env*

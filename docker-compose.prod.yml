@@ -1,0 +1,114 @@
+# Production on a single VPS. Run with: docker compose --env-file .env.prod -f docker-compose.prod.yml up -d
+# Steps, in order, are in deploy/README.md.
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    # Sized for 4 GB shared with the JVM; no published port: only the backend reaches it.
+    command: ["postgres", "-c", "shared_buffers=256MB", "-c", "max_connections=50", "-c", "work_mem=8MB"]
+    volumes:
+      - castel_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks: [castel]
+    logging: *logging
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: castel-backend:latest
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      DATABASE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB}
+      DATABASE_USERNAME: ${POSTGRES_USER}
+      DATABASE_PASSWORD: ${POSTGRES_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET}
+      # The browser always talks to the same origin through nginx; this only names it.
+      CORS_ALLOWED_ORIGINS: https://${DOMAIN}
+      # Regular expression read by Tomcat: only the nginx of this network may set X-Forwarded-For.
+      TRUSTED_PROXIES: ${TRUSTED_PROXIES}
+      # One vCPU: the serial collector keeps the footprint small.
+      JAVA_TOOL_OPTIONS: -XX:MaxRAMPercentage=45 -XX:+UseSerialGC -Xss512k
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health | grep -q UP"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 90s
+    networks: [castel]
+    logging: *logging
+
+  nginx:
+    build:
+      context: .
+      dockerfile: deploy/nginx/Dockerfile
+    image: castel-nginx:latest
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    environment:
+      DOMAIN: ${DOMAIN}
+      # Only ${DOMAIN} is substituted in the template; every other $ in it is nginx's own.
+      NGINX_ENVSUBST_FILTER: DOMAIN
+    ports:
+      - "${HTTP_PORT:-80}:80"
+      - "${HTTPS_PORT:-443}:443"
+    volumes:
+      - castel_certbot_www:/var/www/certbot:ro
+      - castel_certbot_certs:/etc/letsencrypt:ro
+    # The image only renders its templates when the command starts with "nginx", and this one does not,
+    # so it renders them itself. Then it reloads every 6 hours to pick up a renewed certificate.
+    command: >
+      /bin/sh -c '/docker-entrypoint.d/20-envsubst-on-templates.sh;
+      while :; do sleep 6h; nginx -s reload; done &
+      exec nginx -g "daemon off;"'
+    networks: [castel]
+    logging: *logging
+
+  certbot:
+    image: certbot/certbot:latest
+    restart: unless-stopped
+    volumes:
+      - castel_certbot_www:/var/www/certbot
+      - castel_certbot_certs:/etc/letsencrypt
+    entrypoint: >
+      /bin/sh -c 'trap exit TERM;
+      while :; do certbot renew --webroot -w /var/www/certbot --quiet; sleep 12h & wait $${!}; done'
+    networks: [castel]
+    logging: *logging
+
+networks:
+  castel:
+    name: castel_prod
+    ipam:
+      config:
+        # Fixed so TRUSTED_PROXIES can name it (.env.prod.example).
+        - subnet: 172.28.0.0/24
+
+volumes:
+  castel_postgres_data:
+    name: castel_postgres_prod_data
+  castel_certbot_www:
+    name: castel_certbot_www
+  castel_certbot_certs:
+    name: castel_certbot_certs
