@@ -1,3 +1,4 @@
+import { bareTableLabel } from '../../lib/tableLabel';
 import { ApiError, NetworkError } from '../../lib/problemDetail';
 
 /**
@@ -6,7 +7,7 @@ import { ApiError, NetworkError } from '../../lib/problemDetail';
  * `code` the API answers on failure into what the cashier should do next.
  */
 export const CASHIER = {
-  brand: 'Hospedaria',
+  brand: 'Castelo Encantado',
   title: 'Caixa',
 
   // Cash drawer session
@@ -155,7 +156,11 @@ export const CASHIER = {
   // Restaurant tabs, read only (decision #17 of task-qr-table-ordering)
   restaurantTabs: {
     title: 'Comandas abertas',
-    readOnlyNote: 'Só leitura: quem lança, transfere e fecha a comanda é o garçom.',
+    readOnlyNote: 'Só leitura: quem lança, transfere e fecha a comanda é o garçom ou o administrador.',
+    requestBill: 'Pedir a conta',
+    receivePayment: 'Receber pagamento',
+    billRequested: 'Conta pedida. Já dá para receber o pagamento.',
+    paymentProcessed: 'Pagamento registrado.',
     loading: 'Carregando comandas…',
     failed: 'Não deu para carregar as comandas.',
     loadingTab: 'Carregando a comanda…',
@@ -163,7 +168,7 @@ export const CASHIER = {
     empty: 'Nenhuma comanda aberta.',
     choose: 'Escolha uma comanda para ver os itens.',
     noItems: 'Nenhum item lançado.',
-    table: (label: string) => `Mesa ${label}`,
+    table: (label: string) => `Mesa ${bareTableLabel(label)}`,
     card: (cardNumber: number) => `Cartão ${cardNumber}`,
     unnamed: 'Comanda',
     itemCount: (count: number) => (count === 1 ? '1 item' : `${count} itens`),

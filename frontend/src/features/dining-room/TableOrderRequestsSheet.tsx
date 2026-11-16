@@ -10,6 +10,7 @@ import {
 } from './useTableOrderRequests';
 import { useTablePaymentRequests } from './useTablePaymentRequests';
 import { TablePaymentRequestsSection } from './TablePaymentRequestsSection';
+import { bareTableLabel } from '../../lib/tableLabel';
 
 const TEXT = DINING_ROOM.orderRequests;
 
@@ -190,10 +191,10 @@ function RequestCard({
   const error = confirm.error ? describeConfirmRequestError(confirm.error) : rejectError;
 
   return (
-    <article className="dr-request" aria-label={`${DINING_ROOM.table} ${request.diningTableLabel}`}>
+    <article className="dr-request" aria-label={`${DINING_ROOM.table} ${bareTableLabel(request.diningTableLabel)}`}>
       <div className="dr-request-top">
         <span className="dr-request-table">
-          {DINING_ROOM.table} {request.diningTableLabel}
+          {DINING_ROOM.table} {bareTableLabel(request.diningTableLabel)}
         </span>
         <span className={minutesLeft <= 5 ? 'dr-request-expiry is-urgent' : 'dr-request-expiry'}>
           {TEXT.expiresIn(minutesLeft)} · {TEXT.expiresAt(clockOf(request.expiresAt))}

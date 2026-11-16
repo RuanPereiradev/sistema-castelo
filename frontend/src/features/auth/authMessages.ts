@@ -77,3 +77,10 @@ export function failureMessage(code: string | null): AuthMessage {
       };
   }
 }
+
+/** The user menu of the signed-in area: who is signed in and how to leave. */
+export const USER_MENU = {
+  open: 'Abrir menu do usuário',
+  signOut: 'Sair',
+  signOutHint: 'Sai deste aparelho e de todos os outros',
+} as const;

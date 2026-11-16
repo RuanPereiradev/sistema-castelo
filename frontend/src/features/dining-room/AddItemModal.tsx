@@ -4,6 +4,7 @@ import { DINING_ROOM, describeError } from './diningRoomMessages';
 import { useMenuItems, type MenuItem } from './useMenuItems';
 import type { Tab } from './useTab';
 import { AddItemForm } from './AddItemForm';
+import { bareTableLabel } from '../../lib/tableLabel';
 
 interface Props {
   readonly isOpen: boolean;
@@ -55,7 +56,7 @@ export function AddItemModal({ isOpen, tab, onClose, onAdded }: Props) {
         <div className="dr-sheet-content">
           <div className="dr-sheet-header">
             <div className="dr-sheet-subtitle">
-              {DINING_ROOM.table} {tab.diningTableLabel}
+              {DINING_ROOM.table} {bareTableLabel(tab.diningTableLabel ?? "")}
             </div>
             <h2 className="dr-sheet-title dr-sheet-title-small">
               {selected ? selected.name : MENU.title}

@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Castelo Encantado">
+  <path d="M32 3.5 56 10.5v21c0 14.2-10.4 24.2-24 29-13.6-4.800-24-14.800-24-29v-21z" fill="#4A1522" stroke="#E8957F" stroke-width="3" stroke-linejoin="round"/>
+  <path d="M23.500 20h4.500v5h2.500v-5h3v5H36v-5h4.500v8.500H23.500z M25 28.500h14V49H25z" fill="#E8957F"/>
+  <path d="M23.500 20h4.500v5h2.500v-5h3v5H36v-5h4.500v8.500h-17z" fill="#E8957F"/>
+  <path d="M29 49v-6.500a3 3 0 0 1 6 0V49z" fill="#4A1522"/>
+  <rect x="31" y="32" width="2" height="5.500" rx="1" fill="#4A1522"/>
+</svg>

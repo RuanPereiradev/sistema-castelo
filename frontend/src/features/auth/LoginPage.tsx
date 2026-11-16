@@ -14,7 +14,7 @@ import { useLogin } from './useLogin';
  * Provisional: `Setting` holds the house's name in the backend, but there is no
  * anonymous endpoint to read it before the login, so it is a constant here.
  */
-const BRAND_NAME = 'Hospedaria';
+const BRAND_NAME = 'Castelo Encantado';
 
 const FRAME_COMPONENTS = {
   iluminura: IluminuraFrame,

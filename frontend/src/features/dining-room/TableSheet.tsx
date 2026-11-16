@@ -17,10 +17,10 @@ import { MergeTabDialog } from './MergeTabDialog';
 import { MoveTableDialog } from './MoveTableDialog';
 import { PaidByPhoneSection } from './PaidByPhoneSection';
 import { PaymentModal } from './PaymentModal';
+import { bareTableLabel } from '../../lib/tableLabel';
 
 interface Props {
   readonly table: DiningTable;
-  readonly areaLabel: string;
   /** The active tab of the table, when it has one. Absent means the table is free. */
   readonly summary: TabSummary | undefined;
   readonly now: number;
@@ -74,7 +74,6 @@ function quantityOf(item: TabItem): string {
  */
 export function TableSheet({
   table,
-  areaLabel,
   summary,
   now,
   pendingRequestCount,
@@ -181,10 +180,10 @@ export function TableSheet({
         <div className="dr-sheet-content">
           <div className="dr-sheet-header">
             <div className="dr-sheet-subtitle">
-              {areaLabel} · {statusLabel(status)}
+              {statusLabel(status)}
             </div>
             <h2 id="dr-sheet-title" className="dr-sheet-title">
-              {DINING_ROOM.table} {table.label}
+              {DINING_ROOM.table} {bareTableLabel(table.label)}
             </h2>
             <button
               type="button"

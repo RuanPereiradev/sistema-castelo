@@ -2,8 +2,7 @@ import {
   createBrowserRouter,
   Navigate,
   Outlet,
-  useLoaderData,
-  useNavigate,
+  useLocation,
 } from 'react-router-dom';
 import { LoginPage } from './features/auth/LoginPage';
 import { DiningRoomPage } from './features/dining-room/DiningRoomPage';
@@ -14,49 +13,24 @@ import { SelfServicePage } from './features/self-service/SelfServicePage';
 import { AdminPage } from './pages/AdminPage';
 import { currentSession, type Session } from './features/auth/session';
 import { destinationsFor, type Destination } from './features/auth/destinations';
-import { logout } from './features/auth/authApi';
+import { UserMenu } from './features/auth/UserMenu';
 import './styles/shell.css';
 
-/** Shell da área logada: cabeçalho e navegação. */
+/**
+ * Shell da área logada: só a área de trabalho, sem barra de cabeçalho. Cada tela leva o menu do
+ * usuário (nome e Sair) no próprio cabeçalho; o salão tem o seu, as demais recebem o canto.
+ */
 export function Shell() {
-  const navigate = useNavigate();
-  const session = useLoaderData() as Session;
-
-  async function handleLogout() {
-    try {
-      await logout(session.accessToken);
-    } catch {
-      // Ignore: logout falhou mas a sessão já morreu no front.
-    }
-    navigate('/');
-  }
-
-  const destinations = destinationsFor(session.user.roles);
-  const isMultiArea = destinations.length > 1 || session.user.roles.includes('ADMIN');
+  const location = useLocation();
+  const hasOwnHeader = location.pathname.startsWith('/salao');
 
   return (
     <div className="shell">
-      <header className="shell-header">
-        <div className="shell-header-content">
-          <h1>Castel</h1>
-          <div className="shell-header-right">
-            {isMultiArea && (
-              <span className="shell-role-badge" title={session.user.roles.join(', ')}>
-                {destinations[0]?.toUpperCase() || 'Admin'}
-              </span>
-            )}
-            <span className="shell-username">{session.user.fullName}</span>
-            <button
-              className="shell-logout-btn"
-              onClick={handleLogout}
-              aria-label="Sair"
-              title="Sair de todos os dispositivos"
-            >
-              Sair
-            </button>
-          </div>
+      {!hasOwnHeader && (
+        <div className="user-menu-floating">
+          <UserMenu />
         </div>
-      </header>
+      )}
       <main className="shell-main">
         <Outlet />
       </main>

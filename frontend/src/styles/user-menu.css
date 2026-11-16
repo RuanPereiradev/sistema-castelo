@@ -1,0 +1,62 @@
+.user-menu {
+  position: relative;
+  flex: none;
+}
+
+.user-menu button.dr-avatar {
+  background: transparent;
+  cursor: pointer;
+  padding: 0;
+}
+
+.user-menu-avatar {
+  width: 40px;
+  height: 40px;
+  border: 1px solid rgba(232, 149, 127, 0.7);
+  border-radius: 50%;
+  background: transparent;
+  color: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.user-menu-popover {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 50;
+  min-width: 11rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.75rem;
+  background: var(--bg-primary, #1d1a17);
+  color: var(--fg-primary, #f3ece2);
+  border: 1px solid rgba(232, 149, 127, 0.5);
+  border-radius: 0.5rem;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+
+.user-menu-name {
+  font-size: 0.9rem;
+  opacity: 0.8;
+}
+
+.user-menu-signout {
+  min-height: 44px;
+  padding: 0.5rem 1rem;
+  border: 1px solid rgba(232, 149, 127, 0.7);
+  border-radius: 0.375rem;
+  background: transparent;
+  color: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+/* Screens without a header of their own get the menu in the corner. */
+.user-menu-floating {
+  position: fixed;
+  top: 0.75rem;
+  right: 0.75rem;
+  z-index: 40;
+}

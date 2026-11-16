@@ -1,3 +1,5 @@
+import { BrandCrest } from '../../lib/BrandCrest';
+
 /**
  * A · Iluminura — a page of an illuminated manuscript. Parchment ground, a
  * rubricated capital on a salmon mat, double rules. On wide devices a wine
@@ -36,7 +38,7 @@ export function IluminuraFrame({
         <div className="iluminura-column">
           <div className="iluminura-mark">
             <div className="iluminura-seal" aria-hidden="true">
-              {initial}
+              <BrandCrest size={46} />
             </div>
             <div className="iluminura-brand">{brandName}</div>
           </div>
