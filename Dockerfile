@@ -10,6 +10,7 @@ COPY identity/pom.xml identity/pom.xml
 COPY hotel/pom.xml hotel/pom.xml
 COPY restaurant/pom.xml restaurant/pom.xml
 COPY billing/pom.xml billing/pom.xml
+COPY finance/pom.xml finance/pom.xml
 COPY tax-invoice/pom.xml tax-invoice/pom.xml
 COPY payment/pom.xml payment/pom.xml
 COPY app/pom.xml app/pom.xml
@@ -21,6 +22,7 @@ COPY identity identity
 COPY hotel hotel
 COPY restaurant restaurant
 COPY billing billing
+COPY finance finance
 COPY tax-invoice tax-invoice
 COPY payment payment
 COPY app app

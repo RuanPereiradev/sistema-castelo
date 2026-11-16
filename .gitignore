@@ -27,6 +27,7 @@ yarn.lock
 # Environment
 .env
 .env.local
+.env.prod
 .env.*.local
 http-client.private.env.json
 
